@@ -1,3 +1,25 @@
+## TODO:
+   - Simple command to run `prerun.sh`:
+   - `prerun.sh` will check if env is installed. 
+      - if not:
+         - get a valut cli
+         - run OAUTH2 authentication to get API key from the vault
+         - clone the repo with the the API key
+         - run `setup.sh`
+      - if yes:
+         - check if the remote is newer, if so update the local repo
+         - check if local has changes. if so, ask the user to push the changes
+   
+   - `setup.sh` will:
+      - setup dotfiles (including local, config, zsh, tmux, zellij, alacritty, conky etc)
+      - install packages (apt, snap, flatpak, brew, pip, npm, rustup, go, etc)
+      - setup services (backup)
+      - setup docker with the containers (zerotier, rclone)
+      - setup cron jobs
+      - setup z4h, zellij as default shell
+      - register with uptimekuma
+      - show screen with: IP, hostname, uptimekuma, Memory/CPU/Disk/Network Usage, tasks, calendar, weather.
+
 # My Environment Setup
 
 This repository contains my essential Linux environment configuration, contains submodule:
@@ -16,13 +38,13 @@ This repository contains my essential Linux environment configuration, contains 
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/my_env.git
-   cd my_env
+   git clone https://github.com/yourusername/my_env.git ~/env
+   cd ~/env
    ```
 
 2. Run the setup script:
    ```bash
-   ./runme.sh
+   ./setup.sh
    ```
 
    You will be prompted for:

@@ -1,0 +1,2 @@
+export PATH=${ENV_LOC}/scripts:${ENV_LOC}/bin:${PATH}
+export EDITOR=nvim

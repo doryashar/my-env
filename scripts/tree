@@ -1,0 +1,49 @@
+#!/bin/bash
+
+tree() {
+    local depth=""
+    local target_dir="."
+    local show_files=""
+    local show_dotfiles="-not -path '*/.*'"
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -depth)
+                if [[ "$2" =~ ^[0-9]+$ ]]; then
+                    if [[ "$2" -eq 0 ]]; then
+                        depth=""
+                    else
+                        depth="-maxdepth $2"
+                    fi
+                    shift 2
+                else
+                    echo "Error: -depth requires a numeric argument."
+                    return 1
+                fi
+                ;;
+            -d)
+                show_files="-type d"
+                shift
+                ;;
+            -a)
+                show_dotfiles=""
+                shift
+                ;;
+            *)
+                if [[ -d "$1" ]]; then
+                    target_dir="$1"
+                    shift
+                else
+                    echo "Error: '$1' is not a valid directory."
+                    return 1
+                fi
+                ;;
+        esac
+    done
+
+    # Generate the tree
+    eval "find '$target_dir' $depth $show_files $show_dotfiles -print" | sed -e 's;[^/]*/;|____;g;s;____|; |;g'
+}
+
+tree "$@"

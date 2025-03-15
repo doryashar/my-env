@@ -605,14 +605,13 @@ sync_file() {
     if [[ -e "$target" ]]; then
         # Check if it's a link pointing to our source
         if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
-            # info "Link already exists and is correct: $target${NC}"
-            debug "Link already exists and is correct: $target"
+            debug "(-)(-) Link already exists and is correct: $target"
             return 0
         fi
         
         # File exists but is not a correct link - check if it's different
         if diff -q "$source" "$target" &>/dev/null; then
-            info "Files are identical: $target${NC}"
+            debug "(-)(-) Files are identical: $target"
             
             # If target is not a link to source, replace with link
             if [[ ! -L "$target" || "$(readlink "$target")" != "$source" ]]; then

@@ -1,0 +1,112 @@
+MOUNT_BASEDIR="$HOME/mnt"
+CACHE_DIR="$MOUNT_BASEDIR/rclone-cache"
+RCLONE_CONFIG_PATH="$HOME/env/private/rclone"
+NAME_PREFIX=rclone-mount
+ENCRYPTED_DIR="$ENV_DIR/private_encrypted"
+
+rm -rf $CACHE_DIR
+mkdir -p $CACHE_DIR
+
+mount_remote() {
+  REMOTE_NAME=$1
+  REMOTE_DIR=${2:-"/"}
+  UID_=$(id -u)
+  GID_=$(id -g)
+
+  #Replace slashes with spaces in REMOTE_DIR
+  REMOTE_DIR_NAME=$(echo $REMOTE_DIR | tr '/' '_')
+  # echo "REMOTE_DIR_NAME: $REMOTE_DIR_NAME, UID: $UID_, GID: $GID_"
+
+  # If docker exists, return
+  if docker ps | grep -w "${NAME_PREFIX}-${REMOTE_NAME}_${REMOTE_DIR_NAME}" > /dev/null; then
+    echo "Docker ${NAME_PREFIX}-${REMOTE_NAME}_${REMOTE_DIR_NAME} already running"
+    return;
+  fi
+
+  # docker rm ${NAME_PREFIX}-${REMOTE_NAME}_${REMOTE_DIR_NAME} 2> /dev/null
+  sudo umount -l ${MOUNT_BASEDIR}/${REMOTE_NAME}_${REMOTE_DIR_NAME} 2> /dev/null
+  # mkdir ${MOUNT_BASEDIR}/${REMOTE_NAME}_${REMOTE_DIR_NAME}
+  mkdir -p ${MOUNT_BASEDIR}/${REMOTE_NAME}_${REMOTE_DIR_NAME}
+    # --user $(id -u):$(id -g) \
+  sudo docker run -d \
+    --name ${NAME_PREFIX}-${REMOTE_NAME}_${REMOTE_DIR_NAME} \
+    --security-opt apparmor:unconfined \
+    --cap-add SYS_ADMIN \
+    --device /dev/fuse \
+    --volume /etc/passwd:/etc/passwd:ro --volume /etc/group:/etc/group:ro \
+    -v ${MOUNT_BASEDIR}/${REMOTE_NAME}_${REMOTE_DIR_NAME}:/data:shared \
+    -v ${RCLONE_CONFIG_PATH}:/config/rclone:ro \
+    -v ${CACHE_DIR}:/cache \
+    -v ${ENCRYPTED_DIR}:/encrypted \
+    --user $UID_:$GID_ \
+    --restart unless-stopped \
+    $(env | grep RCLONE | cut -f1 -d= | sed 's/^/-e /') \
+    rclone/rclone \
+    mount ${REMOTE_NAME}:${REMOTE_DIR} /data \
+    --vfs-cache-mode full \
+    --vfs-cache-max-size 100G \
+    --vfs-cache-max-age 240h \
+    --buffer-size 256M \
+    --vfs-read-ahead 512M \
+    --vfs-read-chunk-size 32M \
+    --vfs-read-chunk-size-limit 1G \
+    --dir-cache-time 240h \
+    --poll-interval 15s \
+    --attr-timeout 1s \
+    --vfs-cache-poll-interval 15s \
+    --umask 022 \
+    --uid $UID_ \
+    --gid $GID_ \
+    --metadata \
+    --cache-dir=/cache/$REMOTE_NAME \
+    --allow-non-empty \
+    --log-file /cache/$REMOTE_NAME.log --log-level DEBUG
+    if [ $? -eq 0 ]; then
+      echo "Mounted ${REMOTE_NAME}:${REMOTE_DIR} to ${MOUNT_BASEDIR}/${REMOTE_NAME}_${REMOTE_DIR_NAME}"
+      return 0
+    else
+      echo "Failed to mount ${REMOTE_NAME}:${REMOTE_DIR} to ${MOUNT_BASEDIR}/${REMOTE_NAME}_${REMOTE_DIR_NAME}"
+      exit 1
+    fi
+}
+
+# # If docker exists, return
+# if ! docker ps | grep -w "${NAME_PREFIX}-prefix__" > /dev/null; then
+#   echo "Private path not dectypted."
+#   RCLONE_CONFIG_
+#   RCLONE_HASHED_PASS=$(bw get password rclone_hashed_pass)
+#   mount_remote "" "crypt:"
+# fi
+
+# List all remotes
+REMOTES=$(docker run --rm \
+    --volume $RCLONE_CONFIG_PATH:/config/rclone \
+    --user $(id -u):$(id -g) \
+    rclone/rclone \
+    listremotes)
+
+# Mount all remotes
+# for REMOTE in $REMOTES; do
+#   echo "Mounting $REMOTE"
+#   mount_remote $REMOTE
+
+if [[ "$1" == "stop" ]]; then
+  REMOTES=$(docker ps | grep ${NAME_PREFIX} | awk '{print $NF}')
+  for REMOTE in $REMOTES; do
+    echo "Stopping $REMOTE"
+    docker stop $REMOTE && docker rm $REMOTE
+    REMOTE_NAME=$(echo $REMOTE | cut -d '_' -f 1)
+    REMOTE_DIR=$(echo $REMOTE | cut -d '_' -f 2)
+    sudo umount -l ${MOUNT_BASEDIR}/${REMOTE_NAME}_${REMOTE_DIR} 2> /dev/null
+    sudo rm -rf ${MOUNT_BASEDIR}/${REMOTE_NAME}_${REMOTE_DIR}
+  done
+  exit 0
+elif [[ "$1" == "list_remotes" ]]; then
+  echo "All available remotes: $REMOTES"
+
+
+else
+  mount_remote peek
+  # mount_remote hetzner-storagebox /backup
+fi
+

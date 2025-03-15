@@ -1,3 +1,5 @@
 .qodo
 tmp
 private
+private_encrypted
+bin/bw

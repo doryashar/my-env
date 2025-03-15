@@ -1,0 +1,2 @@
+sudo docker run --name zerotier --device=/dev/net/tun --cap-add=NET_ADMIN --cap-add=SYS_ADMIN  -v /var/lib/zerotier-one:/var/lib/zerotier-one --rm zerotier/zerotier:latest $ZEROTIER_NETWORK_ID
+  

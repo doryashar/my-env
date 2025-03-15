@@ -1,0 +1,55 @@
+#!/bin/bash
+uncompress() {
+  # Check if a file was provided as argument
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <filename>"
+    exit 1
+  fi
+
+  # Get the file type
+  file_type=$(file --mime-type -b "$1")
+
+  # Extract based on the file type
+  case $file_type in
+    application/x-tar)
+      echo "Extracting tar archive..."
+      tar -xvf "$1"
+      ;;
+    application/gzip)
+      echo "Extracting gzip archive..."
+      tar -xzvf "$1"
+      ;;
+    application/x-bzip2)
+      echo "Extracting bzip2 archive..."
+      tar -xjvf "$1"
+      ;;
+    application/x-xz)
+      echo "Extracting xz archive..."
+      tar -xJvf "$1"
+      ;;
+    application/zip)
+      echo "Extracting zip archive..."
+      unzip "$1"
+      ;;
+    application/x-lzip)
+      echo "Extracting lzip archive..."
+      tar -xvf "$1"
+      ;;
+    *)
+      echo "Unsupported file type: $file_type"
+      exit 1
+      ;;
+  esac
+}
+
+compress() {
+    date_str="$(date +%Y-%m-%d_%H-%M-%S)"
+    tar -czvf "compressed_${date_str}.tar.gz" "$@"
+    if [ $? -eq 0 ]; then
+      echo "Compressed files to compressed_${date_str}.tar.gz"
+      return 0
+    else
+      echo "Compression failed."
+      return 1
+    fi
+}

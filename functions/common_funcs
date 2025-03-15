@@ -1,0 +1,27 @@
+# Common Functions
+# ANSI color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+NC='\033[0m' # No Color
+info() {
+    local message="$*"
+    echo -e "${GREEN}[INFO] $message${NC}"
+}
+debug() {
+    local message="$*"
+    if [[ -n "$DEBUG" ]]; then
+        echo -e "${PURPLE}[DEBUG] $message${NC}"
+    fi
+}
+warning() {
+    local message="$*"
+    echo -e "${YELLOW}[WARNING] $message${NC}"
+}
+error() {
+    local message="$*"
+    echo -e "${RED}[ERROR] $message${NC}"
+    exit 1
+}

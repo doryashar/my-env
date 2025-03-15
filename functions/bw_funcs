@@ -1,0 +1,15 @@
+add_secret() {
+    name="$1"
+    secret="$2"
+    bw create item password "$secret" --name "$name"
+}
+
+get_secret() {
+    name="$1"
+    bw get item "$name" | jq -r '.login.password'
+}
+
+delete_secret() {
+    name="$1"
+    bw delete item "$name"
+}

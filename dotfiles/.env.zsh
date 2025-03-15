@@ -3,6 +3,10 @@ export ENV_LOC="/home/yashar/env" #
 
 # Load config
 
+if [ -f "${ENV_LOC}/private/.secrets" ]; then
+. ${ENV_LOC}/private/.secrets
+fi
+
 # If modified time of env is more than  1 day, then update it and dotfiles
 if [ -t 0 ]; then
     if [ ! -f "${ENV_LOC}/tmp/updated" ] || [ "$(find "${ENV_LOC}/tmp/updated" -mtime +1 -print)" ]; then

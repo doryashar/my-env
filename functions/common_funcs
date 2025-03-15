@@ -20,6 +20,10 @@ warning() {
     local message="$*"
     echo -e "${YELLOW}[WARNING] $message${NC}"
 }
+title() {
+    local message="$*"
+    echo -e "${BLUE}$message${NC}"
+}
 error() {
     local message="$*"
     echo -e "${RED}[ERROR] $message${NC}"

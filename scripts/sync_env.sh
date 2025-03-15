@@ -34,7 +34,7 @@ SOURCE_REGEX=()
 TARGET_REGEX=()
 BACKWARD_SYNC=()
 
-DEBUG=1
+DEBUG=${ENV_DEBUG:-1}
 
 ## ====================================== ##
 source $ENV_LOC/functions/common_funcs
@@ -42,7 +42,7 @@ source $ENV_LOC/functions/common_funcs
 
 # Function to display usage information
 show_help() {
-    echo -e "${BLUE}Dotfiles Synchronizer${NC}"
+    title "Dotfiles Synchronizer${NC}"
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
@@ -62,11 +62,11 @@ create_default_config() {
     local config_path="$1"
     
     if [[ -f "$config_path" ]]; then
-        echo -e "${YELLOW}Config file already exists at $config_path${NC}"
+        warning "Config file already exists at $config_path"
         return 0
     fi
     
-    echo -e "${GREEN}Creating default configuration at $config_path${NC}"
+    info "Creating default configuration at $config_path"
     
     cat > "$config_path" << EOF
 # Dotfiles Synchronizer Configuration
@@ -124,7 +124,7 @@ custom/bin/* <= $HOME/bin/*
 # Add more mappings as needed
 EOF
 
-    echo -e "${GREEN}Default configuration created. Please edit $config_path to customize your setup.${NC}"
+    info "Default configuration created. Please edit $config_path to customize your setup."
     exit 0
 }
 
@@ -133,7 +133,7 @@ init_repo() {
     local repo_path="$1"
     
     if [[ -d "$repo_path/.git" ]]; then
-        echo -e "${YELLOW}Repository already initialized at $repo_path${NC}"
+        warning "Repository already initialized at $repo_path${NC}"
         return 0
     fi
     
@@ -151,7 +151,7 @@ init_repo() {
     git add README.md
     git commit -m "Initial commit"
     
-    echo -e "${GREEN}Repository initialized at $repo_path${NC}"
+    info "Repository initialized at $repo_path"
     echo "Edit your config file to add your dotfiles."
     
     return 0
@@ -162,7 +162,7 @@ load_config() {
     local config_path="$1"
     
     if [[ ! -f "$config_path" ]]; then
-        echo -e "${YELLOW}Config file not found at $config_path${NC}"
+        warning "Config file not found at $config_path${NC}"
         create_default_config "$config_path"
     fi
     
@@ -260,14 +260,14 @@ load_config() {
 }
 # Process regex-based mappings
 process_regex_mappings() {
-    echo -e "${BLUE}Processing regex-based mappings...${NC}"
+    debug "Processing regex-based mappings..."
     
     for i in "${!SOURCE_REGEX[@]}"; do
         local source_pattern="${SOURCE_REGEX[$i]}"
         local target_pattern="${TARGET_REGEX[$i]}"
         local options="${FILE_OPTIONS["regex:$source_pattern"]}"
         
-        echo -e "${BLUE}Processing pattern: $source_pattern => $target_pattern${NC}"
+        debug "Processing pattern: $source_pattern => $target_pattern"
         
         # Convert source_pattern to a glob pattern for finding files
         local glob_pattern="$REPO_PATH/${source_pattern//\(/*/}"
@@ -280,7 +280,7 @@ process_regex_mappings() {
         done < <(find "$REPO_PATH" -path "$glob_pattern" -print0 2>/dev/null)
         
         if [[ ${#files[@]} -eq 0 ]]; then
-            echo -e "${YELLOW}No files matched pattern: $source_pattern${NC}"
+            warning "No files matched pattern: $source_pattern"
             continue
         fi
         
@@ -318,7 +318,7 @@ process_regex_mappings() {
             # Expand ~ in target path
             target="${target/#\~/$HOME}"
             
-            echo -e "${GREEN}Matched: $rel_path => $target${NC}"
+            debug "(-) Matched: $rel_path => $target"
             
             # Sync the file
             sync_file "$rel_path" "$target" "$options"
@@ -328,7 +328,7 @@ process_regex_mappings() {
 
 # Process backward sync mappings
 process_backward_sync() {
-    echo -e "${BLUE}Processing backward sync mappings...${NC}"
+    debug "Processing backward sync mappings..."
     
     for mapping in "${BACKWARD_SYNC[@]}"; do
         # Parse the mapping
@@ -336,7 +336,7 @@ process_backward_sync() {
         local target="${mapping#* <= }"
         local options="${FILE_OPTIONS["$mapping"]}"
         
-        echo -e "${BLUE}Processing backward sync: $source <= $target${NC}"
+        debug "Processing backward sync: $source <= $target"
         
         # Expand ~ in paths
         source="${source/#\~/$HOME}"
@@ -355,7 +355,7 @@ process_backward_sync() {
             done < <(find "${glob_pattern/#\~/$HOME}" -type f -print0 2>/dev/null)
             
             if [[ ${#files[@]} -eq 0 ]]; then
-                echo -e "${YELLOW}No files matched backward pattern: $target${NC}"
+                warning "No files matched backward pattern: $target${NC}"
                 continue
             fi
             
@@ -382,11 +382,11 @@ process_backward_sync() {
                 elif [[ "$source_file" != /* ]]; then
                     source_file="$source_file"
                 else
-                    echo -e "${RED}Source must be relative to repo or an absolute path: $source_file${NC}"
+                    error "Source must be relative to repo or an absolute path: $source_file"
                     continue
                 fi
                 
-                echo -e "${GREEN}Backward sync: $source_file <= $target_file${NC}"
+                debug "(-) Backward sync: $source_file <= $target_file${NC}"
                 
                 # Sync from target to source
                 backward_sync_file "$source_file" "$target_file" "$options"
@@ -401,11 +401,11 @@ process_backward_sync() {
             elif [[ "$source" != /* ]]; then
                 source="$source"
             else
-                echo -e "${RED}Source must be relative to repo or an absolute path: $source${NC}"
+                error "Source must be relative to repo or an absolute path: $source"
                 continue
             fi
             
-            echo -e "${GREEN}Backward sync: $source <= $target${NC}"
+            debug "(-) Backward sync: $source <= $target"
             
             # Sync from target to source
             backward_sync_file "$source" "$target" "$options"
@@ -434,7 +434,7 @@ backward_sync_file() {
     
     # Check if target exists
     if [[ ! -e "$target" ]]; then
-        echo -e "${YELLOW}Target does not exist: $target${NC}"
+        warning "Target does not exist: $target"
         return 1
     fi
     
@@ -451,7 +451,7 @@ backward_sync_file() {
 
         # Check if they're different
         if diff -q "$source" "$target" &>/dev/null; then
-            echo -e "${BLUE}Files are identical: $target${NC}"
+            debug "Files are identical: $target"
             rm -rf "$target"
             ln -sf "$source" "$target"
             return 0
@@ -461,19 +461,19 @@ backward_sync_file() {
             local target_mtime=$(stat -c %Y "$target" 2>/dev/null || stat -f %m "$target")
             
             if [[ "$target_mtime" -gt "$source_mtime" ]]; then
-                echo -e "${YELLOW}Target is newer than source: $target${NC}"
+                warning "Target is newer than source: $target"
                 # For backward sync, we typically want to update the source
                 cp -rf "$target" "$source"
-                echo -e "${GREEN}Updated source from target: $source_rel${NC}"
+                info "Updated source from target: $source_rel"
             else
-                echo -e "${YELLOW}Source is newer than target: $source${NC}"
+                warning "Source is newer than target: $source"
                 handle_conflict "$source" "$target" "$conflict_strategy"
             fi
         fi
     else
         # Source doesn't exist - copy from target
         cp -rf "$target" "$source"
-        echo -e "${GREEN}Created new source from target: $source_rel${NC}"
+        info "Created new source from target: $source_rel"
     fi
     
     return 0
@@ -490,9 +490,9 @@ create_link() {
     mkdir -p "$target_dir"
     
     if [[ "$link_type" == "hard" ]]; then
-        ln "$source" "$target" && echo -e "${GREEN}Created hard link: $target -> $source${NC}"
+        ln "$source" "$target" && info "Created hard link: $target -> $source"
     else
-        ln -s "$source" "$target" && echo -e "${GREEN}Created symbolic link: $target -> $source${NC}"
+        ln -s "$source" "$target" && info "Created symbolic link: $target -> $source"
     fi
     
     return $?
@@ -506,10 +506,10 @@ handle_conflict() {
     
     case "$strategy" in
         "ask")
-            echo -e "${YELLOW}Conflict detected:${NC}"
+            warning "Conflict detected:"
             echo "Source: $source"
             echo "Target: $target"
-            echo -e "${YELLOW}What would you like to do?${NC}"
+            warning "What would you like to do?"
             echo "1) Keep local version (overwrite repository)"
             echo "2) Use repository version (overwrite local)"
             echo "3) Show diff"
@@ -541,25 +541,25 @@ handle_conflict() {
             ;;
         "local")
             cp -rf "$target" "$source"
-            echo -e "${BLUE}Kept local version: $target${NC}"
+            info "Kept local version: $target"
             ;;
         "remote")
             # cp -rf "$source" "$target"
             rm -rf $target
             ln -s "$source" "$target" 
-            echo -e "${BLUE}Used repository version: $source${NC}"
+            info "Used repository version: $source${NC}"
             ;;
         "rename")
             mv "$target" "${target}.backup.$(date +%Y%m%d%H%M%S)"
             # cp -rf "$source" "$target"
             ln -s "$source" "$target" 
-            echo -e "${BLUE}Renamed local to ${target}.backup.* and used repository version${NC}"
+            info "Renamed local to ${target}.backup.* and used repository version${NC}"
             ;;
         "ignore")
-            echo -e "${BLUE}Ignored conflict for: $target${NC}"
+            info "Ignored conflict for: $target${NC}"
             ;;
         *)
-            echo -e "${RED}Unknown conflict strategy: $strategy${NC}"
+            error "Unknown conflict strategy: $strategy${NC}"
             handle_conflict "$source" "$target" "ask"
             ;;
     esac
@@ -590,13 +590,13 @@ sync_file() {
     if [[ ! -e "$source" ]]; then
         if [[ -e "$target" ]]; then
             # Target exists but source doesn't - copy to repo
-            echo -e "${BLUE}Found new dotfile: $target${NC}"
+            info "Found new dotfile: $target"
             mkdir -p "$(dirname "$source")"
             mv "$target" "$source"
             ln -sf "$source" "$target"
-            echo -e "${GREEN}Added to repository: $source_rel${NC}"
+            info "Added to repository: $source_rel"
         else
-            echo -e "${RED}Neither source nor target exists: $source_rel${NC}"
+            error "Neither source nor target exists: $source_rel"
             return 1
         fi
     fi
@@ -605,14 +605,14 @@ sync_file() {
     if [[ -e "$target" ]]; then
         # Check if it's a link pointing to our source
         if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
-            # echo -e "${BLUE}Link already exists and is correct: $target${NC}"
+            # info "Link already exists and is correct: $target${NC}"
             debug "Link already exists and is correct: $target"
             return 0
         fi
         
         # File exists but is not a correct link - check if it's different
         if diff -q "$source" "$target" &>/dev/null; then
-            echo -e "${BLUE}Files are identical: $target${NC}"
+            info "Files are identical: $target${NC}"
             
             # If target is not a link to source, replace with link
             if [[ ! -L "$target" || "$(readlink "$target")" != "$source" ]]; then
@@ -625,10 +625,10 @@ sync_file() {
             local target_mtime=$(stat -c %Y "$target" 2>/dev/null || stat -f %m "$target")
             
             if [[ "$target_mtime" -gt "$source_mtime" ]]; then
-                echo -e "${YELLOW}Target is newer than source: $target${NC}"
+                warning "Target is newer than source: $target${NC}"
                 handle_conflict "$source" "$target" "$conflict_strategy"
             else
-                echo -e "${YELLOW}Source is newer than target: $source${NC}"
+                warning "Source is newer than target: $source${NC}"
                 handle_conflict "$source" "$target" "$conflict_strategy"
             fi
         fi
@@ -642,8 +642,6 @@ sync_file() {
 
 # Sync all dotfiles
 sync_dotfiles() {
-    echo -e "${BLUE}Syncing dotfiles...${NC}"
-
     debug "Syncing the following files: ${!SOURCE_TO_TARGET[@]}"
     for source in "${!SOURCE_TO_TARGET[@]}"; do
         debug "Syncing $source to ${SOURCE_TO_TARGET[$source]}"
@@ -659,7 +657,7 @@ sync_dotfiles() {
     # Finally, process backward sync mappings
     process_backward_sync
 
-    echo -e "${GREEN}Sync complete!${NC}"
+    debug "Sync complete!"
     return 0
 }
 
@@ -671,7 +669,7 @@ git_sync() {
     
     # Check if there are changes
     if [[ -n "$(git status --porcelain)" ]]; then
-        echo -e "${BLUE}Changes detected in repository${NC}"
+        info "Changes detected in repository${NC}"
         git add .
         git commit -m "Auto-sync dotfiles $(date '+%Y-%m-%d %H:%M:%S')"
     fi
@@ -683,14 +681,14 @@ git_sync() {
                 git remote add origin "$REMOTE_URL"
             fi
             
-            echo -e "${BLUE}Pushing changes to remote repository${NC}"
+            debug "Pushing changes to remote repository"
             git push origin master
         else
-            echo -e "${YELLOW}No remote URL configured. Skipping push.${NC}"
+            warning "No remote URL configured. Skipping push."
         fi
     elif [[ "$direction" == "pull" ]]; then
         if [[ -n "$REMOTE_URL" ]]; then
-            echo -e "${BLUE}Pulling changes from remote repository${NC}"
+            debug "Pulling changes from remote repository"
             
             # Check if remote is configured
             if ! git remote | grep -q origin; then
@@ -699,14 +697,14 @@ git_sync() {
             
             # Try to pull and merge
             if ! git pull origin master --ff-only; then
-                echo -e "${YELLOW}Could not fast-forward merge. Trying to auto-merge...${NC}"
+                warning "Could not fast-forward merge. Trying to auto-merge...${NC}"
                 
                 if ! git pull origin master; then
-                    echo -e "${RED}Merge conflict detected.${NC}"
+                    error "Merge conflict detected."
                     
                     case "$DEFAULT_CONFLICT_STRATEGY" in
                         "ask")
-                            echo -e "${YELLOW}How would you like to handle git conflicts?${NC}"
+                            warning "How would you like to handle git conflicts?${NC}"
                             echo "1) Manual resolution (open editor)"
                             echo "2) Keep local changes"
                             echo "3) Use remote changes"
@@ -738,7 +736,7 @@ git_sync() {
                             # Create backup branch
                             local backup_branch="backup-$(date +%Y%m%d%H%M%S)"
                             git branch "$backup_branch"
-                            echo -e "${BLUE}Created backup branch: $backup_branch${NC}"
+                            info "Created backup branch: $backup_branch${NC}"
                             
                             # Force use remote
                             git reset --hard origin/master
@@ -753,7 +751,7 @@ git_sync() {
                 fi
             fi
         else
-            echo -e "${YELLOW}No remote URL configured. Skipping pull.${NC}"
+            warning "No remote URL configured. Skipping pull.${NC}"
         fi
     fi
     
@@ -766,7 +764,7 @@ update_bashrc() {
     local bashrc="$HOME/.bashrc"
     
     if ! grep -q "$script_path" "$bashrc"; then
-        echo -e "${BLUE}Adding dotfiles synchronizer to .bashrc${NC}"
+        info "Adding dotfiles synchronizer to .bashrc${NC}"
         
         cat >> "$bashrc" << EOL
 
@@ -779,9 +777,9 @@ if [ -f "$script_path" ] && [ "\$-" = *i* ]; then
 fi
 EOL
         
-        echo -e "${GREEN}Added to .bashrc. You can now use 'envsync' command.${NC}"
+        info "Added to .bashrc. You can now use 'envsync' command."
     else
-        echo -e "${BLUE}Already added to .bashrc${NC}"
+        warning "Already added to .bashrc"
     fi
     
     return 0
@@ -827,7 +825,7 @@ main() {
                 shift
                 ;;
             *)
-                echo -e "${RED}Unknown option: $1${NC}"
+                error "Unknown option: $1${NC}"
                 show_help
                 exit 1
                 ;;
@@ -839,6 +837,7 @@ main() {
     
     # Initialize if requested
     if [[ -n "$PERFORM_INIT" ]]; then
+        title "Performing initialization"
         init_repo "$REPO_PATH"
         create_default_config "$CONFIG_FILE"
         update_bashrc
@@ -856,10 +855,10 @@ main() {
     # TODO: if updated tell user the new version.
 
     # Perform actions
-    [[ -n "$PERFORM_PULL" ]] && git_sync "pull" "$REPO_PATH"
-    [[ -n "$PERFORM_ENCRYPTED_SYNC" ]] && sync_encrypted.sh
-    [[ -n "$PERFORM_DOTFILES_SYNC" ]] && sync_dotfiles
-    [[ -n "$PERFORM_PUSH" ]] && git_sync "push" "$REPO_PATH"
+    [[ -n "$PERFORM_PULL" ]] && title "Git pulling" && git_sync "pull" "$REPO_PATH"
+    [[ -n "$PERFORM_ENCRYPTED_SYNC" ]] && title "Encrypted files synching" && sync_encrypted.sh
+    [[ -n "$PERFORM_DOTFILES_SYNC" ]] && title "Dotfiles synching" && sync_dotfiles
+    [[ -n "$PERFORM_PUSH" ]] && title "Git Pushing" && git_sync "push" "$REPO_PATH"
     
     return 0
 }

@@ -19,7 +19,7 @@ command_exists() {
 # Function to ensure age is installed
 ensure_age_installed() {
   if ! command_exists age; then
-    info "age encryption tool not found. Attempting to install..."
+    warning "age encryption tool not found. Attempting to install..."
     
     if command_exists apt-get; then
       sudo apt-get update && sudo apt-get install -y age
@@ -32,13 +32,13 @@ ensure_age_installed() {
     elif command_exists pacman; then
       sudo pacman -S age
     else
-      info "Error: Could not automatically install age. Please install it manually."
-      info "Visit: https://github.com/FiloSottile/age#installation"
+      error "Could not automatically install age. Please install it manually."
+      error "Visit: https://github.com/FiloSottile/age#installation"
       exit 1
     fi
   fi
   
-  info "age encryption tool is installed."
+  debug "age encryption tool is installed."
 }
 
 # Function to encrypt a file or directory
@@ -340,7 +340,7 @@ main() {
 
   # Check for remote changes
   cd "$LOCAL_REPO_PATH" || exit 1
-  info "Checking for remote changes..."
+  debug "Checking for remote changes..."
   git fetch
   
   local_current=$(git rev-parse HEAD)
@@ -351,14 +351,14 @@ main() {
     info "Remote has changes."
     remote_changed=1
   else
-    info "Remote is up-to-date."
+    debug "Remote is up-to-date."
   fi
   
   # Check if local decrypted files changed
   info "Checking for local changes..."
   local_changed=0
   if has_changed "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"; then
-    info "Local files unchanged."
+    debug "Local files unchanged."
   else
     info "Local files have changed."
     local_changed=1
@@ -366,7 +366,7 @@ main() {
   
   # Case 1: No changes anywhere
   if [ "$remote_changed" -eq 0 ] && [ "$local_changed" -eq 0 ]; then
-    info "No changes detected. Nothing to do."
+    debug "No changes detected. Nothing to do."
     exit 0
   fi
   
@@ -377,7 +377,7 @@ main() {
     rm -rf "$DECRYPTED_DIR"/*
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
     find "$DECRYPTED_DIR" -type f -not -path "*/\.*" -exec sha256sum {} \; | sort > "$LOCAL_HASH_FILE"
-    info "Local files updated successfully."
+    debug "Local files updated successfully."
     exit 0
   fi
   
@@ -395,7 +395,7 @@ main() {
     git add .
     git commit -m "Update encrypted files: $(date)"
     git push
-    info "Local changes encrypted and pushed successfully."
+    debug "Local changes encrypted and pushed successfully."
     exit 0
   fi
   
@@ -446,7 +446,7 @@ main() {
     git commit -m "Merge changes: $(date)"
     git push
     
-    info "Files merged, encrypted, and pushed successfully."
+    debug "Files merged, encrypted, and pushed successfully."
     exit 0
   fi
 }
@@ -455,7 +455,7 @@ main() {
 cleanup() {
   info "Cleaning up temporary files..."
   rm -rf "$TEMP_DIR"
-  info "Done."
+  debug "Done cleanup."
 }
 
 # Set cleanup on exit

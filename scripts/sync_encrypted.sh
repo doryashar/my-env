@@ -68,7 +68,7 @@ decrypt_file() {
   mkdir -p "$(dirname "$dest")"
   
   # Decrypt the file
-  age -d -i <(info "$AGE_SECRET") -o "$TEMP_DIR/decrypted_temp" "$source" #Instead of using -i $IDENTITY_FILE
+  age -d -i <(echo "$AGE_SECRET") -o "$TEMP_DIR/decrypted_temp" "$source" #Instead of using -i $IDENTITY_FILE
   
   # Check if it's a tar archive (directory)
   if tar -tf "$TEMP_DIR/decrypted_temp" &> /dev/null; then
@@ -93,7 +93,7 @@ encrypt_recursive() {
     dest_file="$dest_dir/$rel_path.age"
     mkdir -p "$(dirname "$dest_file")"
     encrypt_file "$file" "$dest_file"
-    info "Encrypted: $rel_path"
+    debug "Encrypted: $rel_path"
   done
 }
 
@@ -359,7 +359,7 @@ main() {
   fi
   
   # Check if local decrypted files changed
-  info "Checking for local changes..."
+  debug "Checking for local changes..."
   local_changed=0
   if has_changed "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"; then
     debug "Local files unchanged."
@@ -457,7 +457,7 @@ main() {
 
 # Cleanup function
 cleanup() {
-  info "Cleaning up temporary files..."
+  debug "Cleaning up temporary files..."
   rm -rf "$TEMP_DIR"
   debug "Done cleanup."
 }

@@ -445,13 +445,13 @@ backward_sync_file() {
     if [[ -e "$source" ]]; then
         # Check if source is a symbolic link to the target:
         if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
-            debug "Symbolic link already exists: $source"
+            debug "(-)(-) Symbolic link already exists: $source"
             return 0
         fi
 
         # Check if they're different
         if diff -q "$source" "$target" &>/dev/null; then
-            debug "Files are identical: $target"
+            debug "(-)(-) Files are identical: $target"
             rm -rf "$target"
             ln -sf "$source" "$target"
             return 0

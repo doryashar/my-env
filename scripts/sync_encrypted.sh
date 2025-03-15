@@ -8,7 +8,7 @@ DECRYPTED_DIR="$ENV_LOC/tmp/private"
 LOCAL_HASH_FILE="$ENV_LOC/tmp/local_hashes"
 TEMP_DIR="$ENV_LOC/tmp/private_encrypted-sync-temp"
 # IDENTITY_FILE="$ENV_LOC/tmp/private/age-key"
-AGE_SECRET=$(bw get password AGE_SECRET) #<(info "$AGE_SECRET")
+AGE_SECRET=$(bw get password AGE_SECRET)
 if [[ -z "$AGE_SECRET" ]]; then
   error "AGE_SECRET is not set. Please set it in your environment."
   exit 1

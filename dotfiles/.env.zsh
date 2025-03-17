@@ -1,6 +1,5 @@
 
-# "${ENV_LOC:-"$( cd "$( dirname "$( readlink -f "${0}" )" )" && pwd )"}"
-. ${ENV_LOC}/env_vars
+ENV_LOC="${ENV_LOC:-"$( dirname "$( dirname "$( readlink -f "${0}" )" )" )"}"
 
 # Load config
 . ${ENV_LOC}/env
@@ -9,6 +8,7 @@ if [ -f "${ENV_LOC}/private/secrets" ]; then
 . ${ENV_LOC}/private/secrets
 fi
 
+. ${ENV_LOC}/env_vars
 . ${ENV_LOC}/functions/*
 . ${ENV_LOC}/aliases
 

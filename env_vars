@@ -1,4 +1,3 @@
-export ENV_LOC="${HOME}/env"
 export PATH=${ENV_LOC}/scripts:${ENV_LOC}/bin:${PATH}
 export EDITOR=nvim
 export ENCRYPTED_DIR="$ENV_LOC"/private_encrypted

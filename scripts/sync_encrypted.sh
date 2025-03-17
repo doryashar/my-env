@@ -339,26 +339,28 @@ main() {
   fi
 
   # Create necessary directories
-  mkdir -p "$LOCAL_REPO_PATH" "$DECRYPTED_DIR" "$TEMP_DIR"
+  mkdir -p "$LOCAL_REPO_PATH" "$TEMP_DIR"
   
-  if github_access_denied; then
-    GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-bw get password GITHUB_SSH_PRIVATE_KEY}
-    TEMP_SSH_IDENTITY_FILE=$(mktemp); chmod 600 $TEMP_SSH_IDENTITY_FILE; 
-    echo -e $GITHUB_SSH_PRIVATE_KEY > $TEMP_SSH_IDENTITY_FILE
-    TEMP_SSH_FILE=$(mktemp); chmod +x $TEMP_SSH_FILE; 
-    echo "ssh -i $TEMP_SSH_IDENTITY_FILE " '$@' > $TEMP_SSH_FILE
-    echo executable: $TEMP_SSH_FILE
-    GIT_SSH="$TEMP_SSH_FILE" 
-  fi
+  # if github_access_denied; then
+  #   GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-bw get password GITHUB_SSH_PRIVATE_KEY}
+  #   TEMP_SSH_IDENTITY_FILE=$(mktemp); chmod 600 $TEMP_SSH_IDENTITY_FILE; 
+  #   echo -e $GITHUB_SSH_PRIVATE_KEY > $TEMP_SSH_IDENTITY_FILE
+  #   TEMP_SSH_FILE=$(mktemp); chmod +x $TEMP_SSH_FILE; 
+  #   echo "ssh -i $TEMP_SSH_IDENTITY_FILE " '$@' > $TEMP_SSH_FILE
+  #   echo executable: $TEMP_SSH_FILE
+  #   GIT_SSH="$TEMP_SSH_FILE" 
+  # fi
 
   # Setup local repo if it doesn't exist
   if [ ! -d "$LOCAL_REPO_PATH/.git" ]; then
     info "Initializing local repository..."
     git clone "$REMOTE_REPO" "$LOCAL_REPO_PATH" || error "Could not glone git repo $REMOTE_REPO" && exit 1
     rm -f $TEMP_SSH_IDENTITY_FILE  $TEMP_SSH_FILE
+  fi
     
+  if [ ! -d "$DECRYPTED_DIR" ]; then
     # Initial decrypt after clone
-    debug "Decrypting now"
+    info "Initial Decrypting now from $LOCAL_REPO_PATH to $DECRYPTED_DIR"
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
     find "$DECRYPTED_DIR" -type f -not -path "*/\.*" -exec sha256sum {} \; | sort > "$LOCAL_HASH_FILE"
     exit 0

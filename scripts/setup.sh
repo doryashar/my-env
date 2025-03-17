@@ -1,9 +1,41 @@
 #!/bin/bash
 
+# Common Functions
+# ANSI color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+NC='\033[0m' # No Color
+info() {
+    local message="$*"
+    echo -e "${GREEN}[INFO] $message${NC}"
+}
+debug() {
+    local message="$*"
+    if [[ -n "$DEBUG" ]]; then
+        echo -e "${PURPLE}[DEBUG] $message${NC}"
+    fi
+}
+warning() {
+    local message="$*"
+    echo -e "${YELLOW}[WARNING] $message${NC}"
+}
+title() {
+    local message="$*"
+    echo -e "${BLUE}$message${NC}"
+}
+error() {
+    local message="$*"
+    echo -e "${RED}[ERROR] $message${NC}"
+    exit 1
+}
+
 # Function to check if a command exists
 check_command() {
     if ! command -v "$1" &> /dev/null; then
-        print_error "$1 is required but not installed."
+        error "$1 is required but not installed."
         exit 1
     fi
 }
@@ -19,7 +51,7 @@ get_secret_keys() {
     # Get GitHub API key
     read -p "Enter your GitHub API key: " github_api_key
     if [ -z "$github_api_key" ]; then
-        print_error "GitHub API key is required"
+        error "GitHub API key is required"
         exit 1
     fi
 
@@ -27,7 +59,7 @@ get_secret_keys() {
     read -s -p "Enter decryption password for private repository: " decrypt_password
     echo
     if [ -z "$decrypt_password" ]; then
-        print_error "Decryption password is required"
+        error "Decryption password is required"
         exit 1
     fi
 }
@@ -40,20 +72,14 @@ generate_config() {
     # Dotfiles configuration setup
 }
 
-main() {
-    title "** ENV setup script starting **"
-
+setup_steps() {
     # Validate required commands
-    title "Validating required commands..."
+    info "Validating required commands..."
     validate_commands
 
     # Generate config
-    title "Generating config..."
+    info "Generating config..."
     generate_config
-
-    # Get secret keys
-    title "Getting secret keys..."
-    get_secret_keys
 
     # # Initialize submodules
     # print_message "Initializing submodules..."
@@ -61,18 +87,21 @@ main() {
     # git submodule update
 
     # Clone public_env repository
-    title "Setting up public_env repository..."
+    info "Setting up public_env repository..."
     if [ ! -d "env" ]; then
         # TODO: Implement decryption mechanism
         # This will be implemented once encryption method is decided
         mkdir -p public_env
-        curl -H "Authorization: token $github_api_key" \
-            -L https://api.github.com/repos/yourusername/public_env/tarball \
-            -o public_env.encrypted.tar.gz
+        curl -L https://api.github.com/repos/doryashar/my-env/tarball \
+            -o public_env.tar.gz
     fi
 
+    # Get secret keys
+    info "Getting secret keys..."
+    get_secret_keys
+
     # Clone private_env repository
-    title "Setting up private_env repository..."
+    info "Setting up private_env repository..."
     if [ ! -d "private" ]; then
         curl -H "Authorization: token $github_api_key" \
             -L https://api.github.com/repos/doryashar/encrypted/tarball \
@@ -80,46 +109,53 @@ main() {
         
         mkdir -p private_env
         tar xzf private_env.tar.gz -C private --strip-components=1
+        
+        # TODO: i might need to do it only after the dotenv sync because .ssh dir is missing
+        cd private_env
+        git init
+        git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPO.git
+        git fetch origin main  # Replace "main" with the default branch if different
+        git checkout -b main origin/main
+
         rm private_env.tar.gz
     fi
 
-}
-    
-
-# Setup steps (to be implemented based on repository contents)
-setup_steps() {
-    
-    # Desktop setup
-    print_message "Setting up desktop environment..."
-    # TODO: Implement desktop setup (conky, shortcuts)
-    
-    # Dotfiles setup
-    print_message "Setting up dotfiles..."
-    # TODO: Implement dotfiles setup
-    
-    # System configuration
-    print_message "Setting up system configurations..."
-    # TODO: Implement system configs
-    
-    # Mount NFS
-    print_message "Mounting NFS shares..."
-    # TODO: Implement NFS mounting
-    
-    # Setup aliases and scripts
-    print_message "Setting up aliases and scripts..."
-    # TODO: Implement aliases and scripts setup
-    
     # Docker compose setup
-    print_message "Setting up Docker services..."
+    info "Setting up Docker services..."
     # TODO: Implement Docker compose setup
+
+    # APT packages setup
+    info "Setting up APT packages..."
+    # TODO: Implement
+
+    # PIP packages setup
+    info "Setting up PIP packages..."
+    # TODO: Implement
     
     # Cron jobs setup
-    print_message "Setting up cron jobs..."
+    info "Setting up cron jobs..."
     # TODO: Implement cron jobs setup
+
+    info "Unzipping binaries..."
+    # TODO: Implement
+
+    info "Getting github projects..."
+    # TODO: Implement
+
+    info "Setting up Dotfiles..."
+    # TODO: Implement
+
+    info "Setting up ZSH..."
+    # TODO: Implement
 }
 
-# Run setup
-setup_steps
+main() {    
+    title "** ENV setup script starting **"
 
-print_success "Environment setup completed!"
-print_message "Please log out and log back in for all changes to take effect."
+    # Run setup
+    setup_steps
+
+    info "Environment setup completed!"
+}
+
+main

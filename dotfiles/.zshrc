@@ -62,7 +62,7 @@ path=(~/bin $path)
 export GPG_TTY=$TTY
 
 # Source additional local files if they exist.
-# z4h source ~/.env.zsh
+z4h source ~/.env.zsh
 
 # Use additional Git repositories pulled in with `z4h install`.
 #
@@ -92,7 +92,6 @@ compdef _directories md
 # Define named directories: ~w <=> Windows home directory on WSL.
 [[ -z $z4h_win_home ]] || hash -d w=$z4h_win_home
 
-z4h source ~/.env.zsh
 
 # Define aliases.
 alias tree='tree -a -I .git'

@@ -332,7 +332,7 @@ main() {
   # Ensure age is installed
   debug "Ensuring AGE is installed and setting up the secret from BW"
   ensure_age_installed
-  AGE_SECRET=${AGE_SECRET:-bw get password AGE_SECRET}
+  AGE_SECRET=${AGE_SECRET:-"$(bw get password AGE_SECRET)"}
   if [[ -z "$AGE_SECRET" ]]; then
     error "AGE_SECRET is not set. Please set it in your environment."
     exit 1

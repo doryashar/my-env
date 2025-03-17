@@ -607,6 +607,13 @@ sync_file() {
         if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
             debug "(-)(-) Link already exists and is correct: $target"
             return 0
+        else
+            if [[ -L "$target" ]]; then
+                echo "link"
+            fi
+            if [[ "$(readlink "$target")" == "$source" ]]; then
+                echo "same "$(readlink "$target")" $target $source"
+            fi
         fi
         
         # File exists but is not a correct link - check if it's different
@@ -643,7 +650,7 @@ sync_file() {
 sync_dotfiles() {
     debug "Syncing the following files: ${!SOURCE_TO_TARGET[@]}"
     for source in "${!SOURCE_TO_TARGET[@]}"; do
-        debug "Syncing $source to ${SOURCE_TO_TARGET[$source]}"
+        debug "Forward Syncing $source to ${SOURCE_TO_TARGET[$source]}"
         local target="${SOURCE_TO_TARGET[$source]}"
         local options="${FILE_OPTIONS[$source]}"
         

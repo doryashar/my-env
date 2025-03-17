@@ -3,25 +3,28 @@ export ENV_LOC="/home/yashar/env" #
 
 # Load config
 
-if [ -f "${ENV_LOC}/private/.secrets" ]; then
-. ${ENV_LOC}/private/.secrets
+if [ -f "${ENV_LOC}/private/secrets" ]; then
+. ${ENV_LOC}/private/secrets
 fi
+
+. ${ENV_LOC}/env
+. ${ENV_LOC}/functions/*
+. ${ENV_LOC}/aliases
 
 # If modified time of env is more than  1 day, then update it and dotfiles
 if [ -t 0 ]; then
     if [ ! -f "${ENV_LOC}/tmp/updated" ] || [ "$(find "${ENV_LOC}/tmp/updated" -mtime +1 -print)" ]; then
         echo "Updating env..."
         ${ENV_LOC}/scripts/sync_env.sh --encrypted_sync --dotfiles_sync --push --pull && touch ${ENV_LOC}/tmp/updated
+        #TODO: if updated run exec $0
     fi
 fi
 
-if [ -f "${ENV_LOC}/private/.secrets" ]; then
-. ${ENV_LOC}/private/.secrets
+# If mount file variable exists, then mount it
+if [ -n "${MOUNT_FILE}" ]; then
+    title "Mounting volumes..."
+    mount -T ${MOUNT_FILE}
 fi
-
-. ${ENV_LOC}/env
-. ${ENV_LOC}/functions/*
-. ${ENV_LOC}/aliases
 
 echo "Running duf..."
 (duf &)

@@ -37,7 +37,7 @@ BACKWARD_SYNC=()
 DEBUG=${ENV_DEBUG:-1}
 
 ## ====================================== ##
-source $ENV_LOC/functions/common_funcs
+source $ENV_DIR/functions/common_funcs
 ## ====================================== ##
 
 # Function to display usage information
@@ -855,7 +855,7 @@ main() {
 
     # Perform actions
     [[ -n "$PERFORM_PULL" ]] && title "Git pulling" && git_sync "pull" "$REPO_PATH"
-    [[ -n "$PERFORM_ENCRYPTED_SYNC" ]] && title "Encrypted files synching" && sync_encrypted.sh
+    [[ -n "$PERFORM_ENCRYPTED_SYNC" ]] && title "Encrypted files synching" && ${ENV_DIR}/scripts/sync_encrypted.sh
     [[ -n "$PERFORM_DOTFILES_SYNC" ]] && title "Dotfiles synching" && sync_dotfiles
     [[ -n "$PERFORM_PUSH" ]] && title "Git Pushing" && git_sync "push" "$REPO_PATH"
     

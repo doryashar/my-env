@@ -1,4 +1,6 @@
 #!/bin/bash
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+ENV_LOC=$(dirname "$SCRIPT_DIR")
 source $ENV_LOC/functions/common_funcs
 
 # Configuration variables
@@ -69,7 +71,7 @@ decrypt_file() {
   
   # Decrypt the file
   age -d -i <(echo "$AGE_SECRET") -o "$TEMP_DIR/decrypted_temp" "$source" #Instead of using -i $IDENTITY_FILE
-  
+
   # Check if it's a tar archive (directory)
   if tar -tf "$TEMP_DIR/decrypted_temp" &> /dev/null; then
     # Extract the tar archive
@@ -322,18 +324,41 @@ validate_merged_files() {
 
 # Main function
 main() {
+  if  ! command_exists bw; then
+    error "Command BW not found, quitting"
+    exit 1
+  fi
+    
   # Ensure age is installed
+  debug "Ensuring AGE is installed and setting up the secret from BW"
   ensure_age_installed
-  
+  AGE_SECRET=${AGE_SECRET:-bw get password AGE_SECRET}
+  if [[ -z "$AGE_SECRET" ]]; then
+    error "AGE_SECRET is not set. Please set it in your environment."
+    exit 1
+  fi
+
   # Create necessary directories
   mkdir -p "$LOCAL_REPO_PATH" "$DECRYPTED_DIR" "$TEMP_DIR"
   
+  if github_access_denied; then
+    GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-bw get password GITHUB_SSH_PRIVATE_KEY}
+    TEMP_SSH_IDENTITY_FILE=$(mktemp); chmod 600 $TEMP_SSH_IDENTITY_FILE; 
+    echo -e $GITHUB_SSH_PRIVATE_KEY > $TEMP_SSH_IDENTITY_FILE
+    TEMP_SSH_FILE=$(mktemp); chmod +x $TEMP_SSH_FILE; 
+    echo "ssh -i $TEMP_SSH_IDENTITY_FILE " '$@' > $TEMP_SSH_FILE
+    echo executable: $TEMP_SSH_FILE
+    GIT_SSH="$TEMP_SSH_FILE" 
+  fi
+
   # Setup local repo if it doesn't exist
   if [ ! -d "$LOCAL_REPO_PATH/.git" ]; then
     info "Initializing local repository..."
-    git clone "$REMOTE_REPO" "$LOCAL_REPO_PATH"
+    git clone "$REMOTE_REPO" "$LOCAL_REPO_PATH" || error "Could not glone git repo $REMOTE_REPO" && exit 1
+    rm -f $TEMP_SSH_IDENTITY_FILE  $TEMP_SSH_FILE
     
     # Initial decrypt after clone
+    debug "Decrypting now"
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
     find "$DECRYPTED_DIR" -type f -not -path "*/\.*" -exec sha256sum {} \; | sort > "$LOCAL_HASH_FILE"
     exit 0
@@ -347,6 +372,7 @@ main() {
   debug "Checking for remote changes..."
   git fetch
   
+  debug "Checking if there are any updates in local/remote"
   local_current=$(git rev-parse HEAD)
   remote_current=$(git rev-parse @{upstream})
   

@@ -26,5 +26,12 @@ if [ -n "${MOUNT_FILE}" ]; then
     mount -T ${MOUNT_FILE}
 fi
 
+<<<<<<< HEAD
+=======
+. ${ENV_LOC}/env_vars
+. ${ENV_LOC}/functions/*
+. ${ENV_LOC}/aliases
+
+>>>>>>> Auto-sync dotfiles 2025-03-17 12:30:23
 echo "Running duf..."
 (duf &)

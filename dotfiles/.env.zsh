@@ -1,5 +1,6 @@
-export ENV_LOC="/home/yashar/env" #
+
 # "${ENV_LOC:-"$( cd "$( dirname "$( readlink -f "${0}" )" )" && pwd )"}"
+. ${ENV_LOC}/env_vars
 
 # Load config
 . ${ENV_LOC}/env
@@ -26,12 +27,5 @@ if [ -n "${MOUNT_FILE}" ]; then
     mount -T ${MOUNT_FILE}
 fi
 
-<<<<<<< HEAD
-=======
-. ${ENV_LOC}/env_vars
-. ${ENV_LOC}/functions/*
-. ${ENV_LOC}/aliases
-
->>>>>>> Auto-sync dotfiles 2025-03-17 12:30:23
 echo "Running duf..."
 (duf &)

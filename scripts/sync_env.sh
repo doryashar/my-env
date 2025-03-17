@@ -702,7 +702,7 @@ git_sync() {
             fi
             
             # Try to pull and merge
-            if ! git pull origin master --ff-only; then
+            if ! git pull --ff-only origin master ; then
                 warning "Could not fast-forward merge. Trying to auto-merge...${NC}"
                 
                 if ! git pull origin master; then

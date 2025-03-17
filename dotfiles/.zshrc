@@ -62,7 +62,7 @@ path=(~/bin $path)
 export GPG_TTY=$TTY
 
 # Source additional local files if they exist.
-z4h source ~/.env.zsh
+# z4h source ~/.env.zsh
 
 # Use additional Git repositories pulled in with `z4h install`.
 #
@@ -92,6 +92,8 @@ compdef _directories md
 # Define named directories: ~w <=> Windows home directory on WSL.
 [[ -z $z4h_win_home ]] || hash -d w=$z4h_win_home
 
+z4h source ~/.env.zsh
+
 # Define aliases.
 alias tree='tree -a -I .git'
 
@@ -101,9 +103,6 @@ alias ls="${aliases[ls]:-ls} -A"
 # Set shell options: http://zsh.sourceforge.net/Doc/Release/Options.html.
 setopt glob_dots     # no special treatment for file names with a leading dot
 setopt no_auto_menu  # require an extra TAB press to open the completion menu
-autoload bashcompinit
-bashcompinit
-source "/home/yashar/snap/code/185/.local/share/bash-completion/completions/appman"
-autoload bashcompinit
-bashcompinit
-source "/home/yashar/.local/share/bash-completion/completions/appman"
+# autoload bashcompinit
+# bashcompinit
+# source "/home/yashar/snap/code/185/.local/share/bash-completion/completions/appman"

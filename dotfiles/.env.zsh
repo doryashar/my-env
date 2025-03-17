@@ -2,13 +2,13 @@
 ENV_LOC="${ENV_LOC:-"$( dirname "$( dirname "$( readlink -f "${0}" )" )" )"}"
 
 # Load config
-. ${ENV_LOC}/env
+. ${ENV_LOC}/config/repo.conf
+. ${ENV_LOC}/env_vars
 
 if [ -f "${ENV_LOC}/private/secrets" ]; then
 . ${ENV_LOC}/private/secrets
 fi
 
-. ${ENV_LOC}/env_vars
 . ${ENV_LOC}/functions/*
 . ${ENV_LOC}/aliases
 
@@ -19,13 +19,17 @@ if [ -t 0 ]; then
         ${ENV_LOC}/scripts/sync_env.sh --encrypted_sync --dotfiles_sync --push --pull && touch ${ENV_LOC}/tmp/updated
         #TODO: if updated run exec $0
     fi
-fi
+    
+    title "Welcome"
 
-# If mount file variable exists, then mount it
-if [ -n "${MOUNT_FILE}" ]; then
-    title "Mounting volumes..."
-    mount -T ${MOUNT_FILE}
-fi
+    # If mount file variable exists, then mount it
+    if [ -n "${MOUNT_FILE}" ]; then
+        title "Mounting volumes..."
+        mount -T ${MOUNT_FILE}
+    fi
 
-echo "Running duf..."
-(duf &)
+    if [[ "$SHOW_DUFF" = "on" ]]; then
+        echo "Running duf..."
+        (duf &)
+    fi
+fi

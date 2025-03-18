@@ -369,7 +369,6 @@ main() {
     
   # Ensure age is installed
   debug "Ensuring AGE is installed and setting up the secret from BW"
-  debug "Ensuring AGE is installed and setting up the secret from BW"
   ensure_age_installed
   get_secret_keys
 

@@ -10,11 +10,6 @@ DECRYPTED_DIR="$ENV_LOC/tmp/private"
 LOCAL_HASH_FILE="$ENV_LOC/tmp/local_hashes"
 TEMP_DIR="$ENV_LOC/tmp/private_encrypted-sync-temp"
 # IDENTITY_FILE="$ENV_LOC/tmp/private/age-key"
-AGE_SECRET=${AGE_SECRET:-"$(bw get password AGE_SECRET)"}
-if [[ -z "$AGE_SECRET" ]]; then
-  error "AGE_SECRET is not set. Please set it in your environment."
-  exit 1
-fi
 RECIPIENTS_FILE="$ENV_LOC/tmp/private/age-recipients"
 
 # Function to check if a command exists
@@ -116,25 +111,29 @@ decrypt_recursive() {
   done
 }
 
+hashit() {
+  dir="$1"
+  temp_hash_file="$2"
+  find "$dir" -type f -not -path "*/\.*" -printf "%M %TY-%Tm-%Td %TH:%TM:%TS %p\n" -exec sha256sum {} \; | sort > "$temp_hash_file"
+}
+
 # Function to check if files have changed
 has_changed() {
   local dir="$1"
   local hash_file="$2"
+  local temp_hash_file="$TEMP_DIR/temp_hashes"
+  hashit "$dir" "$temp_hash_file"
   
   if [ ! -f "$hash_file" ]; then
     info "No previous hash file found. Assuming change."
-    find "$dir" -type f -not -path "*/\.*" -exec sha256sum {} \; | sort > "$hash_file"
     return 1  # Indicates change (no previous hash)
+  fi
+
+  if diff -q "$hash_file" "$temp_hash_file" > /dev/null; then
+    return 0  # No change
   else
-    local temp_hash_file="$TEMP_DIR/temp_hashes"
-    find "$dir" -type f -not -path "*/\.*" -exec sha256sum {} \; | sort > "$temp_hash_file"
-    
-    if diff -q "$hash_file" "$temp_hash_file" > /dev/null; then
-      return 0  # No change
-    else
-      mv "$temp_hash_file" "$hash_file"
-      return 1  # Changed
-    fi
+    # mv "$temp_hash_file" "$hash_file"
+    return 1  # Changed
   fi
 }
 
@@ -322,6 +321,40 @@ validate_merged_files() {
   fi
 }
 
+get_bw_password() {
+    # Read the password from the user
+    read -s -p "Enter your BitWarden password: " BW_PASSWORD
+    if [ -z "$BW_PASSWORD" ]; then
+        error "GitHub master password is required"
+        exit 1
+    fi
+    export BW_PASSWORD
+}
+
+get_secret_keys() {
+    export BW_EMAIL="dor.yashar@gmail.com"
+    if [ -z "$BW_SESSION" ]; then
+        if [ -z "$BW_PASSWORD" ]; then
+            get_bw_password
+        fi
+        bw login --raw > /dev/null 2>&1
+        export BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
+        if [ -z "$BW_SESSION" ]; then
+          error "Failed to log in to BitWarden. Please check your credentials."
+          exit 1
+        fi
+        info "Logged in successfully!"
+    else
+        debug "Using existing session."
+    fi
+    export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-bw get password GITHUB_API_KEY}
+    export AGE_SECRET=${AGE_SECRET:-"$(bw get password AGE_SECRET)"}
+    if [[ -z "$AGE_SECRET" ]] || [[ -z "$GITHUB_SSH_PRIVATE_KEY" ]]; then
+        error "AGE_SECRET/GITHUB_SSH_PRIVATE_KEY is not set. Please set it in your environment."
+        exit 1
+    fi
+}
+
 # Main function
 main() {
   if  ! command_exists bw; then
@@ -329,17 +362,19 @@ main() {
     exit 1
   fi
     
-  # Ensure age is installed
-  debug "Ensuring AGE is installed and setting up the secret from BW"
-  ensure_age_installed
-  AGE_SECRET=${AGE_SECRET:-"$(bw get password AGE_SECRET)"}
-  if [[ -z "$AGE_SECRET" ]]; then
-    error "AGE_SECRET is not set. Please set it in your environment."
+  if  ! command_exists bw; then
+    error "Command BW not found, quitting"
     exit 1
   fi
+    
+  # Ensure age is installed
+  debug "Ensuring AGE is installed and setting up the secret from BW"
+  debug "Ensuring AGE is installed and setting up the secret from BW"
+  ensure_age_installed
+  get_secret_keys
 
   # Create necessary directories
-  mkdir -p "$LOCAL_REPO_PATH" "$TEMP_DIR"
+  mkdir -p "$TEMP_DIR"
   
   # if github_access_denied; then
   #   GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-bw get password GITHUB_SSH_PRIVATE_KEY}
@@ -351,31 +386,49 @@ main() {
   #   GIT_SSH="$TEMP_SSH_FILE" 
   # fi
 
-  # Setup local repo if it doesn't exist
-  if [ ! -d "$LOCAL_REPO_PATH/.git" ]; then
-    info "Initializing local repository..."
-    git clone "$REMOTE_REPO" "$LOCAL_REPO_PATH" || error "Could not glone git repo $REMOTE_REPO" && exit 1
-    rm -f $TEMP_SSH_IDENTITY_FILE  $TEMP_SSH_FILE
-  fi
-    
   if [ ! -d "$DECRYPTED_DIR" ]; then
     # Initial decrypt after clone
+
+    # Setup local repo if it doesn't exist
+    if [ ! -d "$LOCAL_REPO_PATH" ]; then
+      info "Initializing local repository..."
+      mkdir -p "$LOCAL_REPO_PATH"
+      temp_gz=$(mktemp)
+      curl -H "Authorization: token $GITHUB_API_TOKEN" \
+          -L https://api.github.com/repos/doryashar/encrypted/tarball \
+          -o $temp_gz
+      tar xzf $temp_gz -C "$LOCAL_REPO_PATH" --strip-components=1
+      rm $temp_gz
+    fi
+
+    
     info "Initial Decrypting now from $LOCAL_REPO_PATH to $DECRYPTED_DIR"
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
-    find "$DECRYPTED_DIR" -type f -not -path "*/\.*" -exec sha256sum {} \; | sort > "$LOCAL_HASH_FILE"
-    exit 0
+    hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
+    #TODO: remove
+    rm -rf ~/.ssh
+    ln -s "$DECRYPTED_DIR"/ssh ~/.ssh
+    chmod 600 ~/.ssh/*
   fi
   
+  
+  if [ ! -d "$LOCAL_REPO_PATH"/.git ]; then 
+    info "setting up git in encrypted dir"
+    rm -rf "$LOCAL_REPO_PATH" || exit 1
+    mkdir -p  "$LOCAL_REPO_PATH" && git clone git@github.com:doryashar/encrypted.git "$LOCAL_REPO_PATH" || error "Could not glone git repo $REMOTE_REPO" && exit 1
+    hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
+    exit 0
+  fi
 #   local_changed=$(git status --porcelain | wc -l)
 #   local_changed=$([ -n "$(git status --porcelain)" ] && info 1 || info 0)
 
   # Check for remote changes
   cd "$LOCAL_REPO_PATH" || exit 1
   debug "Checking for remote changes..."
-  git fetch
-  
-  debug "Checking if there are any updates in local/remote"
+  git fetch || exit 1
+  debug "Checking if there are any updates in local"
   local_current=$(git rev-parse HEAD)
+  debug "Checking if there are any updates in remote"
   remote_current=$(git rev-parse @{upstream})
   
   remote_changed=0
@@ -395,20 +448,31 @@ main() {
     info "Local files have changed."
     local_changed=1
   fi
-  
+
+  # # If CHECK_ONLY does not exist, set it to 0
+  # CHECK_ONLY=${CHECK_ONLY:-1}
+  # if [ "$CHECK_ONLY" -eq 1 ]; then
+  #   exit 0
+  # fi
+
   # Case 1: No changes anywhere
   if [ "$remote_changed" -eq 0 ] && [ "$local_changed" -eq 0 ]; then
     debug "No changes detected. Nothing to do."
     exit 0
   fi
   
+  # Reset LOCAL_REPO_PATH to github head
+  cd "$LOCAL_REPO_PATH" || exit 1
+  git reset --hard HEAD && git clean -fd
+
+
   # Case 2: Only remote changed
   if [ "$remote_changed" -eq 1 ] && [ "$local_changed" -eq 0 ]; then
     info "Only remote has changed. Updating local files..."
     git pull
     rm -rf "$DECRYPTED_DIR"/*
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
-    find "$DECRYPTED_DIR" -type f -not -path "*/\.*" -exec sha256sum {} \; | sort > "$LOCAL_HASH_FILE"
+    hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
     debug "Local files updated successfully."
     exit 0
   fi
@@ -416,6 +480,8 @@ main() {
   # Case 3: Only local changed
   if [ "$remote_changed" -eq 0 ] && [ "$local_changed" -eq 1 ]; then
     info "Only local files have changed. Encrypting and pushing..."
+    #TODO: sync only files that were changed / added / removed
+
     # Remove old encrypted files
     find "$LOCAL_REPO_PATH" -name "*.age" -type f -delete
     
@@ -427,6 +493,11 @@ main() {
     git add .
     git commit -m "Update encrypted files: $(date)"
     git push
+    if [ $? -ne 0 ]; then
+      error "Failed to push changes."
+      exit 1
+    fi
+    mv "$TEMP_DIR/temp_hashes" "$LOCAL_HASH_FILE"
     debug "Local changes encrypted and pushed successfully."
     exit 0
   fi
@@ -434,7 +505,8 @@ main() {
   # Case 4: Both changed
   if [ "$remote_changed" -eq 1 ] && [ "$local_changed" -eq 1 ]; then
     info "Both remote and local files have changed. Merging..."
-    
+    rm "$TEMP_DIR/temp_hashes"
+
     # Create temporary directory for remote files
     REMOTE_TEMP="$TEMP_DIR/remote_decrypted"
     mkdir -p "$REMOTE_TEMP"
@@ -470,7 +542,7 @@ main() {
     encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"
     
     # Update hash file
-    find "$DECRYPTED_DIR" -type f -not -path "*/\.*" -exec sha256sum {} \; | sort > "$LOCAL_HASH_FILE"
+    hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
     
     # Commit and push
     cd "$LOCAL_REPO_PATH" || exit 1
@@ -495,3 +567,4 @@ trap cleanup EXIT
 
 # Run main function
 main
+

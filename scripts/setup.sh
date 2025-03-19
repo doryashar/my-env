@@ -113,7 +113,7 @@ setup_steps() {
     # TODO: Implement
 }
 
-main() {    
+main() {
     title "** ENV setup script starting **"
 
     # Run setup

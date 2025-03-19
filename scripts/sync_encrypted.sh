@@ -1,16 +1,16 @@
 #!/bin/bash
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
-ENV_LOC=$(dirname "$SCRIPT_DIR")
-source $ENV_LOC/functions/common_funcs
+ENV_DIR=$(dirname "$SCRIPT_DIR")
+source $ENV_DIR/functions/common_funcs
 
 # Configuration variables
 REMOTE_REPO="git@github.com:doryashar/encrypted.git"
-LOCAL_REPO_PATH="$ENV_LOC/tmp/private_encrypted"
-DECRYPTED_DIR="$ENV_LOC/tmp/private"
-LOCAL_HASH_FILE="$ENV_LOC/tmp/local_hashes"
-TEMP_DIR="$ENV_LOC/tmp/private_encrypted-sync-temp"
-# IDENTITY_FILE="$ENV_LOC/tmp/private/age-key"
-RECIPIENTS_FILE="$ENV_LOC/tmp/private/age-recipients"
+LOCAL_REPO_PATH="$ENV_DIR/tmp/private_encrypted"
+DECRYPTED_DIR="$ENV_DIR/tmp/private"
+LOCAL_HASH_FILE="$ENV_DIR/tmp/local_hashes"
+TEMP_DIR="$ENV_DIR/tmp/private_encrypted-sync-temp"
+# IDENTITY_FILE="$ENV_DIR/tmp/private/age-key"
+RECIPIENTS_FILE="$ENV_DIR/tmp/private/age-recipients"
 
 # Function to check if a command exists
 command_exists() {

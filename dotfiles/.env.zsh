@@ -1,30 +1,30 @@
 
-ENV_LOC="${ENV_LOC:-"$( dirname "$( dirname "$( readlink -f "${0}" )" )" )"}"
+ENV_DIR="${ENV_DIR:-"$( dirname "$( dirname "$( readlink -f "${0}" )" )" )"}"
 
 # Load config
-. ${ENV_LOC}/config/repo.conf
-. ${ENV_LOC}/env_vars
+. ${ENV_DIR}/config/repo.conf
+. ${ENV_DIR}/env_vars
 
-if [ -f "${ENV_LOC}/private/secrets" ]; then
-    . ${ENV_LOC}/private/secrets
+if [ -f "${ENV_DIR}/private/secrets" ]; then
+    . ${ENV_DIR}/private/secrets
 #     echo "BW session is: $BW_SESSION"
 # else
-#     echo "Secrets was not found in "${ENV_LOC}/private/secrets""
+#     echo "Secrets was not found in "${ENV_DIR}/private/secrets""
 fi
 
-for file in ${ENV_LOC}/functions/*; do
+for file in ${ENV_DIR}/functions/*; do
   if [[ -f "$file" ]]; then
     source "$file"
   fi
 done
 
-. ${ENV_LOC}/aliases
+. ${ENV_DIR}/aliases
 
 # If modified time of env is more than  1 day, then update it and dotfiles
 # if [ -t 0 ]; then
-    if [ ! -f "${ENV_LOC}/tmp/updated" ] || [ "$(find "${ENV_LOC}/tmp/updated" -mtime +1 -print)" ]; then
+    if [ ! -f "${ENV_DIR}/tmp/updated" ] || [ "$(find "${ENV_DIR}/tmp/updated" -mtime +1 -print)" ]; then
         echo "Updating env..."
-        ${ENV_LOC}/scripts/sync_env.sh --encrypted_sync --dotfiles_sync --push --pull && touch ${ENV_LOC}/tmp/updated
+        ${ENV_DIR}/scripts/sync_env.sh --encrypted_sync --dotfiles_sync --push --pull && touch ${ENV_DIR}/tmp/updated
         #TODO: if updated run exec $0
     fi
     

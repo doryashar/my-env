@@ -12,7 +12,12 @@ if [ -f "${ENV_LOC}/private/secrets" ]; then
 #     echo "Secrets was not found in "${ENV_LOC}/private/secrets""
 fi
 
-. ${ENV_LOC}/functions/*
+for file in ${ENV_LOC}/functions/*; do
+  if [[ -f "$file" ]]; then
+    source "$file"
+  fi
+done
+
 . ${ENV_LOC}/aliases
 
 # If modified time of env is more than  1 day, then update it and dotfiles
@@ -23,16 +28,21 @@ fi
         #TODO: if updated run exec $0
     fi
     
-    title "Welcome"
+    # title "Welcome"
 
-    # If mount file variable exists, then mount it
-    if [ -n "${MOUNT_FILE}" ]; then
-        title "Mounting volumes..."
-        mount -T ${MOUNT_FILE}
-    fi
+    # # If mount file variable exists, then mount it
+    # if [ -n "${MOUNT_FILE}" ]; then
+    #     title "Mounting volumes..."
+    #     mount -T ${MOUNT_FILE}
+    # fi
 
     if [[ "$SHOW_DUFF" = "on" ]]; then
-        echo "Running duf..."
+        # echo "Running duf..."
         (duf &)
     fi
+
+    if [[ "$SHOW_NEOFETCH" = "on" ]]; then
+        (neofetch &)
+    fi
+
 # fi

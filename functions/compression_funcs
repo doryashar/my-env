@@ -3,7 +3,7 @@ uncompress() {
   # Check if a file was provided as argument
   if [ -z "$1" ]; then
     echo "Usage: $0 <filename>"
-    exit 1
+    return 1
   fi
 
   # Get the file type
@@ -16,6 +16,10 @@ uncompress() {
       tar -xvf "$1"
       ;;
     application/gzip)
+      echo "Extracting gzip archive..."
+      tar -xzvf "$1"
+      ;;
+    application/x-gzip)
       echo "Extracting gzip archive..."
       tar -xzvf "$1"
       ;;
@@ -37,7 +41,7 @@ uncompress() {
       ;;
     *)
       echo "Unsupported file type: $file_type"
-      exit 1
+      return 1
       ;;
   esac
 }

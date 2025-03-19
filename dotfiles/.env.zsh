@@ -6,7 +6,10 @@ ENV_LOC="${ENV_LOC:-"$( dirname "$( dirname "$( readlink -f "${0}" )" )" )"}"
 . ${ENV_LOC}/env_vars
 
 if [ -f "${ENV_LOC}/private/secrets" ]; then
-. ${ENV_LOC}/private/secrets
+    . ${ENV_LOC}/private/secrets
+    echo "BW session is: $BW_SESSION"
+else
+    echo "Secrets was not found in "${ENV_LOC}/private/secrets""
 fi
 
 . ${ENV_LOC}/functions/*

@@ -19,7 +19,7 @@
 # Declare variables
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 ENV_DIR=$(dirname "$SCRIPT_DIR")
-REMOTE_URL="https://github.com/doryashar/my_env"
+REMOTE_URL="git@github.com:doryashar/my_env"
 CONFIG_FILE="$ENV_DIR/config/dotfiles.conf"
 
 # Default configuration path

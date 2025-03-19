@@ -47,35 +47,6 @@ validate_commands() {
     # check_command docker
 }
 
-get_bw_password() {
-    read -p "Enter your BitWarden password: " BW_PASSWORD
-    if [ -z "$BW_PASSWORD" ]; then
-        error "GitHub API key is required"
-        exit 1
-    fi
-    export BW_PASSWORD
-}
-
-get_secret_keys() {
-    export BW_EMAIL="dor.yashar@gmail.com"
-    if [ -z "$BW_SESSION" ]; then
-        if [ -z "$BW_PASSWORD" ]; then
-            get_bw_password
-        fi
-        bw login --raw 
-        export BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
-        echo "Logged in successfully!"
-    else
-        echo "Using existing session."
-    fi
-    export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-bw get password GITHUB_API_KEY}
-    export AGE_SECRET=${AGE_SECRET:-"$(bw get password AGE_SECRET)"}
-    if [[ -z "$AGE_SECRET" ]] || [[ -z "$GITHUB_SSH_PRIVATE_KEY" ]]; then
-        error "AGE_SECRET/GITHUB_SSH_PRIVATE_KEY is not set. Please set it in your environment."
-        exit 1
-    fi
-}
-
 generate_config() {
     #TODO: implement config generation logic, need to decide:
     # encryption method
@@ -104,35 +75,13 @@ setup_steps() {
         info "Setting up public_env repository..."
         # TODO: Implement decryption mechanism
         # This will be implemented once encryption method is decided
-        mkdir -p public_env
-        git clone https://github.com/doryashar/my-env ~/env
+        mkdir -p ~/env
+        git clone git@github.com:doryashar/my-env ~/env
     fi
 
 
     if [ ! -d "~/env/tmp/private_encrypted" ]; then
-        # Get secret keys
-        info "Getting secret keys..."
-        get_secret_keys
-
-        # Clone private_env repository
-        info "Setting up private_env repository..."
-        if [ ! -d "private" ]; then
-            curl -H "Authorization: token $github_api_key" \
-                -L https://api.github.com/repos/doryashar/encrypted/tarball \
-                -o private_env.tar.gz
-            
-            mkdir -p private_env
-            tar xzf private_env.tar.gz -C private --strip-components=1
-            
-            # TODO: i might need to do it only after the dotenv sync because .ssh dir is missing
-            cd private_env
-            git init
-            git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPO.git
-            git fetch origin main  # Replace "main" with the default branch if different
-            git checkout -b main origin/main
-
-            rm private_env.tar.gz
-        fi
+        #TODO: run sync_encrypted or sync_env
     fi
 
     # Docker compose setup

@@ -42,7 +42,7 @@ done
     fi
 
     if [[ "$SHOW_NEOFETCH" = "on" ]]; then
-        (neofetch &)
+        neofetch
     fi
 
 # fi

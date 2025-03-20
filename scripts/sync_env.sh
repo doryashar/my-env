@@ -256,7 +256,7 @@ main() {
     # Perform actions
     [[ -n "$PERFORM_PULL" ]] && title "Git pulling" && git_sync "pull" "$ENV_DIR"
     [[ -n "$PERFORM_ENCRYPTED_SYNC" ]] && title "Encrypted files synching" && ${ENV_DIR}/scripts/sync_encrypted.sh
-    [[ -n "$PERFORM_DOTFILES_SYNC" ]] && title "Dotfiles synching" && sync_dotfiles $CONFIG_FILE
+    [[ -n "$PERFORM_DOTFILES_SYNC" ]] && title "Dotfiles synching" && ${ENV_DIR}/scripts/sync_dotfiles.sh $CONFIG_FILE
     [[ -n "$PERFORM_PUSH" ]] && title "Git Pushing" && git_sync "push" "$ENV_DIR"
     
     return 0

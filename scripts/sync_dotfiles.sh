@@ -1,4 +1,4 @@
-
+#!/bin/bash
 #########################################################################
 # Dotfiles Synchronizer
 # 
@@ -14,10 +14,9 @@
 # - Support for both hard and soft links
 # - Regular expression support for file matching
 #########################################################################
-
 SELF_PATH="$(realpath "${BASH_SOURCE[0]}")"
 ZERO_PATH="$(realpath "$0")"
-ENV_DIR=${ENV_DIR:-$(dirname "$SELF_PATH")}
+ENV_DIR=${ENV_DIR:-$(dirname $(dirname "$SELF_PATH"))}
 
 # Default configuration 
 DEFAULT_LINK_TYPE="soft"
@@ -65,7 +64,7 @@ create_default_config() {
 #########################################################################
 
 # Repository path (where dotfiles are stored in git)
-# REPO_PATH="$REPO_PATH"
+# ENV_DIR="$ENV_DIR"
 
 # Remote git repository URL (optional)
 # REMOTE_URL=""
@@ -83,7 +82,7 @@ DEFAULT_CONFLICT_STRATEGY="$DEFAULT_CONFLICT_STRATEGY"
 # File mappings
 # Format: SOURCE => TARGET  or  SOURCE <= TARGET
 # 
-# SOURCE paths are relative to REPO_PATH
+# SOURCE paths are relative to ENV_DIR
 # TARGET paths can be absolute or relative to HOME
 #
 # Forward sync (=>): Copy/link from repo to system
@@ -216,7 +215,7 @@ load_config() {
             # debug "Stored mapping: $source => $SOURCE_TO_TARGET["$source"], link=$link_type, conflict=$conflict_strategy"
         fi
     done < "$config_path"
-    REPO_PATH="${REPO_PATH/#\~/$HOME}"
+    ENV_DIR="${ENV_DIR/#\~/$HOME}"
     return 0
 }
 
@@ -232,14 +231,14 @@ process_regex_mappings() {
         debug "Processing pattern: $source_pattern => $target_pattern"
         
         # Convert source_pattern to a glob pattern for finding files
-        local glob_pattern="$REPO_PATH/${source_pattern//\(/*/}"
+        local glob_pattern="$ENV_DIR/${source_pattern//\(/*/}"
         glob_pattern="${glob_pattern//\)/}"
         
         # Find files matching the glob pattern
         local files=()
         while IFS= read -r -d $'\0' file; do
             files+=("$file")
-        done < <(find "$REPO_PATH" -path "$glob_pattern" -print0 2>/dev/null)
+        done < <(find "$ENV_DIR" -path "$glob_pattern" -print0 2>/dev/null)
         
         if [[ ${#files[@]} -eq 0 ]]; then
             warning "No files matched pattern: $source_pattern"
@@ -249,7 +248,7 @@ process_regex_mappings() {
         # Process each matching file
         for file in "${files[@]}"; do
             # Get relative path from repo root
-            local rel_path="${file#$REPO_PATH/}"
+            local rel_path="${file#$ENV_DIR/}"
             
             # Create target path by replacing capture groups
             local target="$target_pattern"
@@ -371,7 +370,7 @@ sync_file() {
     [[ -z "$conflict_strategy" ]] && conflict_strategy="$DEFAULT_CONFLICT_STRATEGY"
     
     # Convert relative source path to absolute
-    local source="$REPO_PATH/$source_rel"
+    local source="$ENV_DIR/$source_rel"
     
     # Expand ~ in target path
     target="${target/#\~/$HOME}"
@@ -485,9 +484,9 @@ process_backward_sync() {
                     source_file="${source/\*/$middle}"
                 fi
                 
-                # Make sure source is relative to REPO_PATH
-                if [[ "$source_file" == "$REPO_PATH"/* ]]; then
-                    local rel_path="${source_file#$REPO_PATH/}"
+                # Make sure source is relative to ENV_DIR
+                if [[ "$source_file" == "$ENV_DIR"/* ]]; then
+                    local rel_path="${source_file#$ENV_DIR/}"
                     source_file="$rel_path"
                 elif [[ "$source_file" != /* ]]; then
                     source_file="$source_file"
@@ -504,9 +503,9 @@ process_backward_sync() {
         else
             # Direct backward sync of a single file
             
-            # Make sure source is relative to REPO_PATH
-            if [[ "$source" == "$REPO_PATH"/* ]]; then
-                local rel_path="${source#$REPO_PATH/}"
+            # Make sure source is relative to ENV_DIR
+            if [[ "$source" == "$ENV_DIR"/* ]]; then
+                local rel_path="${source#$ENV_DIR/}"
                 source="$rel_path"
             elif [[ "$source" != /* ]]; then
                 source="$source"
@@ -537,7 +536,7 @@ backward_sync_file() {
     [[ -z "$conflict_strategy" ]] && conflict_strategy="$DEFAULT_CONFLICT_STRATEGY"
     
     # Convert relative source path to absolute
-    local source="$REPO_PATH/$source_rel"
+    local source="$ENV_DIR/$source_rel"
     
     # Expand ~ in target path
     target="${target/#\~/$HOME}"
@@ -630,6 +629,11 @@ sync_dotfiles() {
 }
 
 main() {
+    if [[ "$#" -lt 1 ]]; then
+        CONFIG_FILE="$ENV_DIR/config/dotfiles.conf"
+    else
+        CONFIG_FILE="$1"
+    fi
 
     # Load configuration
     load_config "$CONFIG_FILE"
@@ -642,3 +646,4 @@ main() {
 
 if [[ "$SELF_PATH" == "$ZERO_PATH" ]]; then
     main $@
+fi

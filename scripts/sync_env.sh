@@ -7,7 +7,7 @@ ENV_DIR=$(dirname "$SCRIPT_DIR")
 CONFIG_FILE="$ENV_DIR/config/dotfiles.conf"
 
 # Default configuration path
-REPO_PATH="${ENV_DIR/#\~/$HOME}"
+ENV_DIR="${ENV_DIR/#\~/$HOME}"
 DEBUG=${ENV_DEBUG:-1}
 
 ## ====================================== ##
@@ -203,7 +203,7 @@ main() {
                 shift 2
                 ;;
             -r|--repo)
-                REPO_PATH="$2"
+                ENV_DIR="$2"
                 shift 2
                 ;;
             -d|--dotfiles_sync)
@@ -240,7 +240,7 @@ main() {
     # Initialize if requested
     if [[ -n "$PERFORM_INIT" ]]; then
         title "Performing initialization"
-        init_repo "$REPO_PATH"
+        init_repo "$ENV_DIR"
         # TODO: create_default_config "$CONFIG_FILE"
         update_bashrc
     fi
@@ -254,10 +254,10 @@ main() {
     # TODO: if updated tell user the new version.
 
     # Perform actions
-    [[ -n "$PERFORM_PULL" ]] && title "Git pulling" && git_sync "pull" "$REPO_PATH"
+    [[ -n "$PERFORM_PULL" ]] && title "Git pulling" && git_sync "pull" "$ENV_DIR"
     [[ -n "$PERFORM_ENCRYPTED_SYNC" ]] && title "Encrypted files synching" && ${ENV_DIR}/scripts/sync_encrypted.sh
-    [[ -n "$PERFORM_DOTFILES_SYNC" ]] && title "Dotfiles synching" && sync_dotfiles
-    [[ -n "$PERFORM_PUSH" ]] && title "Git Pushing" && git_sync "push" "$REPO_PATH"
+    [[ -n "$PERFORM_DOTFILES_SYNC" ]] && title "Dotfiles synching" && sync_dotfiles $CONFIG_FILE
+    [[ -n "$PERFORM_PUSH" ]] && title "Git Pushing" && git_sync "push" "$ENV_DIR"
     
     return 0
 }

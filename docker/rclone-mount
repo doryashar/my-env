@@ -1,6 +1,6 @@
 MOUNT_BASEDIR="$HOME/mnt"
 CACHE_DIR="$MOUNT_BASEDIR/rclone-cache"
-RCLONE_CONFIG_PATH="$HOME/env/private/rclone"
+RCLONE_CONFIG_PATH="$HOME/env/private/config/rclone"
 NAME_PREFIX=rclone-mount
 ENCRYPTED_DIR="$ENV_DIR/private_encrypted"
 
@@ -78,12 +78,6 @@ mount_remote() {
 #   mount_remote "" "crypt:"
 # fi
 
-# List all remotes
-REMOTES=$(docker run --rm \
-    --volume $RCLONE_CONFIG_PATH:/config/rclone \
-    --user $(id -u):$(id -g) \
-    rclone/rclone \
-    listremotes)
 
 # Mount all remotes
 # for REMOTE in $REMOTES; do
@@ -102,11 +96,15 @@ if [[ "$1" == "stop" ]]; then
   done
   exit 0
 elif [[ "$1" == "list_remotes" ]]; then
-  echo "All available remotes: $REMOTES"
-
-
+  # List all remotes
+  REMOTES=$(docker run --rm \
+      --volume $RCLONE_CONFIG_PATH:/config/rclone \
+      --user $(id -u):$(id -g) \
+      rclone/rclone \
+      listremotes)
+  echo -e "All available remotes: \n=======================\n$REMOTES"
 else
-  mount_remote peek
-  # mount_remote hetzner-storagebox /backup
+  # mount_remote peek
+  mount_remote hetzner-storagebox /backup
 fi
 

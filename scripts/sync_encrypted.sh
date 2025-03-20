@@ -333,11 +333,22 @@ get_bw_password() {
 
 get_secret_keys() {
     export BW_EMAIL="dor.yashar@gmail.com"
-    if [ -z "$BW_SESSION" ]; then
+    BW_STATUS=$(bw status --raw)
+    if [[ $BW_STATUS == *"unauthenticated"* ]]; then
+        if [ -z "$BW_CLIENTID" ] || [ -z "$BW_CLIENTSECRET" ]; then
+            error "Please set the BW_CLIENTID and BW_CLIENTSECRET environment variable. or login to BitWarden"
+        fi
+        bw login --apikey --raw > /dev/null 2>&1
+        if [ $? -ne 0 ]; then
+          error "Failed to log in to BitWarden. Please check your credentials."
+          exit 1
+        fi
+    fi
+
+    if [ -z "$BW_SESSION" ] && [[ $BW_STATUS == *"locked"* ]]; then
         if [ -z "$BW_PASSWORD" ]; then
             get_bw_password
         fi
-        bw login --raw > /dev/null 2>&1
         export BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
         if [ -z "$BW_SESSION" ]; then
           error "Failed to log in to BitWarden. Please check your credentials."
@@ -347,6 +358,7 @@ get_secret_keys() {
     else
         debug "Using existing session."
     fi
+
     export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-bw get password GITHUB_API_KEY}
     export AGE_SECRET=${AGE_SECRET:-"$(bw get password AGE_SECRET)"}
     if [[ -z "$AGE_SECRET" ]] || [[ -z "$GITHUB_SSH_PRIVATE_KEY" ]]; then

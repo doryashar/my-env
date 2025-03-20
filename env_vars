@@ -2,6 +2,10 @@ export PATH=${ENV_DIR}/scripts:${ENV_DIR}/bin:${PATH}
 export EDITOR=nvim
 export ENCRYPTED_DIR="$ENV_DIR"/private_encrypted
 MOUNT_FILE=~/.config/systemd/user/my_fstab
-export PROJECT=${PROJECT:-arbel}
+
+# Xsight
+export PROJECT_NAME=${PROJECT_NAME:-arbel}
 export MY_ENV='dunit_env'
-export ENV="/projects/$PROJECT/home/$USER/$PROJECT_release/fe/dv/$MY_ENV"
+export ENV="/projects/${PROJECT_NAME}/home/$USER/${PROJECT_NAME}_release/fe/dv/$MY_ENV"
+export FSDB_ENV_SECONDS_TO_FORCE_FLUSH=60
+export SFTP_HOST=eft.synopsys.com

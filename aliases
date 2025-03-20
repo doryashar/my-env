@@ -30,6 +30,7 @@ alias run_rocky='rocky -sv $DV/../design/epc_global/misc/epc_cfg_reg.rdl -o $DV/
 alias addscreen='xrandr --newmode "2560x1360" 293.50 2560 2744 3016 3472 1360 1363 1373 1410 -hsync +vsync; xrandr --addmode VNC-0 2560x1360; xrandr --newmode "1920x1016" 161.75 1920 2040 2240 2560 1016 1019 1029 1054 -hsync +vsync; xrandr --addmode VNC-0 1920x1016"'
 alias laptop="addscreen; xrandr -s 1920x1016"
 alias office="addscreen; xrandr -s 2560x1360"
+
 ##################################
 ## SVN
 ##################################

@@ -1,9 +1,10 @@
 
+ENV_DIR=$HOME/env
 ENV_DIR="${ENV_DIR:-"$( dirname "$( dirname "$( readlink -f "${0}" )" )" )"}"
 
 # Load config
-. ${ENV_DIR}/config/repo.conf
-. ${ENV_DIR}/env_vars
+source ${ENV_DIR}/config/repo.conf
+source ${ENV_DIR}/env_vars
 
 if [ -f "${ENV_DIR}/private/secrets" ]; then
     . ${ENV_DIR}/private/secrets

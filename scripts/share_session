@@ -1,0 +1,7 @@
+share_session() {
+   name="${1:-dor}"
+   echo "name is $name"
+   submit_job -pty yes -host lx054 "tmux new-session -A -s $name"
+}
+
+share_session $@

@@ -1,0 +1,5 @@
+share_session() {
+   local name="${1:-dor}"
+   submit_job -pty yes -host lx054 'tmux new-session -A -s $name'
+}
+

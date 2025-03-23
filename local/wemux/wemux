@@ -721,8 +721,24 @@ allowed_nested_command() {
   done
   return 1
 }
-# Create $wemux variable.
 
+# dor_setup() {
+#   LOCAL_SOCKET="/tmp/wemux-wemux"
+#   NFS_FILE="/projects/arbel/work/dory/wemux-nfs.txt"
+
+#   # Ensure the socket exists or create one
+#   if [ -e "$LOCAL_SOCKET" ]; then
+#       echo "Using existing socket: $LOCAL_SOCKET"
+#   else
+#       echo "Creating Unix socket at $LOCAL_SOCKET"
+#       socat UNIX-LISTEN:$LOCAL_SOCKET,fork - &
+#   fi
+
+#   # Continuously read from the socket and write to the NFS file
+#   socat UNIX-RECV:$LOCAL_SOCKET - | tee -a "$NFS_FILE"
+# }
+
+# Create $wemux variable.
 build_wemux_prefix
 
 # Don't allow wemux to be run directly within a wemux server.

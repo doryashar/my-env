@@ -1,4 +1,7 @@
 #!/bin/bash
+#TODO: When linking a directory, dont link also the files inside it
+#Why private/config/* does not match?
+
 #########################################################################
 # Dotfiles Synchronizer
 # 

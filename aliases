@@ -6,8 +6,8 @@ alias cls='printf "\033c"'
 alias ll="ls --color -altr"
 
 ##################################
-alias z="zellij -l strider --config ~/zellij/zellij.cfg attach --create dor"
-alias cat="batcat"
+alias zj="zellij -l strider --config ~/zellij/zellij.cfg attach --create dor"
+alias bat="batcat"
 alias grep="grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.snapshot}"
 # alias tree="find . -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'"
 
@@ -18,14 +18,16 @@ alias meld='/bin/meld'
 alias emacs='/bin/emacs'
 alias e='emacs --reverse-video'
 alias snxx="echo $XSIGHT_PASSWORD | snx"
+
 alias home='cd /projects/$PROJECT/home/$USER'
 alias work='cd /projects/$PROJECT/work/$USER'
+
 alias cud_gen_="echo 'Generating CUD file list...'; fgen.py -b \!:1 -c \!:2 -d dv -s \!:3 -o ~/veride_workspace/ffiles.cud; sed -i -E '/(incdir)/\\!s/(.*release_.*)/-box \1/g' ~/veride_workspace/ffiles.cud"
 alias veride_='echo "Runnig VerIDE..."; submit_job /tools/veride/VerIDE-2020.3.4.2/eclipse/veride.sh -top \!:1 -root_cud ~/veride_workspace/ffiles.cud -workspace ~/veride_workspace/ -project_location $$PROJECT_HOME/$PROJECT_release/trunk/fe/'
 alias veride_fgen='cud_gen_ epc_ver epc /projects/$PROJECT/home/dory/$PROJECT_release/trunk/fe/dv/epc_ver/srl/epc_ver.srl; veride_ epc_tb'
+
 alias verdi_='echo "Running Verdi" ; submit_job verdi -ssf'
 alias iderun='cud_gen && veride_ &'
-alias run_test_gui='trex.py --tb epc_ver --bc epc --wd one_port --seed 2 --psrl /projects/$PROJECT/home/dory/$PROJECT_release/trunk/fe/dv/epc_ver/srl/epc_ver.srl --test epc_simple_test --chi_vip --gui --verb MEDIUM --comp_args "+set_uvm_verbosity=<comp>,<id>,<verbosity>,[<TIME>,]<phase>" --simargs +dor' 
 alias run_rocky='rocky -sv $DV/../design/epc_global/misc/epc_cfg_reg.rdl -o $DV/epc_ver/verif/epc_uvm/'
 alias addscreen='xrandr --newmode "2560x1360" 293.50 2560 2744 3016 3472 1360 1363 1373 1410 -hsync +vsync; xrandr --addmode VNC-0 2560x1360; xrandr --newmode "1920x1016" 161.75 1920 2040 2240 2560 1016 1019 1029 1054 -hsync +vsync; xrandr --addmode VNC-0 1920x1016"'
 alias laptop="addscreen; xrandr -s 1920x1016"
@@ -41,8 +43,22 @@ alias make_release='user_release.pl -dv -p $PROJECT -b '
 
 
 #xmessgae 'hi there' / notify-send -u critical -t 0 "Hello world / zenify --notify..."
-alias notify='zenity --info --title "Notification" --text "\!*"' 
-alias notify2='kdialog --title "Notification" --passivepopup "\!*" 25'
-#alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+
+notify() {
+    local msg="$*"
+
+    if command -v zenity >/dev/null 2>&1; then
+        zenity --info --title "Notification" --text "$msg" --timeout 25
+    elif command -v kdialog >/dev/null 2>&1; then
+        kdialog --title "Notification" --passivepopup "$msg" 25
+    elif command -v notify-send >/dev/null 2>&1; then
+        notify-send --urgency=low -i terminal "$msg"
+    else
+        echo "Notification: $msg" >&2
+    fi
+}
 
 function calc () { bc <<< "scale=6;$*"; }
+
+#alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+

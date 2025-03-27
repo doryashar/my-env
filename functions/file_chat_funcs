@@ -1,0 +1,137 @@
+PUBLIC_CHAT_FILE=${PUBLIC_CHAT_FILE:-"$HOME/.public_chatfile"}
+PRIVATE_CHAT_FILE=${CHPRIVATE_CHAT_FILEAT_FILE:-"$HOME/.private_chatfile"}
+setopt NO_NOMATCH
+
+# trap_exit() {
+#     rm -f "$PUBLIC_CHAT_FILE"
+#     rm -f "$PRIVATE_CHAT_FILE"
+# }
+
+listen_for_messages() {
+    if [[ ! -f "$PUBLIC_CHAT_FILE" ]]; then
+        touch "$PUBLIC_CHAT_FILE"
+        chmod 1777 "$PUBLIC_CHAT_FILE"
+    fi
+
+    tail -n 0 -F "$PUBLIC_CHAT_FILE" | while read line; do
+        stripped_line=$(echo "$line" | sed 's/\x1B\[[0-9;]*m//g')
+        if [[ "$stripped_line" == "[$USER]"* ]]; then
+            continue
+        elif [[ "$line" == "[NOTIFY]"* ]]; then
+            notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$line"
+        else
+            echo "$line"
+        fi
+    done &
+
+    if [[ ! -f "$PRIVATE_CHAT_FILE" ]]; then
+        touch "$PRIVATE_CHAT_FILE"
+        chmod 622 "$PRIVATE_CHAT_FILE"
+    fi
+
+    tail -n 0 -F "$PRIVATE_CHAT_FILE" | while read line; do
+        stripped_line=$(echo "$line" | sed 's/\x1B\[[0-9;]*m//g')
+        # if [[ "$stripped_line" == "[$USER]"* ]]; then
+        #     echo "NOW"
+        #     continue
+        # el
+        if [[ "$line" == "[NOTIFY]"* ]]; then
+            notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$line"
+        else
+            echo "$line"
+        fi
+    done &
+}
+
+send_message() {
+    user="$1"
+    shift
+    rest="$*"
+    echo -e "${GREEN}[$user]${NC} $rest" >> "$PUBLIC_CHAT_FILE"
+}
+
+send_to(){
+    to_user="$1"
+    shift
+    rest="$*"
+    echo -e "${GREEN}[$USER]${NC} $rest" >> "/home/$to_user/.private_chatfile"
+}
+
+say() {
+    send_message $USER "$@"
+}
+
+send_flashing_popup_message() {
+    # Validate input parameters
+    if [ $# -lt 2 ]; then
+        echo "Usage: send_flashing_popup_message <tty> <message> [duration] [clear_after]" >&2
+        return 1
+    fi
+
+    local tty="$1"
+    local message="$2"
+    local duration="${3:-5}"  # Default flashing duration (5 flashes)
+    local clear_after="${4:-true}"  # Whether to clear after flashing (default: true)
+
+    # Validate the target terminal
+    if [ ! -w "$tty" ]; then
+        echo "Error: Cannot write to terminal $tty" >&2
+        return 1
+    fi
+
+    # Validate message is not empty
+    if [ -z "$message" ]; then
+        echo "Error: Message cannot be empty" >&2
+        return 1
+    fi
+
+    # Get terminal size (rows and columns) of the target terminal
+    local terminal_info
+    terminal_info=$(stty size < "$tty")
+    if [ -z "$terminal_info" ]; then
+        echo "Error: Unable to determine terminal size" >&2
+        return 1
+    fi
+
+    local rows=$(echo "$terminal_info" | awk '{print $1}')
+    local cols=$(echo "$terminal_info" | awk '{print $2}')
+
+    # Calculate center position
+    local middle_row=$((rows / 2))
+    local middle_col=$(( (cols - ${#message} - 2) / 2 ))
+
+    # Set up the border
+    local border="+"$(printf "%-$((${#message}+2))s" " " | tr " " "-")"+"
+
+    # Save the current cursor position
+    echo -e "\033[s" > "$tty"
+
+    # Draw the popup box
+    echo -e "\033[${middle_row};${middle_col}H$border" > "$tty"
+    echo -e "\033[$((middle_row+1));${middle_col}H| $message |" > "$tty"
+    echo -e "\033[$((middle_row+2));${middle_col}H$border" > "$tty"
+
+    # Flashing effect
+    local flash_count=0
+    while [ $flash_count -lt "$duration" ]; do
+        # Orange background
+        echo -e "\033[${middle_row+1};${middle_col}H\033[48;5;214m| $message |\033[0m" > "$tty"
+        sleep 0.2
+        
+        # Dark background
+        echo -e "\033[${middle_row+1};${middle_col}H\033[48;5;236m| $message |\033[0m" > "$tty"
+        sleep 0.2
+
+        flash_count=$((flash_count + 1))
+    done
+
+    # Clear the popup if requested
+    if [ "$clear_after" = "true" ]; then
+        for i in {0..2}; do
+            echo -e "\033[$((middle_row+i));${middle_col}H$(printf "%-${#border}s" " ")" > "$tty"
+        done
+    fi
+
+    # Restore the cursor position
+    echo -e "\033[u" > "$tty"
+}

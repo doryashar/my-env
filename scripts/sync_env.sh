@@ -73,8 +73,9 @@ git_sync() {
 
         if [[ -n "$REMOTE_URL" ]]; then
             git remote | grep -q origin || git remote add origin "$REMOTE_URL"
-            [[ "$direction" == "push" ]] && info "Pushing changes to git" && git push origin master
-            if [[ "$direction" == "pull" ]]; then
+            if [[ "$direction" == "push" ]]; then
+              info "Pushing changes to git" && git push origin master
+            elif [[ "$direction" == "pull" ]]; then
                 info "Pulling changes from git" 
                 git pull --ff-only origin master
             else

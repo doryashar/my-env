@@ -5,6 +5,7 @@ set -euo pipefail  # Ensure robustness
 # Declare variables
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 ENV_DIR=$(dirname "$SCRIPT_DIR")
+REPO_CONFIG_FILE="$ENV_DIR/config/repo.conf"
 CONFIG_FILE="$ENV_DIR/config/dotfiles.conf"
 
 # Default configuration path
@@ -14,6 +15,8 @@ DEBUG=${ENV_DEBUG:-1}
 # Load external functions if needed
 [[ $(type -t title) ]] || source "$ENV_DIR/functions/common_funcs"
 
+# Source config file
+[[ -f "$REPO_CONFIG_FILE" ]] && source "$REPO_CONFIG_FILE"
 
 # Function to display usage information
 show_help() {
@@ -120,7 +123,7 @@ update_bashrc() {
     script_path="$(realpath "$0")"
     local bashrc="$HOME/.bashrc"
 
-    grep -Fxq "$script_path" "$bashrc" || {
+    grep -Fq "$script_path" "$bashrc" || {
         cat <<EOL >> "$bashrc"
 
 # Environment Synchronizer

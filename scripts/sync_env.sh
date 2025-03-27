@@ -74,9 +74,9 @@ git_sync() {
         if [[ -n "$REMOTE_URL" ]]; then
             git remote | grep -q origin || git remote add origin "$REMOTE_URL"
             if [[ "$direction" == "push" ]]; then
-                [[ -n "$(git cherry -v)" ]] && info "Pushing changes to git" && git push origin master
+                [[ -n "$(git cherry -v)" ]] && info "Pushing changes to git" && debug $(git push origin master)
             elif [[ "$direction" == "pull" ]]; then
-                git fetch && git status | grep -q "behind" && info "Pulling changes from git" && git pull --ff-only origin master
+                git fetch && git status | grep -q "behind" && info "Pulling changes from git" && debug $(git pull --ff-only origin master)
             else
                 warning "Could not fast-forward merge. Trying auto-merge..."
                 if ! git pull origin master; then

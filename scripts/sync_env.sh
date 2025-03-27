@@ -71,17 +71,12 @@ git_sync() {
             git commit -m "Auto-sync dotfiles $(date '+%Y-%m-%d %H:%M:%S')"
         }
 
-        git fetch || exit 1
         if [[ -n "$REMOTE_URL" ]]; then
             git remote | grep -q origin || git remote add origin "$REMOTE_URL"
             if [[ "$direction" == "push" ]]; then
-                debug "Checking if there are any updates in local"
-                local_current=$(git rev-parse HEAD)
-                [ "$local_changed" -eq 1 ] && info "Pushing changes to git" && git push origin master
+                [[ -n "$(git cherry -v)" ]] && info "Pushing changes to git" && git push origin master
             elif [[ "$direction" == "pull" ]]; then
-                debug "Checking if there are any updates in remote"
-                remote_current=$(git rev-parse @{upstream})
-                [ "$remote_current" -eq 1 ] && info "Pulling changes from git" && git pull --ff-only origin master
+                git fetch && git status | grep -q "behind" && info "Pulling changes from git" && git pull --ff-only origin master
             else
                 warning "Could not fast-forward merge. Trying auto-merge..."
                 if ! git pull origin master; then

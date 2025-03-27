@@ -166,6 +166,7 @@ main() {
     [[ -n "$PERFORM_ENCRYPTED_SYNC" ]] && "$ENV_DIR/scripts/sync_encrypted.sh"
     [[ -n "$PERFORM_DOTFILES_SYNC" ]] && "$ENV_DIR/scripts/sync_dotfiles.sh" "$CONFIG_FILE"
     [[ -n "$PERFORM_PUSH" ]] && git_sync "push" "$ENV_DIR"
+    debug Finished!
 }
 
 # Functions for argument handling

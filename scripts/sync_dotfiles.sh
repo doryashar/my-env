@@ -241,7 +241,7 @@ process_regex_mappings() {
         local files=()
         while IFS= read -r -d $'\0' file; do
             files+=("$file")
-        done < <(find "$ENV_DIR" -path "$glob_pattern" -print0 2>/dev/null)
+        done < <(find "$ENV_DIR" -path "$ENV_DIR/$glob_pattern" -print0 2>/dev/null)
         
         if [[ ${#files[@]} -eq 0 ]]; then
             warning "No files matched pattern: $source_pattern"

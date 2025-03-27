@@ -20,6 +20,7 @@
 SELF_PATH="$(realpath "${BASH_SOURCE[0]}")"
 ZERO_PATH="$(realpath "$0")"
 ENV_DIR=${ENV_DIR:-$(dirname $(dirname "$SELF_PATH"))}
+ENV_DIR=${ENV_DIR%/}
 
 # Default configuration 
 DEFAULT_LINK_TYPE="soft"
@@ -241,7 +242,7 @@ process_regex_mappings() {
         local files=()
         while IFS= read -r -d $'\0' file; do
             files+=("$file")
-        done < <(find "$ENV_DIR" -path "$ENV_DIR/$glob_pattern" -print0 2>/dev/null)
+        done < <(find "$ENV_DIR" -maxdepth $(($(printf '%s' "$source_pattern" | tr -cd '/' | wc -c) + 1)) -path $ENV_DIR/"$source_pattern" -print0 2>/dev/null)
         
         if [[ ${#files[@]} -eq 0 ]]; then
             warning "No files matched pattern: $source_pattern"
@@ -432,6 +433,7 @@ sync_file() {
         fi
     else
         # Target doesn't exist - create link
+        debug "(-)(-) Creating link: $target"
         create_link "$source" "$target" "$link_type"
     fi
     
@@ -601,6 +603,12 @@ create_link() {
     local target_dir=$(dirname "$target")
     mkdir -p "$target_dir"
     
+    # if the broken link file exists, remove it
+    if [[ -h "$target" ]]; then
+        warning "Removing existing file (probably broken simlink): $target, $(ls -al "$target")"
+        rm -rf "$target"
+    fi
+
     if [[ "$link_type" == "hard" ]]; then
         ln "$source" "$target" && info "Created hard link: $target -> $source"
     else

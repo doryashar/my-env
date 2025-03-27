@@ -638,7 +638,16 @@ sync_dotfiles() {
     debug "Sync complete!"
     return 0
 }
-
+remove_all_broken_links() {
+    # list_files=$(find $directory -xtype l)
+    directory="$1"
+    find "$directory" -maxdepth 2 -type l | while read -r file; do
+        if [[ -L "$file" ]] && [[ ! -e "$file" ]]; then
+            warning "Removing broken symlink: $file"
+            rm "$file"
+        fi
+    done
+}
 main() {
     if [[ "$#" -lt 1 ]]; then
         CONFIG_FILE="$ENV_DIR/config/dotfiles.conf"
@@ -651,6 +660,7 @@ main() {
     
     # Sync dotfiles
     sync_dotfiles
+    remove_all_broken_links $HOME
     return 0
 
 }

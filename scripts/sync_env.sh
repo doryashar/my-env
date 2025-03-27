@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail  # Ensure robustness
+# set -euo pipefail  # Ensure robustness
 
 # Declare variables
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
@@ -140,11 +140,7 @@ EOL
 main() {
     local custom_config="" 
     # Initialize flags to prevent "unbound variable" errors
-    PERFORM_INIT=0
-    PERFORM_PULL=0
-    PERFORM_DOTFILES_SYNC=0
-    PERFORM_ENCRYPTED_SYNC=0
-    PERFORM_PUSH=0
+
     declare -A actions=(
         [-h]=show_help [-help]=show_help
         [-c]=set_custom_config [--config]=set_custom_config

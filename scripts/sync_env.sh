@@ -67,6 +67,7 @@ git_sync() {
 
     (cd "$repo_path" && {
         [[ -n "$(git status --porcelain)" ]] && {
+            debug "Uncommitted changes detected. Committing changes..."
             git add .
             git commit -m "Auto-sync dotfiles $(date '+%Y-%m-%d %H:%M:%S')"
         }
@@ -74,9 +75,9 @@ git_sync() {
         if [[ -n "$REMOTE_URL" ]]; then
             git remote | grep -q origin || git remote add origin "$REMOTE_URL"
             if [[ "$direction" == "push" ]]; then
-                [[ -n "$(git cherry -v)" ]] && info "Pushing changes to git" && debug $(git push origin master)
+                [[ -n "$(git cherry -v)" ]] && info "Pushing changes to git" && debug $(git push origin master 2>&1)
             elif [[ "$direction" == "pull" ]]; then
-                git fetch && git status | grep -q "behind" && info "Pulling changes from git" && debug $(git pull --ff-only origin master)
+                git fetch && git status | grep -q "behind" && info "Pulling changes from git" && debug $(git pull --ff-only origin master 2>&1)
             else
                 warning "Could not fast-forward merge. Trying auto-merge..."
                 if ! git pull origin master; then

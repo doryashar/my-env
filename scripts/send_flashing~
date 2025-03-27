@@ -1,0 +1,46 @@
+send_flashing_popup_message() {
+    local tty="$1"
+    local message="$2"
+    local duration="${3:-5}"  # Default flashing duration (5 flashes)
+    local clear_after="${4:-true}"  # Whether to clear after flashing (default: true)
+
+    # Get terminal size (rows and columns) of the target terminal
+    local rows=$(stty size < "$tty" | awk '{print $1}')
+    local cols=$(stty size < "$tty" | awk '{print $2}')
+
+    # Calculate center position
+    local middle_row=$((rows / 2))
+    local middle_col=$(( (cols - ${#message}) / 2 ))
+
+    # Set up the border
+    local border="+"$(printf "%-${#message}s" " " | tr " " "-")"+"
+
+    # Save the current cursor position
+    echo -e "\033[s" > "$tty"
+
+    # Draw the popup box
+    echo -e "\033[${middle_row};${middle_col}H$border" > "$tty"
+    echo -e "\033[${middle_row+1};${middle_col}H| $message |" > "$tty"
+    echo -e "\033[${middle_row+2};${middle_col}H$border" > "$tty"
+
+    # Flashing effect
+    for i in $(seq "$duration"); do
+        echo -e "\033[${middle_row+1};${middle_col}H\033[48;5;214m| $message |" > "$tty"  # Orange background
+        sleep 0.2
+        echo -e "\033[${middle_row+1};${middle_col}H\033[48;5;236m| $message |" > "$tty"  # Dark background
+        sleep 0.2
+    done
+
+    # Clear the popup if requested
+    if [ "$clear_after" = "true" ]; then
+        for i in {0..2}; do
+            echo -e "\033[$((middle_row+i));${middle_col}H$(printf "%-${#border}s" " ")" > "$tty"
+        done
+    fi
+
+    # Restore the cursor position
+    echo -e "\033[u" > "$tty"
+}
+echo $1
+echo $2
+send_flashing_popup_message $@

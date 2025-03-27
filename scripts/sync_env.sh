@@ -73,8 +73,8 @@ git_sync() {
 
         if [[ -n "$REMOTE_URL" ]]; then
             git remote | grep -q origin || git remote add origin "$REMOTE_URL"
-            [[ "$direction" == "push" ]] && git push origin master
-            [[ "$direction" == "pull" ]] && git pull --ff-only origin master || {
+            [[ "$direction" == "push" ]] && info "Pushing changes to git" && git push origin master
+            [[ "$direction" == "pull" ]] && info "Pulling changes from git" && git pull --ff-only origin master || {
                 warning "Could not fast-forward merge. Trying auto-merge..."
                 if ! git pull origin master; then
                     error "Merge conflict detected."

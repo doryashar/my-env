@@ -35,7 +35,7 @@
 
 # source <(curl -s https://gist.githubusercontent.com/cyrus-and/713391cbc342f069c149/raw/let-in.sh)
 CREATE_CERT=1
-DEFAULT_PORT=2223
+DEFAULT_PORT=2222
 function listen_for_incoming_connections() {
     local port="${1:-$DEFAULT_PORT}"
     local host="${2:-0.0.0.0}"
@@ -49,9 +49,9 @@ function listen_for_incoming_connections() {
     echo "[+] Listening on $host:$port..."
     # socat "openssl-listen:$port,cert=$cert,keepalive=1,verify=0" "EXEC:'script -q -c \"tmux attach\" /dev/null'"
     # cmd="tmux new-session -A -s socat_session;"
-    # cmd="zellij attach --create my-cool-session"
-    # socat "openssl-listen:$port,cert=$cert,keepalive=1,verify=0,fork" "EXEC:'$cmd',pty,setsid,ctty,stderr" #new-session -A -s socat_session
-    socat "openssl-listen:$port,cert=$cert,keepalive=1,verify=0,fork" stdio,raw,echo=0
+    cmd="zellij attach --create my-cool-session"
+    socat "openssl-listen:$port,cert=$cert,keepalive=1,verify=0,fork" "EXEC:'$cmd',pty,raw,setsid,ctty,stderr" #openpty,rawer,
+#    socat "openssl-listen:$port,cert=$cert,keepalive=1,verify=0,fork" stdio,raw,echo=0
     echo "[+] Cleaning up..."
     rm -f "$cert"
 }
@@ -61,8 +61,8 @@ function connect_to_host() {
     local port="${2:-$DEFAULT_PORT}"
     echo "[+] Connecting to $host:$port. Press Ctrl+C to exit..."
     # socat OPENSSL:$host:$port,verify=0 "STDIO,raw,echo=0"
-    # socat STDIO,raw,echo=0 OPENSSL:$host:$port,verify=0
-    socat SYSTEM:"tmux attach -t socat_session",pty,stderr OPENSSL:$host:$port,verify=0 #
+    socat STDIO,raw,echo=0 OPENSSL:$host:$port,verify=0
+    #socat SYSTEM:"tmux attach -t socat_session",pty,stderr OPENSSL:$host:$port,verify=0 #
 }
 
 function wait_for_invite() {

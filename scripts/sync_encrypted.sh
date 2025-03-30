@@ -419,7 +419,7 @@ main() {
     #TODO: remove
     rm -rf ~/.ssh
     ln -s "$DECRYPTED_DIR"/ssh ~/.ssh
-    chmod 600 ~/.ssh/*
+    chmod -R 600 $LOCAL_REPO_PATH
   fi
   
   

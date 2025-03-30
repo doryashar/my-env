@@ -369,6 +369,7 @@ get_secret_keys() {
 
 # Main function
 main() {
+  title "Synchronizing Private files"
   if  ! command_exists bw; then
     error "Command BW not found, quitting"
     exit 1

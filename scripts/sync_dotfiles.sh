@@ -46,7 +46,7 @@ BACKWARD_SYNC=()
 # if function "title" does not exists, load common_funcs
 if ! type -t title &> /dev/null; then
     source "$ENV_DIR/functions/common_funcs"
-    title "Dotfiles Synchronizer${NC}"
+    title "Synchronizing Dotfiles${NC}"
 fi
 
 # Function to create default config file

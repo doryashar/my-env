@@ -46,5 +46,5 @@ if [ -t 0 ]; then
         neofetch
     fi
     kuma_status;
-    zt__clients;
+    zerotier_clients;
 fi

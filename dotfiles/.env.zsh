@@ -22,7 +22,7 @@ done
 . ${ENV_DIR}/aliases
 
 # If modified time of env is more than  1 day, then update it and dotfiles
-# if [ -t 0 ]; then
+if [ -t 0 ]; then
     if [ ! -f "${ENV_DIR}/tmp/updated" ] || [ "$(find "${ENV_DIR}/tmp/updated" -mtime +1 -print)" ]; then
         echo "Updating env..."
         ${ENV_DIR}/scripts/sync_env.sh --encrypted_sync --dotfiles_sync --push --pull && touch ${ENV_DIR}/tmp/updated
@@ -45,5 +45,6 @@ done
     if [[ "$SHOW_NEOFETCH" = "on" ]]; then
         neofetch
     fi
-
-# fi
+    kuma_status;
+    zt__clients;
+fi

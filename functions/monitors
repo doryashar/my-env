@@ -1,0 +1,28 @@
+kuma_status() {
+    local KUMA_URL="http://uptime-kuma.cap.yashar.us/metrics" 
+    curl -s -u":$UPTIME_KUMA_API" "$KUMA_URL" | awk -v GREEN="$GREEN" -v RED="$RED" -v YELLOW="$YELLOW" -v BLUE="$BLUE" -v RESET="$NC" '
+    BEGIN { print "Monitor Status:" }
+    /^monitor_status{/ {
+        match($0, /monitor_name="([^"]+)"/, name)
+        match($0, /} ([0-9]+)/, status)
+        if (status[1] == 1) {
+            status_text = GREEN "UP" RESET
+        } else if (status[1] == 0) {
+            status_text = RED "DOWN" RESET
+        } else if (status[1] == 2) {
+            status_text = YELLOW "PENDING" RESET
+        } else {
+            status_text = BLUE "MAINTENANCE" RESET
+        }
+        print name[1] ": " status_text
+    }'
+}
+
+zerotier_clients() {
+  curl -s -H "Authorization: bearer $ZEROTIER_API_KEY" \
+    "https://my.zerotier.com/api/network/$ZEROTIER_NETWORK_ID/member" | \
+    jq -r '.[] | select(.name != "" and .description != "") | 
+      "\(.name): \(.description) | IP Address(es): \(.config.ipAssignments | join(", ")) | Last Seen: \(.lastSeen | tonumber | todate)"' | \
+    sort -t ":" -k5,5n
+}
+

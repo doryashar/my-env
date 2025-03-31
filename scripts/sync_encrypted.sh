@@ -448,10 +448,11 @@ main() {
   
   remote_changed=0
     
-  if [ ! -d "$DECRYPTED_DIR" ]; then
-    info "Decrypted directory not found. Assuming remote has changes."
-    remote_changed=1
-  elif [ "$local_current" != "$remote_current" ]; then
+  # if [ ! -d "$DECRYPTED_DIR" ]; then
+  #   info "Decrypted directory not found. Assuming remote has changes."
+  #   remote_changed=1
+  # el
+  if [ "$local_current" != "$remote_current" ]; then
     info "Remote has changes."
     remote_changed=1
   else
@@ -462,8 +463,9 @@ main() {
   debug "Checking for local changes..."
   local_changed=0
 
-  if [ ! -d "$DECRYPTED_DIR" ]; then
-    debug "Will not check for local changes, as decrypted dir does not exist"
+  # if [ ! -d "$DECRYPTED_DIR" ]; then
+  #   debug "Will not check for local changes, as decrypted dir does not exist"
+  # el
   if has_changed "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"; then
     debug "Local files unchanged."
   else

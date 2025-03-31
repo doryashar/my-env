@@ -67,7 +67,7 @@ git_sync() {
 
     (cd "$repo_path" && {
         [[ -n "$(git status --porcelain)" ]] && {
-            debug "Uncommitted changes detected. Committing changes..."
+            info "Uncommitted changes detected. Committing changes..."
             git submodule foreach 'git add . && git commit -m "Auto-sync submodule $(date "+%Y-%m-%d %H:%M:%S")'
             git add .
             git commit -m "Auto-sync dotfiles $(date '+%Y-%m-%d %H:%M:%S')"

@@ -360,7 +360,7 @@ get_secret_keys() {
         debug "Using existing session."
     fi
 
-    export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-bw get password GITHUB_API_KEY}
+    export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-$(bw get password GITHUB_API_KEY)}
     export AGE_SECRET=${AGE_SECRET:-"$(bw get password AGE_SECRET)"}
     if [[ -z "$AGE_SECRET" ]] || [[ -z "$GITHUB_SSH_PRIVATE_KEY" ]]; then
         error "AGE_SECRET/GITHUB_SSH_PRIVATE_KEY is not set. Please set it in your environment."
@@ -407,10 +407,10 @@ main() {
       info "Initializing local repository..."
       mkdir -p "$LOCAL_REPO_PATH"
       temp_gz=$(mktemp)
-      curl -H "Authorization: token $GITHUB_API_TOKEN" \
+      curl -H "Authorization: token $GITHUB_SSH_PRIVATE_KEY" \
           -L https://api.github.com/repos/doryashar/encrypted/tarball \
           -o $temp_gz
-      tar xzf $temp_gz -C "$LOCAL_REPO_PATH" --strip-components=1
+      \tar xzf $temp_gz -C "$LOCAL_REPO_PATH" --strip-components=1 || exit 1
       rm $temp_gz
     fi
 
@@ -421,7 +421,9 @@ main() {
     #TODO: remove
     rm -rf ~/.ssh
     ln -s "$DECRYPTED_DIR"/ssh ~/.ssh
-    chmod -R 600 $LOCAL_REPO_PATH
+    #TODO: the script should also set the file permissions
+    chmod 600 $DECRYPTED_DIR/ssh/*
+    chmod 600 $DECRYPTED_DIR/ssh/secrets
   fi
   
   

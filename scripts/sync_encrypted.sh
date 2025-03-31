@@ -122,6 +122,7 @@ has_changed() {
   local dir="$1"
   local hash_file="$2"
   local temp_hash_file="$TEMP_DIR/temp_hashes"
+  
   hashit "$dir" "$temp_hash_file"
   
   if [ ! -f "$hash_file" ]; then
@@ -444,7 +445,11 @@ main() {
   remote_current=$(git rev-parse @{upstream})
   
   remote_changed=0
-  if [ "$local_current" != "$remote_current" ]; then
+    
+  if [ ! -d "$DECRYPTED_DIR" ]; then
+    info "Decrypted directory not found. Assuming remote has changes."
+    remote_changed=1
+  elif [ "$local_current" != "$remote_current" ]; then
     info "Remote has changes."
     remote_changed=1
   else
@@ -454,6 +459,9 @@ main() {
   # Check if local decrypted files changed
   debug "Checking for local changes..."
   local_changed=0
+
+  if [ ! -d "$DECRYPTED_DIR" ]; then
+    debug "Will not check for local changes, as decrypted dir does not exist"
   if has_changed "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"; then
     debug "Local files unchanged."
   else

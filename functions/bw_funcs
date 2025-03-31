@@ -1,7 +1,18 @@
 add_secret() {
     name="$1"
     secret="$2"
-    bw create item password "$secret" --name "$name"
+    # bw create item password "$secret" --name "$name"
+    echo -e "${GREEN}Adding secrets to Bitwarden.${NC}"
+        
+    # Create JSON for new item
+    local item_json
+    item_json=$(jq -n \
+        --arg name "$name" \
+        --arg notes "$secret" \
+        '{name: $name, notes: $notes, type: 2, secureNote: {type: 0}}')
+    
+    # Add item to Bitwarden
+    echo "$item_json" | bw encode | bw create item > /dev/null
 }
 
 get_secret() {

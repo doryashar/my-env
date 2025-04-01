@@ -40,6 +40,7 @@ zstyle ':z4h:ssh:*'                   enable 'no'
 
 # Send these files over to the remote host when connecting over SSH to the
 # enabled hosts.
+[ ! -f "$HOME/.x-cmd.root/X" ] || . "$HOME/.x-cmd.root/X" # boot up x-cmd.
 zstyle ':z4h:ssh:*' send-extra-files '~/.nanorc' '~/.env.zsh'
 
 # Clone additional Git repositories from GitHub.
@@ -105,4 +106,3 @@ setopt no_auto_menu  # require an extra TAB press to open the completion menu
 # autoload bashcompinit
 # bashcompinit
 # source "/home/yashar/snap/code/185/.local/share/bash-completion/completions/appman"
-[ ! -f "$HOME/.x-cmd.root/X" ] || . "$HOME/.x-cmd.root/X" # boot up x-cmd.

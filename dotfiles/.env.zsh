@@ -20,6 +20,7 @@ for file in ${ENV_DIR}/functions/*; do
 done
 
 . ${ENV_DIR}/aliases
+eval "$(zoxide init zsh)"
 
 # If modified time of env is more than  1 day, then update it and dotfiles
 if [ -t 0 ]; then
@@ -47,4 +48,5 @@ if [ -t 0 ]; then
     fi
     kuma_status;
     zerotier_clients;
+    
 fi

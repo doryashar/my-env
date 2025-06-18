@@ -357,7 +357,7 @@ get_secret_keys() {
         fi
         info "Logged in successfully!"
     else
-        debug "Using existing session."
+        debug "Using existing BitWarden session."
     fi
 
     export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-$(bw get password GITHUB_API_KEY)}
@@ -376,10 +376,10 @@ main() {
     exit 1
   fi
     
-  if  ! command_exists bw; then
-    error "Command BW not found, quitting"
-    exit 1
-  fi
+  # if  ! command_exists bw; then
+  #   error "Command BW not found, quitting"
+  #   exit 1
+  # fi
     
   # Ensure age is installed
   debug "Ensuring AGE is installed and setting up the secret from BW"

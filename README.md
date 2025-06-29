@@ -72,10 +72,21 @@ The setup script will configure:
 ## Repository Structure
 
 ```
-my_env/
-├── private/        # Private encrypted submodule (sensitive data)
-├── runme.sh        # Main setup script
-└── README.md       # This documentation
+env/
+├── AGENTS.md       # Agent instructions
+├── aliases         # Custom shell aliases
+├── bin/            # Standalone binaries
+├── config/         # Application configurations
+├── docker/         # Docker-compose files
+├── dotfiles/       # Dotfiles (e.g., .bashrc, .vimrc)
+├── env_vars        # Environment variables
+├── fonts/          # Custom fonts
+├── functions/      # Shell functions
+├── local/          # Local configurations
+├── private/        # Private encrypted submodule
+├── README.md       # This documentation
+├── scripts/        # Setup and utility scripts
+└── tmp/            # Temporary files
 ```
 
 ## Security
@@ -96,7 +107,7 @@ To update your environment:
 
 2. Run the setup script again:
    ```bash
-   ./runme.sh
+   ./setup.sh
    ```
 
 ## Contributing

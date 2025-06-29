@@ -1,11 +1,0 @@
---2025-06-05 14:34:50--  https://bitwarden.com/download/?app=desktop
-Resolving bitwarden.com (bitwarden.com)... 151.101.1.91, 151.101.65.91, 151.101.129.91, ...
-Connecting to bitwarden.com (bitwarden.com)|151.101.1.91|:443... connected.
-HTTP request sent, awaiting response... 200 OK
-Length: 774429 (756K) [text/html]
-Saving to: ‘index.html?app=desktop’
-
-index.html?app=desktop                  0%[                                                                          ]       0  --.-KB/s               index.html?app=desktop                 61%[============================================>                             ] 461.60K  2.22MB/s               index.html?app=desktop                100%[=========================================================================>] 756.28K  2.97MB/s    in 0.2s    
-
-2025-06-05 14:34:50 (2.97 MB/s) - ‘index.html?app=desktop’ saved [774429/774429]
-

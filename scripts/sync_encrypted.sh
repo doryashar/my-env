@@ -493,88 +493,100 @@ main() {
   # Case 2: Only remote changed
   if [ "$remote_changed" -eq 1 ] && [ "$local_changed" -eq 0 ]; then
     info "Only remote has changed. Updating local files..."
-    git pull
-    rm -rf "$DECRYPTED_DIR"/*
-    decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
-    hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
-    debug "Local files updated successfully."
+    read -p "An update is available. Do you want to pull the changes? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        git pull
+        rm -rf "$DECRYPTED_DIR"/*
+        decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
+        hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
+        debug "Local files updated successfully."
+    fi
     exit 0
   fi
   
   # Case 3: Only local changed
   if [ "$remote_changed" -eq 0 ] && [ "$local_changed" -eq 1 ]; then
     info "Only local files have changed. Encrypting and pushing..."
-    #TODO: sync only files that were changed / added / removed
+    read -p "Local changes detected. Do you want to push the changes? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        #TODO: sync only files that were changed / added / removed
 
-    # Remove old encrypted files
-    find "$LOCAL_REPO_PATH" -name "*.age" -type f -delete
-    
-    # Encrypt all decrypted files
-    encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"
-    
-    # Commit and push
-    cd "$LOCAL_REPO_PATH" || exit 1
-    git add .
-    git commit -m "Update encrypted files: $(date)"
-    git push
-    if [ $? -ne 0 ]; then
-      error "Failed to push changes."
-      exit 1
+        # Remove old encrypted files
+        find "$LOCAL_REPO_PATH" -name "*.age" -type f -delete
+        
+        # Encrypt all decrypted files
+        encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"
+        
+        # Commit and push
+        cd "$LOCAL_REPO_PATH" || exit 1
+        git add .
+        git commit -m "Update encrypted files: $(date)"
+        git push
+        if [ $? -ne 0 ]; then
+          error "Failed to push changes."
+          exit 1
+        fi
+        mv "$TEMP_DIR/temp_hashes" "$LOCAL_HASH_FILE"
+        debug "Local changes encrypted and pushed successfully."
     fi
-    mv "$TEMP_DIR/temp_hashes" "$LOCAL_HASH_FILE"
-    debug "Local changes encrypted and pushed successfully."
     exit 0
   fi
   
   # Case 4: Both changed
   if [ "$remote_changed" -eq 1 ] && [ "$local_changed" -eq 1 ]; then
     info "Both remote and local files have changed. Merging..."
-    rm "$TEMP_DIR/temp_hashes"
+    read -p "Both remote and local files have changed. Do you want to merge and push the changes? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm "$TEMP_DIR/temp_hashes"
 
-    # Create temporary directory for remote files
-    REMOTE_TEMP="$TEMP_DIR/remote_decrypted"
-    mkdir -p "$REMOTE_TEMP"
-    
-    # Save current state
-    git stash
-    
-    # Get remote version
-    git pull
-    
-    # Decrypt remote files
-    decrypt_recursive "$LOCAL_REPO_PATH" "$REMOTE_TEMP"
-    
-    # Pop the stash to revert to our local state
-    git stash pop
-    
-    # Merged directory
-    MERGED_DIR="$TEMP_DIR/merged"
-    rm -rf "$MERGED_DIR"
-    mkdir -p "$MERGED_DIR"
-    
-    # Merge changes
-    merge_changes "$REMOTE_TEMP" "$DECRYPTED_DIR" "$MERGED_DIR"
-    
-    # Remove old decrypted and encrypted files
-    rm -rf "$DECRYPTED_DIR"/*
-    find "$LOCAL_REPO_PATH" -name "*.age" -type f -delete
-    
-    # Copy merged files to decrypted directory
-    cp -R "$MERGED_DIR/"* "$DECRYPTED_DIR/" 2>/dev/null || true
-    
-    # Encrypt merged files
-    encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"
-    
-    # Update hash file
-    hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
-    
-    # Commit and push
-    cd "$LOCAL_REPO_PATH" || exit 1
-    git add .
-    git commit -m "Merge changes: $(date)"
-    git push
-    
-    debug "Files merged, encrypted, and pushed successfully."
+        # Create temporary directory for remote files
+        REMOTE_TEMP="$TEMP_DIR/remote_decrypted"
+        mkdir -p "$REMOTE_TEMP"
+        
+        # Save current state
+        git stash
+        
+        # Get remote version
+        git pull
+        
+        # Decrypt remote files
+        decrypt_recursive "$LOCAL_REPO_PATH" "$REMOTE_TEMP"
+        
+        # Pop the stash to revert to our local state
+        git stash pop
+        
+        # Merged directory
+        MERGED_DIR="$TEMP_DIR/merged"
+        rm -rf "$MERGED_DIR"
+        mkdir -p "$MERGED_DIR"
+        
+        # Merge changes
+        merge_changes "$REMOTE_TEMP" "$DECRYPTED_DIR" "$MERGED_DIR"
+        
+        # Remove old decrypted and encrypted files
+        rm -rf "$DECRYPTED_DIR"/*
+        find "$LOCAL_REPO_PATH" -name "*.age" -type f -delete
+        
+        # Copy merged files to decrypted directory
+        cp -R "$MERGED_DIR/"* "$DECRYPTED_DIR/" 2>/dev/null || true
+        
+        # Encrypt merged files
+        encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"
+        
+        # Update hash file
+        hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
+        
+        # Commit and push
+        cd "$LOCAL_REPO_PATH" || exit 1
+        git add .
+        git commit -m "Merge changes: $(date)"
+        git push
+        
+        debug "Files merged, encrypted, and pushed successfully."
+    fi
     exit 0
   fi
 }

@@ -1,3 +1,4 @@
+#!/bin/bash
 MOUNT_BASEDIR="$HOME/mnt"
 CACHE_DIR="$MOUNT_BASEDIR/rclone-cache"
 RCLONE_CONFIG_PATH="$HOME/env/private/config/rclone"
@@ -60,7 +61,8 @@ mount_remote() {
     --metadata \
     --cache-dir=/cache/$REMOTE_NAME \
     --allow-non-empty \
-    --log-file /cache/$REMOTE_NAME.log --log-level DEBUG
+    --log-file /cache/$REMOTE_NAME.log 
+    #--log-level DEBUG
     if [ $? -eq 0 ]; then
       echo "Mounted ${REMOTE_NAME}:${REMOTE_DIR} to ${MOUNT_BASEDIR}/${REMOTE_NAME}_${REMOTE_DIR_NAME}"
       return 0

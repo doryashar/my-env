@@ -106,3 +106,4 @@ setopt no_auto_menu  # require an extra TAB press to open the completion menu
 # autoload bashcompinit
 # bashcompinit
 # source "/home/yashar/snap/code/185/.local/share/bash-completion/completions/appman"
+

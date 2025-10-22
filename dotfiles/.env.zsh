@@ -23,30 +23,30 @@ done
 eval "$(zoxide init zsh)"
 
 # If modified time of env is more than  1 day, then update it and dotfiles
-if [ -t 0 ]; then
-    if [ ! -f "${ENV_DIR}/tmp/updated" ] || [ "$(find "${ENV_DIR}/tmp/updated" -mtime +1 -print)" ]; then
-        echo "Updating env..."
-        ${ENV_DIR}/scripts/sync_env.sh --encrypted_sync --dotfiles_sync --push --pull && touch ${ENV_DIR}/tmp/updated
-        #TODO: if updated run exec $0
-    fi
-    
-    # title "Welcome"
-
-    # # If mount file variable exists, then mount it
-    # if [ -n "${MOUNT_FILE}" ]; then
-    #     title "Mounting volumes..."
-    #     mount -T ${MOUNT_FILE}
-    # fi
-
-    if [[ "$SHOW_DUFF" = "on" ]]; then
-        # echo "Running duf..."
-        (duf &)
-    fi
-
-    if [[ "$SHOW_NEOFETCH" = "on" ]]; then
-        neofetch
-    fi
-    kuma_status;
-    zerotier_clients;
-    
-fi
+#if [ -t 0 ]; then
+#    if [ ! -f "${ENV_DIR}/tmp/updated" ] || [ "$(find "${ENV_DIR}/tmp/updated" -mtime +1 -print)" ]; then
+#        echo "Updating env..."
+#        ${ENV_DIR}/scripts/sync_env.sh --encrypted_sync --dotfiles_sync --push --pull && touch ${ENV_DIR}/tmp/updated
+#        #TODO: if updated run exec $0
+#    fi
+#    
+#    # title "Welcome"
+#
+#    # # If mount file variable exists, then mount it
+#    # if [ -n "${MOUNT_FILE}" ]; then
+#    #     title "Mounting volumes..."
+#    #     mount -T ${MOUNT_FILE}
+#    # fi
+#
+#    if [[ "$SHOW_DUFF" = "on" ]]; then
+#        # echo "Running duf..."
+#        (duf &)
+#    fi
+#
+#    if [[ "$SHOW_NEOFETCH" = "on" ]]; then
+#        neofetch
+#    fi
+#    kuma_status;
+#    zerotier_clients;
+#    
+#fi

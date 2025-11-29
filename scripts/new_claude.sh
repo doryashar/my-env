@@ -151,9 +151,10 @@ if [ "$USE_DEVCONTAINER" = true ]; then
   # Prepare environment variables
   ENV_VARS=("-e" "CLAUDE_CONFIG_DIR=/home/node/.claude")
 
-  # Pass GitHub token if available
+  # Pass GitHub token if available and configure git credential helper
   if [ -n "${GITHUB_API_TOKEN:-}" ]; then
     ENV_VARS+=("-e" "GH_TOKEN=$GITHUB_API_TOKEN")
+    ENV_VARS+=("-e" "GITHUB_TOKEN=$GITHUB_API_TOKEN")
     echo ">>> Passing GitHub token as GH_TOKEN"
   fi
 
@@ -165,8 +166,9 @@ if [ "$USE_DEVCONTAINER" = true ]; then
     -w /workspace \
     "${ENV_VARS[@]}" \
     --user node \
+    --entrypoint /bin/bash \
     "$DEVCONTAINER_IMAGE" \
-    claude --dangerously-skip-permissions
+    -c 'if [ -n "$GITHUB_TOKEN" ]; then git config --global credential.helper "!f() { echo username=git; echo password=$GITHUB_TOKEN; }; f"; fi && exec claude --dangerously-skip-permissions'
 
 elif [ "$USE_CONTAINER" = true ]; then
   echo ">>> Running Claude in container: $CONTAINER_IMAGE"
@@ -222,9 +224,10 @@ elif [ "$USE_CONTAINER" = true ]; then
   # Prepare environment variables
   ENV_VARS=("-e" "CLAUDE_CONFIG_DIR=/home/agent/.claude")
 
-  # Pass GitHub token if available
+  # Pass GitHub token if available and configure git credential helper
   if [ -n "${GITHUB_API_TOKEN:-}" ]; then
     ENV_VARS+=("-e" "GH_TOKEN=$GITHUB_API_TOKEN")
+    ENV_VARS+=("-e" "GITHUB_TOKEN=$GITHUB_API_TOKEN")
     echo ">>> Passing GitHub token as GH_TOKEN"
   fi
 
@@ -235,8 +238,9 @@ elif [ "$USE_CONTAINER" = true ]; then
     -v "$CLAUDE_CONTAINER_VOLUME:/home/agent/.claude" \
     -w /workspace \
     "${ENV_VARS[@]}" \
+    --entrypoint /bin/bash \
     "$CONTAINER_IMAGE" \
-    claude --dangerously-skip-permissions
+    -c 'if [ -n "$GITHUB_TOKEN" ]; then git config --global credential.helper "!f() { echo username=git; echo password=$GITHUB_TOKEN; }; f"; fi && exec claude --dangerously-skip-permissions'
 
 else
   echo ">>> Running Claude locally"

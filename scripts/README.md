@@ -34,22 +34,29 @@ Uses the official Anthropic devcontainer built from their Dockerfile.
 ## Environment Variables
 
 ### GitHub Token (Automatic)
-If you have `GITHUB_API_TOKEN` set in your environment, it will automatically be passed to the container as `GH_TOKEN`:
+If you have `GITHUB_API_TOKEN` set in your environment, it will automatically be:
+1. Passed to the container as `GH_TOKEN` and `GITHUB_TOKEN`
+2. Configured as a git credential helper for HTTPS authentication
 
 ```bash
 export GITHUB_API_TOKEN=ghp_your_token_here
 ./new_claude.sh --container my-branch
 ```
 
-Inside the container, Claude can use `$GH_TOKEN` for GitHub API operations like:
-- Creating issues/PRs with `gh` CLI
-- Accessing private repositories
-- GitHub API requests
+Inside the container, the token enables:
+- ✅ `git push origin <branch>` - No password prompt needed
+- ✅ `git pull` from private repositories
+- ✅ `gh pr create` and other GitHub CLI commands
+- ✅ GitHub API requests
+- ✅ Cloning private repositories
 
 **Output when token is detected:**
 ```
 >>> Passing GitHub token as GH_TOKEN
 ```
+
+**How it works:**
+The script automatically configures git to use your token as a credential helper, so all HTTPS git operations work seamlessly without prompting for a password.
 
 ## First-Time Setup (Container Modes)
 
@@ -131,10 +138,20 @@ open -a Docker  # macOS
 ### Can't build devcontainer image
 The script automatically downloads the official Dockerfile and builds it. Ensure you have internet access and Docker is running.
 
+### Git push asks for password
+Make sure `GITHUB_API_TOKEN` is set before starting the container:
+```bash
+export GITHUB_API_TOKEN=ghp_your_token_here
+./new_claude.sh --container my-branch
+```
+
+The token must be set **before** running the script. If you set it after the container starts, restart the container.
+
 ### GitHub token not working in container
-1. Verify it's set: `echo $GITHUB_API_TOKEN`
+1. Verify it's set on host: `echo $GITHUB_API_TOKEN`
 2. Check the script output for "Passing GitHub token as GH_TOKEN"
-3. Inside container, verify: `echo $GH_TOKEN`
+3. Inside container, verify: `echo $GITHUB_TOKEN`
+4. Test git credential helper: `git config --global credential.helper`
 
 ## Test Scripts
 
@@ -145,6 +162,7 @@ The script automatically downloads the official Dockerfile and builds it. Ensure
 - `test_git_remote_simple.sh` - Tests git remote access in containers
 - `test_git_remotes.sh` - Detailed git remote analysis
 - `test_git_operations.sh` - Tests git add/commit/status operations
+- `test_git_push.sh` - Tests git push authentication with token (requires `GITHUB_API_TOKEN` set)
 
 ## Credits
 

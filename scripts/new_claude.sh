@@ -9,9 +9,9 @@ CLAUDE_CONFIG_DIR="${HOME}/.claude"
 
 usage() {
   echo "Usage: $0 [--container] [--devcontainer] [--no_container] [branch-name]"
-  echo "  --container        Use Docker sandbox template (docker/sandbox-templates:claude-code)"
+  echo "  --container        Use Docker sandbox template (docker/sandbox-templates:claude-code) (default)"
   echo "  --devcontainer     Use official Anthropic devcontainer (builds from Dockerfile)"
-  echo "  --no_container     Use local Claude installation (default)"
+  echo "  --no_container     Use local Claude installation"
   exit 1
 }
 

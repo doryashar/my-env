@@ -3,15 +3,19 @@ set -euo pipefail
 
 USE_CONTAINER=true
 USE_DEVCONTAINER=false
+USE_GLM=false
+USE_BRANCH=false
 CONTAINER_IMAGE="${CONTAINER_IMAGE:-docker/sandbox-templates:claude-code}"
 DEVCONTAINER_IMAGE="anthropic-claude-devcontainer"
 CLAUDE_CONFIG_DIR="${HOME}/.claude"
 
 usage() {
-  echo "Usage: $0 [--container] [--devcontainer] [--no_container] [branch-name]"
+  echo "Usage: $0 [--container] [--devcontainer] [--no_container] [--glm] [--branch] [branch-name]"
   echo "  --container        Use Docker sandbox template (docker/sandbox-templates:claude-code) (default)"
   echo "  --devcontainer     Use official Anthropic devcontainer (builds from Dockerfile)"
   echo "  --no_container     Use local Claude installation"
+  echo "  --glm             Use GLM model instead of Claude"
+  echo "  --branch          Create new branch instead of worktree"
   exit 1
 }
 
@@ -33,6 +37,14 @@ while [[ $# -gt 0 ]]; do
       USE_DEVCONTAINER=false
       shift
       ;;
+    --glm)
+      USE_GLM=true
+      shift
+      ;;
+    --branch)
+      USE_BRANCH=true
+      shift
+      ;;
     --help|-h)
       usage
       ;;
@@ -43,39 +55,58 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-BRANCH="${BRANCH:-wt-$(date +%Y%m%d-%H%M%S)}"
+# Set default branch name based on mode
+if [ "$USE_BRANCH" = true ]; then
+  BRANCH="${BRANCH:-br-$(date +%Y%m%d-%H%M%S)}"
+else
+  BRANCH="${BRANCH:-wt-$(date +%Y%m%d-%H%M%S)}"
+fi
+
 DIR=".worktrees/$BRANCH"
 
-mkdir -p .worktrees
-
-# Get repository root before creating worktree
+# Get repository root
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
-# Get current branch as base for new worktree
+# Get current branch as base
 CURRENT_BRANCH=$(git branch --show-current || echo "HEAD")
 
-echo ">>> Creating worktree $DIR (branch: $BRANCH based on $CURRENT_BRANCH)"
-git worktree add "$DIR" -b "$BRANCH" "$CURRENT_BRANCH"
+if [ "$USE_BRANCH" = true ]; then
+  echo ">>> Creating and checking out branch $BRANCH (based on $CURRENT_BRANCH)"
+  git checkout -b "$BRANCH" "$CURRENT_BRANCH"
 
-# Cleanup function (runs on exit or Ctrl-C)
-cleanup() {
-  echo ">>> Cleaning up worktree $DIR"
+  # Cleanup function for branch mode
+  cleanup() {
+    echo ">>> Cleaning up branch $BRANCH"
+    # Switch back to original branch
+    git checkout "$CURRENT_BRANCH" 2>/dev/null || true
+    # Delete the branch
+    git branch -D "$BRANCH" 2>/dev/null || true
+    echo ">>> Cleanup complete"
+  }
+  trap cleanup EXIT INT TERM
+else
+  mkdir -p .worktrees
 
-  # Remove worktree
-  git worktree remove "$DIR" --force || true
+  echo ">>> Creating worktree $DIR (branch: $BRANCH based on $CURRENT_BRANCH)"
+  git worktree add "$DIR" -b "$BRANCH" "$CURRENT_BRANCH"
 
-  # Delete branch
-  git branch -D "$BRANCH" 2>/dev/null || true
+  # Cleanup function for worktree mode
+  cleanup() {
+    echo ">>> Cleaning up worktree $DIR"
+    # Remove worktree
+    git worktree remove "$DIR" --force || true
+    # Delete branch
+    git branch -D "$BRANCH" 2>/dev/null || true
+    # Delete directory if still exists
+    rm -rf "$DIR" || true
+    echo ">>> Cleanup complete"
+  }
+  trap cleanup EXIT INT TERM
 
-  # Delete directory if still exists
-  rm -rf "$DIR" || true
+  cd "$DIR"
+  echo ">>> Entered $DIR"
+fi
 
-  echo ">>> Cleanup complete"
-}
-trap cleanup EXIT INT TERM
-
-cd "$DIR"
-echo ">>> Entered $DIR"
 echo ">>> Repository root: $REPO_ROOT"
 
 # Verify git remotes are accessible
@@ -85,9 +116,19 @@ fi
 
 
 
-### Run Claude
+### Run Claude or GLM
+# Determine which command to run
+CLAUDE_COMMAND="claude"
+if [ "$USE_GLM" = true ]; then
+  CLAUDE_COMMAND="claude_glm"
+fi
+
 if [ "$USE_DEVCONTAINER" = true ]; then
-  echo ">>> Running Claude in devcontainer"
+  if [ "$USE_GLM" = true ]; then
+    echo ">>> Running GLM in devcontainer"
+  else
+    echo ">>> Running Claude in devcontainer"
+  fi
 
   # Check docker availability
   if ! command -v docker &> /dev/null; then
@@ -158,7 +199,7 @@ if [ "$USE_DEVCONTAINER" = true ]; then
     echo ">>> Passing GitHub token as GH_TOKEN"
   fi
 
-  # Run Claude in devcontainer with persistent volume
+  # Run Claude/GLM in devcontainer with persistent volume
   docker run --rm -it \
     -v "$(pwd):/workspace" \
     -v "$REPO_ROOT/.git:$REPO_ROOT/.git" \
@@ -168,10 +209,14 @@ if [ "$USE_DEVCONTAINER" = true ]; then
     --user node \
     --entrypoint /bin/bash \
     "$DEVCONTAINER_IMAGE" \
-    -c 'if [ -n "$GITHUB_TOKEN" ]; then git config --global credential.helper "!f() { echo username=git; echo password=$GITHUB_TOKEN; }; f"; fi && exec claude --dangerously-skip-permissions'
+    -c "if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && exec $CLAUDE_COMMAND --dangerously-skip-permissions"
 
 elif [ "$USE_CONTAINER" = true ]; then
-  echo ">>> Running Claude in container: $CONTAINER_IMAGE"
+  if [ "$USE_GLM" = true ]; then
+    echo ">>> Running GLM in container: $CONTAINER_IMAGE"
+  else
+    echo ">>> Running Claude in container: $CONTAINER_IMAGE"
+  fi
 
   # Check docker availability
   if ! command -v docker &> /dev/null; then
@@ -231,7 +276,7 @@ elif [ "$USE_CONTAINER" = true ]; then
     echo ">>> Passing GitHub token as GH_TOKEN"
   fi
 
-  # Run Claude in sandbox container with persistent volume
+  # Run Claude/GLM in sandbox container with persistent volume
   docker run --rm -it \
     -v "$(pwd):/workspace" \
     -v "$REPO_ROOT/.git:$REPO_ROOT/.git" \
@@ -240,10 +285,15 @@ elif [ "$USE_CONTAINER" = true ]; then
     "${ENV_VARS[@]}" \
     --entrypoint /bin/bash \
     "$CONTAINER_IMAGE" \
-    -c 'if [ -n "$GITHUB_TOKEN" ]; then git config --global credential.helper "!f() { echo username=git; echo password=$GITHUB_TOKEN; }; f"; fi && exec claude --dangerously-skip-permissions'
+    -c "if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && exec $CLAUDE_COMMAND --dangerously-skip-permissions"
 
 else
-  echo ">>> Running Claude locally"
-  claude --dangerously-skip-permissions
+  if [ "$USE_GLM" = true ]; then
+    echo ">>> Running GLM locally"
+    claude_glm --dangerously-skip-permissions
+  else
+    echo ">>> Running Claude locally"
+    claude --dangerously-skip-permissions
+  fi
 fi
 

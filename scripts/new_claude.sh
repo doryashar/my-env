@@ -64,8 +64,23 @@ fi
 
 DIR=".worktrees/$BRANCH"
 
-# Get repository root
+# Early validation: Check for GLM_API_KEY before any git operations
+if [ "$USE_GLM" = true ] && [ -z "${GLM_API_KEY:-}" ]; then
+  echo "ERROR: GLM_API_KEY not set. Please set it to use GLM mode."
+  echo "Example: export GLM_API_KEY='your-api-key-here'"
+  exit 1
+fi
+
+# Get repository root and save current directory
 REPO_ROOT=$(git rev-parse --show-toplevel)
+ORIGINAL_DIR=$(pwd)
+
+# Calculate relative path from repo root to current directory
+if [ "$ORIGINAL_DIR" = "$REPO_ROOT" ]; then
+  RELATIVE_PATH="."
+else
+  RELATIVE_PATH="${ORIGINAL_DIR#$REPO_ROOT/}"
+fi
 
 # Get current branch as base
 CURRENT_BRANCH=$(git branch --show-current || echo "HEAD")
@@ -119,8 +134,13 @@ fi
 ### Run Claude or GLM
 # Determine which command to run
 CLAUDE_COMMAND="claude"
+GLM_ENV_VARS=""
 if [ "$USE_GLM" = true ]; then
-  CLAUDE_COMMAND="claude_glm"
+  # Build GLM environment variables conditionally
+  GLM_ENV_VARS="ANTHROPIC_BASE_URL=\"https://api.z.ai/api/anthropic\" API_TIMEOUT_MS=\"3000000\" ANTHROPIC_DEFAULT_HAIKU_MODEL=\"glm-4.5-air\" ANTHROPIC_DEFAULT_SONNET_MODEL=\"glm-4.6\" ANTHROPIC_DEFAULT_OPUS_MODEL=\"glm-4.6\""
+  if [ -n "${GLM_API_KEY:-}" ]; then
+    GLM_ENV_VARS="ANTHROPIC_AUTH_TOKEN=\"$GLM_API_KEY\" $GLM_ENV_VARS"
+  fi
 fi
 
 if [ "$USE_DEVCONTAINER" = true ]; then
@@ -192,6 +212,12 @@ if [ "$USE_DEVCONTAINER" = true ]; then
   # Prepare environment variables
   ENV_VARS=("-e" "CLAUDE_CONFIG_DIR=/home/node/.claude")
 
+  # Pass GLM API key if using GLM
+  if [ "$USE_GLM" = true ] && [ -n "${GLM_API_KEY:-}" ]; then
+    ENV_VARS+=("-e" "GLM_API_KEY=$GLM_API_KEY")
+    echo ">>> Passing GLM API key"
+  fi
+
   # Pass GitHub token if available and configure git credential helper
   if [ -n "${GITHUB_API_TOKEN:-}" ]; then
     ENV_VARS+=("-e" "GH_TOKEN=$GITHUB_API_TOKEN")
@@ -200,16 +226,22 @@ if [ "$USE_DEVCONTAINER" = true ]; then
   fi
 
   # Run Claude/GLM in devcontainer with persistent volume
+  if [ "$USE_GLM" = true ]; then
+    # Build command with GLM environment variables
+    CMD="if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && export ANTHROPIC_AUTH_TOKEN=\"\$GLM_API_KEY\" && export ANTHROPIC_BASE_URL=\"https://api.z.ai/api/anthropic\" && export API_TIMEOUT_MS=\"3000000\" && export ANTHROPIC_DEFAULT_HAIKU_MODEL=\"glm-4.5-air\" && export ANTHROPIC_DEFAULT_SONNET_MODEL=\"glm-4.6\" && export ANTHROPIC_DEFAULT_OPUS_MODEL=\"glm-4.6\" && exec claude --dangerously-skip-permissions"
+  else
+    CMD="if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && exec claude --dangerously-skip-permissions"
+  fi
+
   docker run --rm -it \
-    -v "$(pwd):/workspace" \
-    -v "$REPO_ROOT/.git:$REPO_ROOT/.git" \
+    -v "$REPO_ROOT:/workspace" \
     -v "$CLAUDE_CONTAINER_VOLUME:/home/node/.claude" \
-    -w /workspace \
+    -w "/workspace/$RELATIVE_PATH" \
     "${ENV_VARS[@]}" \
     --user node \
     --entrypoint /bin/bash \
     "$DEVCONTAINER_IMAGE" \
-    -c "if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && exec $CLAUDE_COMMAND --dangerously-skip-permissions"
+    -c "$CMD"
 
 elif [ "$USE_CONTAINER" = true ]; then
   if [ "$USE_GLM" = true ]; then
@@ -269,6 +301,12 @@ elif [ "$USE_CONTAINER" = true ]; then
   # Prepare environment variables
   ENV_VARS=("-e" "CLAUDE_CONFIG_DIR=/home/agent/.claude")
 
+  # Pass GLM API key if using GLM
+  if [ "$USE_GLM" = true ] && [ -n "${GLM_API_KEY:-}" ]; then
+    ENV_VARS+=("-e" "GLM_API_KEY=$GLM_API_KEY")
+    echo ">>> Passing GLM API key"
+  fi
+
   # Pass GitHub token if available and configure git credential helper
   if [ -n "${GITHUB_API_TOKEN:-}" ]; then
     ENV_VARS+=("-e" "GH_TOKEN=$GITHUB_API_TOKEN")
@@ -277,20 +315,33 @@ elif [ "$USE_CONTAINER" = true ]; then
   fi
 
   # Run Claude/GLM in sandbox container with persistent volume
+  if [ "$USE_GLM" = true ]; then
+    # Build command with GLM environment variables
+    CMD="if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && export ANTHROPIC_AUTH_TOKEN=\"\$GLM_API_KEY\" && export ANTHROPIC_BASE_URL=\"https://api.z.ai/api/anthropic\" && export API_TIMEOUT_MS=\"3000000\" && export ANTHROPIC_DEFAULT_HAIKU_MODEL=\"glm-4.5-air\" && export ANTHROPIC_DEFAULT_SONNET_MODEL=\"glm-4.6\" && export ANTHROPIC_DEFAULT_OPUS_MODEL=\"glm-4.6\" && exec claude --dangerously-skip-permissions"
+  else
+    CMD="if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && exec claude --dangerously-skip-permissions"
+  fi
+
   docker run --rm -it \
-    -v "$(pwd):/workspace" \
-    -v "$REPO_ROOT/.git:$REPO_ROOT/.git" \
+    -v "$REPO_ROOT:/workspace" \
     -v "$CLAUDE_CONTAINER_VOLUME:/home/agent/.claude" \
-    -w /workspace \
+    -w "/workspace/$RELATIVE_PATH" \
     "${ENV_VARS[@]}" \
     --entrypoint /bin/bash \
     "$CONTAINER_IMAGE" \
-    -c "if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && exec $CLAUDE_COMMAND --dangerously-skip-permissions"
+    -c "$CMD"
 
 else
   if [ "$USE_GLM" = true ]; then
     echo ">>> Running GLM locally"
-    claude_glm --dangerously-skip-permissions
+    # Export GLM environment variables and run claude
+    export ANTHROPIC_AUTH_TOKEN="$GLM_API_KEY"
+    export ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic"
+    export API_TIMEOUT_MS="3000000"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.5-air"
+    export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.6"
+    export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.6"
+    claude --dangerously-skip-permissions
   else
     echo ">>> Running Claude locally"
     claude --dangerously-skip-permissions

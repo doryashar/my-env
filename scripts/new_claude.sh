@@ -74,7 +74,7 @@ else
   BRANCH="${BRANCH:-wt-$(date +%Y%m%d-%H%M%S)}"
 fi
 
-DIR=".worktrees/$BRANCH"
+DIR="$REPO_ROOT/.worktrees/$BRANCH"
 
 install_requirements() {
   echo ">>> Installing repository requirements..."
@@ -478,11 +478,14 @@ if [ "$USE_BRANCH" = true ]; then
   # Create a clean directory for the branch
   echo ">>> Creating clean directory for branch $BRANCH in $DIR"
 
+  # Save original repo root before we change it
+  ORIGINAL_REPO_ROOT="$REPO_ROOT"
+
   # Use rsync to copy everything except .worktrees to avoid recursion
-  rsync -av --exclude='.worktrees' --exclude='.git' "$REPO_ROOT/" "$DIR/"
+  rsync -av --exclude='.worktrees' --exclude='.git' "$ORIGINAL_REPO_ROOT/" "$DIR/"
 
   # Copy .git separately
-  cp -r "$REPO_ROOT/.git" "$DIR/"
+  cp -r "$ORIGINAL_REPO_ROOT/.git" "$DIR/"
 
   # Enter the new directory and create the branch
   cd "$DIR"
@@ -491,6 +494,9 @@ if [ "$USE_BRANCH" = true ]; then
   # Initialize as a separate git repo and create the branch
   git checkout -b "$BRANCH" "$CURRENT_BRANCH"
   echo ">>> Created branch $BRANCH (based on $CURRENT_BRANCH) in clean directory"
+
+  # Update REPO_ROOT to point to the branch directory for container mounts
+  REPO_ROOT="$DIR"
 
   # Cleanup function for branch mode
   cleanup() {

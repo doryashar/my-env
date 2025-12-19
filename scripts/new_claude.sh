@@ -466,11 +466,17 @@ fi
 CURRENT_BRANCH=$(git branch --show-current || echo "HEAD")
 
 if [ "$USE_BRANCH" = true ]; then
-  mkdir -p .worktrees
+  # Create the worktrees directory at the repository root level
+  mkdir -p "$REPO_ROOT/.worktrees"
 
   # Create a clean directory for the branch
   echo ">>> Creating clean directory for branch $BRANCH in $DIR"
-  cp -r . "$DIR"
+
+  # Use rsync to copy everything except .worktrees to avoid recursion
+  rsync -av --exclude='.worktrees' --exclude='.git' "$REPO_ROOT/" "$DIR/"
+
+  # Copy .git separately
+  cp -r "$REPO_ROOT/.git" "$DIR/"
 
   # Enter the new directory and create the branch
   cd "$DIR"

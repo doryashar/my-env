@@ -74,8 +74,6 @@ else
   BRANCH="${BRANCH:-wt-$(date +%Y%m%d-%H%M%S)}"
 fi
 
-DIR="$REPO_ROOT/.worktrees/$BRANCH"
-
 install_requirements() {
   echo ">>> Installing repository requirements..."
 
@@ -460,6 +458,9 @@ fi
 # Get repository root and save current directory
 REPO_ROOT=$(git rev-parse --show-toplevel)
 ORIGINAL_DIR=$(pwd)
+
+# Set worktree directory path after REPO_ROOT is defined
+DIR="$REPO_ROOT/.worktrees/$BRANCH"
 
 # Calculate relative path from repo root to current directory
 if [ "$ORIGINAL_DIR" = "$REPO_ROOT" ]; then

@@ -195,6 +195,255 @@ detect_and_activate_venv() {
   return 1
 }
 
+# Helper functions to reduce code duplication
+
+# Build GLM environment variables
+build_glm_env_vars() {
+  if [ "$USE_GLM" = true ]; then
+    cat << EOF
+export ANTHROPIC_AUTH_TOKEN="\$GLM_API_KEY"
+export ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic"
+export API_TIMEOUT_MS="3000000"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.5-air"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.6"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.6"
+EOF
+  fi
+}
+
+# Build the container command string
+build_container_command() {
+  local install_cmd=""
+  if [ "$INSTALL_REQUIREMENTS" = true ]; then
+    install_cmd="install_requirements && "
+  fi
+
+  cat << 'EOF'
+install_requirements() {
+  echo ">>> Installing repository requirements..."
+  if [ -f "requirements.txt" ]; then
+    echo ">>> Installing Python requirements from requirements.txt"
+    pip install -r requirements.txt
+  fi
+  if [ -f "pyproject.toml" ]; then
+    echo ">>> Installing Python package from pyproject.toml"
+    pip install -e .
+  fi
+  if [ -f "package.json" ]; then
+    echo ">>> Installing Node.js dependencies from package.json"
+    npm install
+  fi
+  if [ -f "Cargo.toml" ]; then
+    echo ">>> Installing Rust dependencies"
+    cargo build
+  fi
+  if [ -f "go.mod" ]; then
+    echo ">>> Installing Go dependencies"
+    go mod download
+  fi
+  if [ -f "Gemfile" ]; then
+    echo ">>> Installing Ruby gems from Gemfile"
+    bundle install
+  fi
+  if [ -f "composer.json" ]; then
+    echo ">>> Installing PHP dependencies from composer.json"
+    composer install
+  fi
+  echo ">>> Requirements installation complete"
+}
+
+detect_and_activate_venv() {
+  if [ "$USE_VENV" = false ]; then
+    echo ">>> Virtual environment disabled"
+    return 0
+  fi
+
+  echo ">>> Detecting virtual environment..."
+  if [ -n "${VIRTUAL_ENV:-}" ] || [ -n "${CONDA_PREFIX:-}" ]; then
+    echo ">>> Detected active virtual environment on host"
+    if [ -n "${VIRTUAL_ENV:-}" ]; then
+      VENV_NAME=$(basename "$VIRTUAL_ENV")
+      echo ">>> Recreating venv '$VENV_NAME' in container"
+      python -m venv "/workspace/$VENV_NAME"
+      source "/workspace/$VENV_NAME/bin/activate"
+      echo ">>> Activated virtual environment: /workspace/$VENV_NAME"
+    fi
+    if [ -n "${CONDA_PREFIX:-}" ]; then
+      ENV_NAME=$(basename "$CONDA_PREFIX")
+      echo ">>> Recreating conda environment '$ENV_NAME' in container"
+      conda create -n "$ENV_NAME" --yes --clone base 2>/dev/null || conda create -n "$ENV_NAME" --yes
+      eval "$(conda shell.bash hook)"
+      conda activate "$ENV_NAME"
+      echo ">>> Activated conda environment: $ENV_NAME"
+    fi
+    return 0
+  fi
+
+  VENV_DIRS=("venv" ".venv" "env" ".env")
+  for venv_dir in "${VENV_DIRS[@]}"; do
+    if [ -d "$venv_dir" ] && [ -f "$venv_dir/bin/activate" ]; then
+      echo ">>> Found virtual environment: $venv_dir"
+      source "/workspace/$venv_dir/bin/activate"
+      echo ">>> Activated virtual environment: $venv_dir"
+      return 0
+    fi
+  done
+
+  if command -v conda &> /dev/null; then
+    if [ -f "environment.yml" ]; then
+      echo ">>> Found environment.yml, creating conda environment"
+      conda env create -f environment.yml --force
+      eval "$(conda shell.bash hook)"
+      conda activate "$(grep 'name:' environment.yml | head -1 | cut -d' ' -f2)"
+      echo ">>> Activated conda environment from environment.yml"
+      return 0
+    fi
+    if conda info --envs | grep -q "^base"; then
+      echo ">>> Activating default conda base environment"
+      eval "$(conda shell.bash hook)"
+      conda activate base
+      echo ">>> Activated conda base environment"
+      return 0
+    fi
+  fi
+
+  echo ">>> No virtual environment found"
+  return 0
+}
+
+if [ -n "$GITHUB_TOKEN" ]; then
+  git config --global credential.helper "!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f"
+fi
+
+EOF
+
+  # Add GLM environment variables if needed
+  build_glm_env_vars
+
+  # Add the final command
+  cat << EOF
+detect_and_activate_venv && ${install_cmd}exec claude --dangerously-skip-permissions
+EOF
+}
+
+# Setup docker volume and permissions
+setup_docker_volume() {
+  local volume_name="$1"
+  local claude_home="$2"
+  local user="$3"
+  local image="$4"
+
+  echo ">>> Using persistent Claude config volume: $volume_name"
+
+  # Check if this is first run
+  local volume_exists=$(docker volume ls -q -f name="^${volume_name}$")
+  if [ -z "$volume_exists" ]; then
+    echo ">>> First run: Creating persistent credentials volume"
+    echo ">>> IMPORTANT: You'll need to complete Claude onboarding:"
+    echo ">>>   1. Select your preferred theme"
+    echo ">>>   2. Complete authentication (browser will open)"
+    echo ">>> Your credentials will persist across all worktree sessions"
+
+    # Create volume and set correct permissions
+    docker volume create "$volume_name" > /dev/null
+    docker run --rm --user root \
+      -v "$volume_name:$claude_home" \
+      "$image" \
+      sh -c "chown -R $user:$user $claude_home && chmod 700 $claude_home"
+  else
+    echo ">>> Using existing credentials from persistent volume"
+  fi
+}
+
+# Prepare environment variables for docker
+prepare_env_vars() {
+  local claude_home="$1"
+  local env_vars=("-e" "CLAUDE_CONFIG_DIR=$claude_home")
+
+  # Pass GLM API key if using GLM
+  if [ "$USE_GLM" = true ] && [ -n "${GLM_API_KEY:-}" ]; then
+    env_vars+=("-e" "GLM_API_KEY=$GLM_API_KEY")
+    echo ">>> Passing GLM API key"
+  fi
+
+  # Pass GitHub token if available
+  if [ -n "${GITHUB_API_TOKEN:-}" ]; then
+    env_vars+=("-e" "GH_TOKEN=$GITHUB_API_TOKEN")
+    env_vars+=("-e" "GITHUB_TOKEN=$GITHUB_API_TOKEN")
+    echo ">>> Passing GitHub token as GH_TOKEN"
+  fi
+
+  # Pass virtual environment preference
+  env_vars+=("-e" "USE_VENV=$USE_VENV")
+
+  # Return the array
+  printf '%s\n' "${env_vars[@]}"
+}
+
+# Check docker availability
+check_docker() {
+  if ! command -v docker &> /dev/null; then
+    echo "ERROR: docker command not found. Please install Docker or use --no_container flag"
+    exit 1
+  fi
+
+  if ! docker info &> /dev/null; then
+    echo "ERROR: Docker daemon is not running. Please start Docker or use --no_container flag"
+    exit 1
+  fi
+}
+
+# Setup GLM environment locally
+setup_local_glm() {
+  if [ "$USE_GLM" = true ]; then
+    export ANTHROPIC_AUTH_TOKEN="$GLM_API_KEY"
+    export ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic"
+    export API_TIMEOUT_MS="3000000"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.5-air"
+    export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.6"
+    export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.6"
+  fi
+}
+
+# Run docker container with unified logic
+run_docker_container() {
+  local image="$1"
+  local user="$2"
+  local claude_home="$3"
+  local volume_name="$4"
+  local extra_args=()
+
+  # Add user flag if specified
+  if [ -n "$user" ]; then
+    extra_args+=("--user" "$user")
+  fi
+
+  # Check and setup docker
+  check_docker
+
+  # Build the container command
+  local cmd
+  cmd=$(build_container_command)
+
+  # Setup volume
+  setup_docker_volume "$volume_name" "$claude_home" "$user" "$image"
+
+  # Prepare environment variables
+  local env_vars
+  readarray -t env_vars < <(prepare_env_vars "$claude_home")
+
+  # Run the container
+  docker run --rm -it \
+    -v "$REPO_ROOT:/workspace" \
+    -v "$volume_name:$claude_home" \
+    -w "/workspace/$RELATIVE_PATH" \
+    "${env_vars[@]}" \
+    "${extra_args[@]}" \
+    --entrypoint /bin/bash \
+    "$image" \
+    -c "$cmd"
+}
+
 # Early validation: Check for GLM_API_KEY before any git operations
 if [ "$USE_GLM" = true ] && [ -z "${GLM_API_KEY:-}" ]; then
   echo "ERROR: GLM_API_KEY not set. Please set it to use GLM mode."
@@ -276,31 +525,12 @@ fi
 ### Run Claude or GLM
 # Determine which command to run
 CLAUDE_COMMAND="claude"
-GLM_ENV_VARS=""
-if [ "$USE_GLM" = true ]; then
-  # Build GLM environment variables conditionally
-  GLM_ENV_VARS="ANTHROPIC_BASE_URL=\"https://api.z.ai/api/anthropic\" API_TIMEOUT_MS=\"3000000\" ANTHROPIC_DEFAULT_HAIKU_MODEL=\"glm-4.5-air\" ANTHROPIC_DEFAULT_SONNET_MODEL=\"glm-4.6\" ANTHROPIC_DEFAULT_OPUS_MODEL=\"glm-4.6\""
-  if [ -n "${GLM_API_KEY:-}" ]; then
-    GLM_ENV_VARS="ANTHROPIC_AUTH_TOKEN=\"$GLM_API_KEY\" $GLM_ENV_VARS"
-  fi
-fi
 
 if [ "$USE_DEVCONTAINER" = true ]; then
   if [ "$USE_GLM" = true ]; then
     echo ">>> Running GLM in devcontainer"
   else
     echo ">>> Running Claude in devcontainer"
-  fi
-
-  # Check docker availability
-  if ! command -v docker &> /dev/null; then
-    echo "ERROR: docker command not found. Please install Docker or use --no_container flag"
-    exit 1
-  fi
-
-  if ! docker info &> /dev/null; then
-    echo "ERROR: Docker daemon is not running. Please start Docker or use --no_container flag"
-    exit 1
   fi
 
   # Build devcontainer image if it doesn't exist
@@ -325,89 +555,14 @@ if [ "$USE_DEVCONTAINER" = true ]; then
     docker build --build-arg CLAUDE_CODE_VERSION="$LOCAL_CLAUDE_VERSION" -t "$DEVCONTAINER_IMAGE" "$BUILD_DIR"
   fi
 
-  # Use persistent volume for container-specific credentials
-  # Following the approach from https://github.com/nociza/cuti
-  # Container needs its own Linux-specific credentials, can't share host credentials
-  CLAUDE_CONTAINER_VOLUME="claude-devcontainer-config"
-
-  echo ">>> Using persistent Claude config volume: $CLAUDE_CONTAINER_VOLUME"
-
-  # Check if this is first run (volume is empty)
-  VOLUME_EXISTS=$(docker volume ls -q -f name="^${CLAUDE_CONTAINER_VOLUME}$")
-  if [ -z "$VOLUME_EXISTS" ]; then
-    echo ">>> First run: Creating persistent credentials volume"
-    echo ">>> IMPORTANT: You'll need to complete Claude onboarding:"
-    echo ">>>   1. Select your preferred theme"
-    echo ">>>   2. Complete authentication (browser will open)"
-    echo ">>> Your credentials will persist across all worktree sessions"
-
-    # Create volume and set correct permissions
-    docker volume create "$CLAUDE_CONTAINER_VOLUME" > /dev/null
-    docker run --rm --user root \
-      -v "$CLAUDE_CONTAINER_VOLUME:/home/node/.claude" \
-      "$DEVCONTAINER_IMAGE" \
-      sh -c "chown -R node:node /home/node/.claude && chmod 700 /home/node/.claude"
-  else
-    echo ">>> Using existing credentials from persistent volume"
-  fi
-
-  # Prepare environment variables
-  ENV_VARS=("-e" "CLAUDE_CONFIG_DIR=/home/node/.claude")
-
-  # Pass GLM API key if using GLM
-  if [ "$USE_GLM" = true ] && [ -n "${GLM_API_KEY:-}" ]; then
-    ENV_VARS+=("-e" "GLM_API_KEY=$GLM_API_KEY")
-    echo ">>> Passing GLM API key"
-  fi
-
-  # Pass GitHub token if available and configure git credential helper
-  if [ -n "${GITHUB_API_TOKEN:-}" ]; then
-    ENV_VARS+=("-e" "GH_TOKEN=$GITHUB_API_TOKEN")
-    ENV_VARS+=("-e" "GITHUB_TOKEN=$GITHUB_API_TOKEN")
-    echo ">>> Passing GitHub token as GH_TOKEN"
-  fi
-
-  # Pass virtual environment preference
-  ENV_VARS+=("-e" "USE_VENV=$USE_VENV")
-
-  # Build command with GLM environment variables and optional requirements installation
-  INSTALL_CMD=""
-  if [ "$INSTALL_REQUIREMENTS" = true ]; then
-    INSTALL_CMD="install_requirements && "
-  fi
-
-  if [ "$USE_GLM" = true ]; then
-    CMD="install_requirements() { echo \">>> Installing repository requirements...\"; if [ -f \"requirements.txt\" ]; then echo \">>> Installing Python requirements from requirements.txt\"; pip install -r requirements.txt; fi; if [ -f \"pyproject.toml\" ]; then echo \">>> Installing Python package from pyproject.toml\"; pip install -e .; fi; if [ -f \"package.json\" ]; then echo \">>> Installing Node.js dependencies from package.json\"; npm install; fi; if [ -f \"Cargo.toml\" ]; then echo \">>> Installing Rust dependencies\"; cargo build; fi; if [ -f \"go.mod\" ]; then echo \">>> Installing Go dependencies\"; go mod download; fi; if [ -f \"Gemfile\" ]; then echo \">>> Installing Ruby gems from Gemfile\"; bundle install; fi; if [ -f \"composer.json\" ]; then echo \">>> Installing PHP dependencies from composer.json\"; composer install; fi; echo \">>> Requirements installation complete\"; }; detect_and_activate_venv() { if [ \"\$USE_VENV\" = false ]; then echo \">>> Virtual environment disabled\"; return 0; fi; echo \">>> Detecting virtual environment...\"; if [ -n \"\${VIRTUAL_ENV:-}\" ] || [ -n \"\${CONDA_PREFIX:-}\" ]; then echo \">>> Detected active virtual environment on host\"; if [ -n \"\${VIRTUAL_ENV:-}\" ]; then VENV_NAME=\$(basename \"\$VIRTUAL_ENV\"); echo \">>> Recreating venv '\$VENV_NAME' in container\"; python -m venv \"/workspace/\$VENV_NAME\"; source \"/workspace/\$VENV_NAME/bin/activate\"; echo \">>> Activated virtual environment: /workspace/\$VENV_NAME\"; fi; if [ -n \"\${CONDA_PREFIX:-}\" ]; then ENV_NAME=\$(basename \"\$CONDA_PREFIX\"); echo \">>> Recreating conda environment '\$ENV_NAME' in container\"; conda create -n \"\$ENV_NAME\" --yes --clone base 2>/dev/null || conda create -n \"\$ENV_NAME\" --yes; eval \"\$(conda shell.bash hook)\"; conda activate \"\$ENV_NAME\"; echo \">>> Activated conda environment: \$ENV_NAME\"; fi; return 0; fi; VENV_DIRS=(\"venv\" \".venv\" \"env\" \".env\"); for venv_dir in \"\${VENV_DIRS[@]}\"; do if [ -d \"\$venv_dir\" ] && [ -f \"\$venv_dir/bin/activate\" ]; then echo \">>> Found virtual environment: \$venv_dir\"; source \"/workspace/\$venv_dir/bin/activate\"; echo \">>> Activated virtual environment: \$venv_dir\"; return 0; fi; done; if command -v conda &> /dev/null; then if [ -f \"environment.yml\" ]; then echo \">>> Found environment.yml, creating conda environment\"; conda env create -f environment.yml --force; eval \"\$(conda shell.bash hook)\"; conda activate \"\$(grep 'name:' environment.yml | head -1 | cut -d' ' -f2)\"; echo \">>> Activated conda environment from environment.yml\"; return 0; fi; if conda info --envs | grep -q \"^base\"; then echo \">>> Activating default conda base environment\"; eval \"\$(conda shell.bash hook)\"; conda activate base; echo \">>> Activated conda base environment\"; return 0; fi; fi; echo \">>> No virtual environment found\"; return 0; }; if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && export ANTHROPIC_AUTH_TOKEN=\"\$GLM_API_KEY\" && export ANTHROPIC_BASE_URL=\"https://api.z.ai/api/anthropic\" && export API_TIMEOUT_MS=\"3000000\" && export ANTHROPIC_DEFAULT_HAIKU_MODEL=\"glm-4.5-air\" && export ANTHROPIC_DEFAULT_SONNET_MODEL=\"glm-4.6\" && export ANTHROPIC_DEFAULT_OPUS_MODEL=\"glm-4.6\" && detect_and_activate_venv && $INSTALL_CMD exec claude --dangerously-skip-permissions"
-  else
-    CMD="install_requirements() { echo \">>> Installing repository requirements...\"; if [ -f \"requirements.txt\" ]; then echo \">>> Installing Python requirements from requirements.txt\"; pip install -r requirements.txt; fi; if [ -f \"pyproject.toml\" ]; then echo \">>> Installing Python package from pyproject.toml\"; pip install -e .; fi; if [ -f \"package.json\" ]; then echo \">>> Installing Node.js dependencies from package.json\"; npm install; fi; if [ -f \"Cargo.toml\" ]; then echo \">>> Installing Rust dependencies\"; cargo build; fi; if [ -f \"go.mod\" ]; then echo \">>> Installing Go dependencies\"; go mod download; fi; if [ -f \"Gemfile\" ]; then echo \">>> Installing Ruby gems from Gemfile\"; bundle install; fi; if [ -f \"composer.json\" ]; then echo \">>> Installing PHP dependencies from composer.json\"; composer install; fi; echo \">>> Requirements installation complete\"; }; detect_and_activate_venv() { if [ \"\$USE_VENV\" = false ]; then echo \">>> Virtual environment disabled\"; return 0; fi; echo \">>> Detecting virtual environment...\"; if [ -n \"\${VIRTUAL_ENV:-}\" ] || [ -n \"\${CONDA_PREFIX:-}\" ]; then echo \">>> Detected active virtual environment on host\"; if [ -n \"\${VIRTUAL_ENV:-}\" ]; then VENV_NAME=\$(basename \"\$VIRTUAL_ENV\"); echo \">>> Recreating venv '\$VENV_NAME' in container\"; python -m venv \"/workspace/\$VENV_NAME\"; source \"/workspace/\$VENV_NAME/bin/activate\"; echo \">>> Activated virtual environment: /workspace/\$VENV_NAME\"; fi; if [ -n \"\${CONDA_PREFIX:-}\" ]; then ENV_NAME=\$(basename \"\$CONDA_PREFIX\"); echo \">>> Recreating conda environment '\$ENV_NAME' in container\"; conda create -n \"\$ENV_NAME\" --yes --clone base 2>/dev/null || conda create -n \"\$ENV_NAME\" --yes; eval \"\$(conda shell.bash hook)\"; conda activate \"\$ENV_NAME\"; echo \">>> Activated conda environment: \$ENV_NAME\"; fi; return 0; fi; VENV_DIRS=(\"venv\" \".venv\" \"env\" \".env\"); for venv_dir in \"\${VENV_DIRS[@]}\"; do if [ -d \"\$venv_dir\" ] && [ -f \"\$venv_dir/bin/activate\" ]; then echo \">>> Found virtual environment: \$venv_dir\"; source \"/workspace/\$venv_dir/bin/activate\"; echo \">>> Activated virtual environment: \$venv_dir\"; return 0; fi; done; if command -v conda &> /dev/null; then if [ -f \"environment.yml\" ]; then echo \">>> Found environment.yml, creating conda environment\"; conda env create -f environment.yml --force; eval \"\$(conda shell.bash hook)\"; conda activate \"\$(grep 'name:' environment.yml | head -1 | cut -d' ' -f2)\"; echo \">>> Activated conda environment from environment.yml\"; return 0; fi; if conda info --envs | grep -q \"^base\"; then echo \">>> Activating default conda base environment\"; eval \"\$(conda shell.bash hook)\"; conda activate base; echo \">>> Activated conda base environment\"; return 0; fi; fi; echo \">>> No virtual environment found\"; return 0; }; if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && detect_and_activate_venv && $INSTALL_CMD exec claude --dangerously-skip-permissions"
-  fi
-
-  docker run --rm -it \
-    -v "$REPO_ROOT:/workspace" \
-    -v "$CLAUDE_CONTAINER_VOLUME:/home/node/.claude" \
-    -w "/workspace/$RELATIVE_PATH" \
-    "${ENV_VARS[@]}" \
-    --user node \
-    --entrypoint /bin/bash \
-    "$DEVCONTAINER_IMAGE" \
-    -c "$CMD"
+  # Run the devcontainer with our unified function
+  run_docker_container "$DEVCONTAINER_IMAGE" "node" "/home/node/.claude" "claude-devcontainer-config"
 
 elif [ "$USE_CONTAINER" = true ]; then
   if [ "$USE_GLM" = true ]; then
     echo ">>> Running GLM in container: $CONTAINER_IMAGE"
   else
     echo ">>> Running Claude in container: $CONTAINER_IMAGE"
-  fi
-
-  # Check docker availability
-  if ! command -v docker &> /dev/null; then
-    echo "ERROR: docker command not found. Please install Docker or use --no_container flag"
-    exit 1
-  fi
-
-  if ! docker info &> /dev/null; then
-    echo "ERROR: Docker daemon is not running. Please start Docker or use --no_container flag"
-    exit 1
   fi
 
   # Pull image if not present
@@ -422,84 +577,18 @@ elif [ "$USE_CONTAINER" = true ]; then
     fi
   fi
 
-  # Use persistent volume for container-specific credentials
-  # Following the approach from https://github.com/nociza/cuti
-  CLAUDE_CONTAINER_VOLUME="claude-sandbox-config"
-
-  echo ">>> Using persistent Claude config volume: $CLAUDE_CONTAINER_VOLUME"
-
-  # Check if this is first run (volume is empty)
-  VOLUME_EXISTS=$(docker volume ls -q -f name="^${CLAUDE_CONTAINER_VOLUME}$")
-  if [ -z "$VOLUME_EXISTS" ]; then
-    echo ">>> First run: Creating persistent credentials volume"
-    echo ">>> IMPORTANT: You'll need to complete Claude onboarding:"
-    echo ">>>   1. Select your preferred theme"
-    echo ">>>   2. Complete authentication (browser will open)"
-    echo ">>> Your credentials will persist across all worktree sessions"
-
-    # Create volume and set correct permissions
-    docker volume create "$CLAUDE_CONTAINER_VOLUME" > /dev/null
-    docker run --rm --user root \
-      -v "$CLAUDE_CONTAINER_VOLUME:/home/agent/.claude" \
-      "$CONTAINER_IMAGE" \
-      sh -c "chown -R agent:agent /home/agent/.claude && chmod 700 /home/agent/.claude"
-  else
-    echo ">>> Using existing credentials from persistent volume"
-  fi
-
-  # Prepare environment variables
-  ENV_VARS=("-e" "CLAUDE_CONFIG_DIR=/home/agent/.claude")
-
-  # Pass GLM API key if using GLM
-  if [ "$USE_GLM" = true ] && [ -n "${GLM_API_KEY:-}" ]; then
-    ENV_VARS+=("-e" "GLM_API_KEY=$GLM_API_KEY")
-    echo ">>> Passing GLM API key"
-  fi
-
-  # Pass GitHub token if available and configure git credential helper
-  if [ -n "${GITHUB_API_TOKEN:-}" ]; then
-    ENV_VARS+=("-e" "GH_TOKEN=$GITHUB_API_TOKEN")
-    ENV_VARS+=("-e" "GITHUB_TOKEN=$GITHUB_API_TOKEN")
-    echo ">>> Passing GitHub token as GH_TOKEN"
-  fi
-
-  # Pass virtual environment preference
-  ENV_VARS+=("-e" "USE_VENV=$USE_VENV")
-
-  # Build command with GLM environment variables and optional requirements installation
-  INSTALL_CMD=""
-  if [ "$INSTALL_REQUIREMENTS" = true ]; then
-    INSTALL_CMD="install_requirements && "
-  fi
-
-  if [ "$USE_GLM" = true ]; then
-    CMD="install_requirements() { echo \">>> Installing repository requirements...\"; if [ -f \"requirements.txt\" ]; then echo \">>> Installing Python requirements from requirements.txt\"; pip install -r requirements.txt; fi; if [ -f \"pyproject.toml\" ]; then echo \">>> Installing Python package from pyproject.toml\"; pip install -e .; fi; if [ -f \"package.json\" ]; then echo \">>> Installing Node.js dependencies from package.json\"; npm install; fi; if [ -f \"Cargo.toml\" ]; then echo \">>> Installing Rust dependencies\"; cargo build; fi; if [ -f \"go.mod\" ]; then echo \">>> Installing Go dependencies\"; go mod download; fi; if [ -f \"Gemfile\" ]; then echo \">>> Installing Ruby gems from Gemfile\"; bundle install; fi; if [ -f \"composer.json\" ]; then echo \">>> Installing PHP dependencies from composer.json\"; composer install; fi; echo \">>> Requirements installation complete\"; }; detect_and_activate_venv() { if [ \"\$USE_VENV\" = false ]; then echo \">>> Virtual environment disabled\"; return 0; fi; echo \">>> Detecting virtual environment...\"; if [ -n \"\${VIRTUAL_ENV:-}\" ] || [ -n \"\${CONDA_PREFIX:-}\" ]; then echo \">>> Detected active virtual environment on host\"; if [ -n \"\${VIRTUAL_ENV:-}\" ]; then VENV_NAME=\$(basename \"\$VIRTUAL_ENV\"); echo \">>> Recreating venv '\$VENV_NAME' in container\"; python -m venv \"/workspace/\$VENV_NAME\"; source \"/workspace/\$VENV_NAME/bin/activate\"; echo \">>> Activated virtual environment: /workspace/\$VENV_NAME\"; fi; if [ -n \"\${CONDA_PREFIX:-}\" ]; then ENV_NAME=\$(basename \"\$CONDA_PREFIX\"); echo \">>> Recreating conda environment '\$ENV_NAME' in container\"; conda create -n \"\$ENV_NAME\" --yes --clone base 2>/dev/null || conda create -n \"\$ENV_NAME\" --yes; eval \"\$(conda shell.bash hook)\"; conda activate \"\$ENV_NAME\"; echo \">>> Activated conda environment: \$ENV_NAME\"; fi; return 0; fi; VENV_DIRS=(\"venv\" \".venv\" \"env\" \".env\"); for venv_dir in \"\${VENV_DIRS[@]}\"; do if [ -d \"\$venv_dir\" ] && [ -f \"\$venv_dir/bin/activate\" ]; then echo \">>> Found virtual environment: \$venv_dir\"; source \"/workspace/\$venv_dir/bin/activate\"; echo \">>> Activated virtual environment: \$venv_dir\"; return 0; fi; done; if command -v conda &> /dev/null; then if [ -f \"environment.yml\" ]; then echo \">>> Found environment.yml, creating conda environment\"; conda env create -f environment.yml --force; eval \"\$(conda shell.bash hook)\"; conda activate \"\$(grep 'name:' environment.yml | head -1 | cut -d' ' -f2)\"; echo \">>> Activated conda environment from environment.yml\"; return 0; fi; if conda info --envs | grep -q \"^base\"; then echo \">>> Activating default conda base environment\"; eval \"\$(conda shell.bash hook)\"; conda activate base; echo \">>> Activated conda base environment\"; return 0; fi; fi; echo \">>> No virtual environment found\"; return 0; }; if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && export ANTHROPIC_AUTH_TOKEN=\"\$GLM_API_KEY\" && export ANTHROPIC_BASE_URL=\"https://api.z.ai/api/anthropic\" && export API_TIMEOUT_MS=\"3000000\" && export ANTHROPIC_DEFAULT_HAIKU_MODEL=\"glm-4.5-air\" && export ANTHROPIC_DEFAULT_SONNET_MODEL=\"glm-4.6\" && export ANTHROPIC_DEFAULT_OPUS_MODEL=\"glm-4.6\" && detect_and_activate_venv && $INSTALL_CMD exec claude --dangerously-skip-permissions"
-  else
-    CMD="install_requirements() { echo \">>> Installing repository requirements...\"; if [ -f \"requirements.txt\" ]; then echo \">>> Installing Python requirements from requirements.txt\"; pip install -r requirements.txt; fi; if [ -f \"pyproject.toml\" ]; then echo \">>> Installing Python package from pyproject.toml\"; pip install -e .; fi; if [ -f \"package.json\" ]; then echo \">>> Installing Node.js dependencies from package.json\"; npm install; fi; if [ -f \"Cargo.toml\" ]; then echo \">>> Installing Rust dependencies\"; cargo build; fi; if [ -f \"go.mod\" ]; then echo \">>> Installing Go dependencies\"; go mod download; fi; if [ -f \"Gemfile\" ]; then echo \">>> Installing Ruby gems from Gemfile\"; bundle install; fi; if [ -f \"composer.json\" ]; then echo \">>> Installing PHP dependencies from composer.json\"; composer install; fi; echo \">>> Requirements installation complete\"; }; detect_and_activate_venv() { if [ \"\$USE_VENV\" = false ]; then echo \">>> Virtual environment disabled\"; return 0; fi; echo \">>> Detecting virtual environment...\"; if [ -n \"\${VIRTUAL_ENV:-}\" ] || [ -n \"\${CONDA_PREFIX:-}\" ]; then echo \">>> Detected active virtual environment on host\"; if [ -n \"\${VIRTUAL_ENV:-}\" ]; then VENV_NAME=\$(basename \"\$VIRTUAL_ENV\"); echo \">>> Recreating venv '\$VENV_NAME' in container\"; python -m venv \"/workspace/\$VENV_NAME\"; source \"/workspace/\$VENV_NAME/bin/activate\"; echo \">>> Activated virtual environment: /workspace/\$VENV_NAME\"; fi; if [ -n \"\${CONDA_PREFIX:-}\" ]; then ENV_NAME=\$(basename \"\$CONDA_PREFIX\"); echo \">>> Recreating conda environment '\$ENV_NAME' in container\"; conda create -n \"\$ENV_NAME\" --yes --clone base 2>/dev/null || conda create -n \"\$ENV_NAME\" --yes; eval \"\$(conda shell.bash hook)\"; conda activate \"\$ENV_NAME\"; echo \">>> Activated conda environment: \$ENV_NAME\"; fi; return 0; fi; VENV_DIRS=(\"venv\" \".venv\" \"env\" \".env\"); for venv_dir in \"\${VENV_DIRS[@]}\"; do if [ -d \"\$venv_dir\" ] && [ -f \"\$venv_dir/bin/activate\" ]; then echo \">>> Found virtual environment: \$venv_dir\"; source \"/workspace/\$venv_dir/bin/activate\"; echo \">>> Activated virtual environment: \$venv_dir\"; return 0; fi; done; if command -v conda &> /dev/null; then if [ -f \"environment.yml\" ]; then echo \">>> Found environment.yml, creating conda environment\"; conda env create -f environment.yml --force; eval \"\$(conda shell.bash hook)\"; conda activate \"\$(grep 'name:' environment.yml | head -1 | cut -d' ' -f2)\"; echo \">>> Activated conda environment from environment.yml\"; return 0; fi; if conda info --envs | grep -q \"^base\"; then echo \">>> Activating default conda base environment\"; eval \"\$(conda shell.bash hook)\"; conda activate base; echo \">>> Activated conda base environment\"; return 0; fi; fi; echo \">>> No virtual environment found\"; return 0; }; if [ -n \"\$GITHUB_TOKEN\" ]; then git config --global credential.helper \"!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f\"; fi && detect_and_activate_venv && $INSTALL_CMD exec claude --dangerously-skip-permissions"
-  fi
-
-  docker run --rm -it \
-    -v "$REPO_ROOT:/workspace" \
-    -v "$CLAUDE_CONTAINER_VOLUME:/home/agent/.claude" \
-    -w "/workspace/$RELATIVE_PATH" \
-    "${ENV_VARS[@]}" \
-    --entrypoint /bin/bash \
-    "$CONTAINER_IMAGE" \
-    -c "$CMD"
+  # Run the container with our unified function
+  run_docker_container "$CONTAINER_IMAGE" "agent" "/home/agent/.claude" "claude-sandbox-config"
 
 else
   if [ "$USE_GLM" = true ]; then
     echo ">>> Running GLM locally"
-    # Export GLM environment variables and run claude
-    export ANTHROPIC_AUTH_TOKEN="$GLM_API_KEY"
-    export ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic"
-    export API_TIMEOUT_MS="3000000"
-    export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.5-air"
-    export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.6"
-    export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.6"
   else
     echo ">>> Running Claude locally"
   fi
+
+  # Setup GLM environment if needed
+  setup_local_glm
 
   # Activate virtual environment and install requirements if requested
   if [ "$INSTALL_REQUIREMENTS" = true ] || [ "$USE_VENV" = true ]; then

@@ -363,14 +363,12 @@ prepare_env_vars() {
   # Pass GLM API key if using GLM
   if [ "$USE_GLM" = true ] && [ -n "${GLM_API_KEY:-}" ]; then
     env_vars+=("-e" "GLM_API_KEY=$GLM_API_KEY")
-    echo ">>> Passing GLM API key"
   fi
 
   # Pass GitHub token if available
   if [ -n "${GITHUB_API_TOKEN:-}" ]; then
     env_vars+=("-e" "GH_TOKEN=$GITHUB_API_TOKEN")
     env_vars+=("-e" "GITHUB_TOKEN=$GITHUB_API_TOKEN")
-    echo ">>> Passing GitHub token as GH_TOKEN"
   fi
 
   # Pass virtual environment preference
@@ -428,9 +426,17 @@ run_docker_container() {
   # Setup volume
   setup_docker_volume "$volume_name" "$claude_home" "$user" "$image"
 
-  # Prepare environment variables
+  # Prepare environment variables and provide feedback
   local env_vars
   readarray -t env_vars < <(prepare_env_vars "$claude_home")
+
+  # Provide user feedback for what's being passed
+  if [ "$USE_GLM" = true ] && [ -n "${GLM_API_KEY:-}" ]; then
+    echo ">>> Passing GLM API key"
+  fi
+  if [ -n "${GITHUB_API_TOKEN:-}" ]; then
+    echo ">>> Passing GitHub token as GH_TOKEN"
+  fi
 
   # Run the container
   docker run --rm -it \

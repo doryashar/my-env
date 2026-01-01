@@ -14,7 +14,7 @@ info() {
 }
 debug() {
     local message="$*"
-    if [[ -n "$DEBUG" ]]; then
+    if [[ -n "$ENV_DEBUG" ]]; then
         echo -e "${PURPLE}[DEBUG] $message${NC}"
     fi
 }

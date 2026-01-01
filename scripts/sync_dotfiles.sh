@@ -47,7 +47,16 @@ if ! type -t title &> /dev/null; then
     title "Synchronizing Dotfiles${NC}"
 fi
 
-# Function to create default config file
+# Create default configuration file with example mappings
+#
+# Args:
+#   $1 - Path where config file should be created
+#
+# Returns:
+#   0 - Success or config already exists
+#
+# Side Effects:
+#   - Creates new config file at specified path
 create_default_config() {
     local config_path="$1"
     
@@ -119,7 +128,18 @@ EOF
     exit 0
 }
 
-# Parse and load configuration
+# Parse and load configuration from config file
+#
+# Args:
+#   $1 - Path to config file
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Sets global arrays: SOURCE_TO_TARGET, FILE_OPTIONS, SOURCE_REGEX,
+#     TARGET_REGEX, BACKWARD_SYNC
+#   - Sets global variables: DEFAULT_LINK_TYPE, DEFAULT_CONFLICT_STRATEGY
 load_config() {
     local config_path="$1"
     
@@ -221,7 +241,18 @@ load_config() {
     return 0
 }
 
-# Process regex-based mappings
+# Process regex/wildcard-based file mappings
+#
+# Uses global arrays:
+#   SOURCE_REGEX - Array of source patterns
+#   TARGET_REGEX - Array of target patterns
+#   FILE_OPTIONS - Options for each mapping
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Calls sync_file() for each matched file
 process_regex_mappings() {
     debug "Processing regex-based mappings..."
     
@@ -289,7 +320,19 @@ process_regex_mappings() {
     done
 }
 
-# Handle file conflicts based on strategy
+# Handle file conflicts based on configured strategy
+#
+# Args:
+#   $1 - Source file path
+#   $2 - Target file path
+#   $3 - Conflict resolution strategy (ask, local, remote, rename, ignore)
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - May modify/delete files based on strategy
+#   - May prompt user for input if strategy is "ask"
 handle_conflict() {
     local source="$1"
     local target="$2"
@@ -312,8 +355,8 @@ handle_conflict() {
             
             case "$choice" in
                 1) cp -rf "$target" "$source" ;;
-                2) 
-                    rm -rf $target
+                2)
+                    rm -rf "$target"
                     ln -s "$source" "$target" ;;
                 3) 
                     diff -u "$target" "$source"
@@ -336,7 +379,7 @@ handle_conflict() {
             ;;
         "remote")
             # cp -rf "$source" "$target"
-            rm -rf $target
+            rm -rf "$target"
             ln -s "$source" "$target" 
             info "Used repository version: $source${NC}"
             ;;
@@ -358,7 +401,21 @@ handle_conflict() {
     return 0
 }
 
-# Sync a single file/directory
+# Sync a single file/directory from source to target
+#
+# Args:
+#   $1 - Relative source path (from ENV_DIR)
+#   $2 - Target path (absolute or ~)
+#   $3 - Options string (link=X, conflict=Y)
+#
+# Returns:
+#   0 - Success
+#   1 - Error (neither source nor target exists)
+#
+# Side Effects:
+#   - Creates symbolic links
+#   - May create/remove backup files
+#   - May call handle_conflict() for conflicts
 sync_file() {
     local source_rel="$1"
     local target="$2"
@@ -400,10 +457,10 @@ sync_file() {
             return 0
         else
             if [[ -L "$target" ]]; then
-                echo "link"
+                debug "Target is a symlink: $target"
             fi
             if [[ "$(readlink "$target")" == "$source" ]]; then
-                echo "same "$(readlink "$target")" $target $source"
+                debug "Symlink already points to source: $(readlink "$target") == $source"
             fi
         fi
         
@@ -438,7 +495,17 @@ sync_file() {
     return 0
 }
 
-# Process backward sync mappings
+# Process backward sync mappings (system to repo)
+#
+# Uses global arrays:
+#   BACKWARD_SYNC - Array of backward sync mappings
+#   FILE_OPTIONS - Options for each mapping
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Calls backward_sync_file() for each mapping
 process_backward_sync() {
     debug "Processing backward sync mappings..."
     
@@ -525,7 +592,20 @@ process_backward_sync() {
     done
 }
 
-# Backward sync a single file
+# Sync a single file from target (system) back to source (repo)
+#
+# Args:
+#   $1 - Relative source path (from ENV_DIR)
+#   $2 - Target path (system file)
+#   $3 - Options string (link=X, conflict=Y)
+#
+# Returns:
+#   0 - Success
+#   1 - Target does not exist
+#
+# Side Effects:
+#   - Copies files from system to repo
+#   - May create symbolic links
 backward_sync_file() {
     local source_rel="$1"
     local target="$2"
@@ -592,6 +672,19 @@ backward_sync_file() {
 }
 
 # Create a link (hard or soft) between source and target
+#
+# Args:
+#   $1 - Source file path (must exist)
+#   $2 - Target link path (will be created)
+#   $3 - Link type: "hard" or "soft"
+#
+# Returns:
+#   0 - Success, non-zero on failure
+#
+# Side Effects:
+#   - Creates target directory if needed
+#   - Removes existing broken symlinks at target
+#   - Creates new link at target
 create_link() {
     local source="$1"
     local target="$2"
@@ -616,7 +709,19 @@ create_link() {
     return $?
 }
 
-# Sync all dotfiles
+# Sync all dotfiles based on loaded configuration
+#
+# Uses global arrays:
+#   SOURCE_TO_TARGET - Direct file mappings
+#   FILE_OPTIONS - Options for each mapping
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Calls sync_file() for each direct mapping
+#   - Calls process_regex_mappings() for pattern mappings
+#   - Calls process_backward_sync() for backward sync
 sync_dotfiles() {
     debug "Syncing the following files: ${!SOURCE_TO_TARGET[@]}"
     for source in "${!SOURCE_TO_TARGET[@]}"; do
@@ -636,6 +741,16 @@ sync_dotfiles() {
     debug "Sync complete!"
     return 0
 }
+# Remove all broken symlinks in a directory
+#
+# Args:
+#   $1 - Directory path to search for broken symlinks
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Removes broken symbolic links in the specified directory
 remove_all_broken_links() {
     # list_files=$(find $directory -xtype l)
     directory="$1"
@@ -646,6 +761,18 @@ remove_all_broken_links() {
         fi
     done
 }
+# Main entry point for the script
+#
+# Args:
+#   $1 - Optional: Path to config file (default: $ENV_DIR/config/dotfiles.conf)
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Loads configuration
+#   - Syncs all dotfiles
+#   - Removes broken symlinks in HOME
 main() {
     if [[ "$#" -lt 1 ]]; then
         CONFIG_FILE="$ENV_DIR/config/dotfiles.conf"

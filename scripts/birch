@@ -13,7 +13,13 @@ clean() {
 
     # Kill the IRC client to also exit the child
     # listener which runs in the background.
-    kill 0
+    # Safety: Only kill process group if we're the main script
+    # (not sourced) by checking BASH_SOURCE
+    if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+        kill 0
+    else
+        echo "Warning: birch was sourced rather than executed. Background processes may remain." >&2
+    fi
 }
 
 refresh() {

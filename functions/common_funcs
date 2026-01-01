@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Common Functions
 # ANSI color codes
 RED='\033[0;31m'
@@ -12,7 +13,9 @@ info() {
 }
 debug() {
     local message="$*"
-    if [[ -n "$DEBUG" ]]; then
+    if [[ -n "$ENV_DEBUG" ]]; then
+        # Sanitize sensitive values
+        message=$(echo "$message" | sed -E 's/(AGE_SECRET|BW_PASSWORD|BW_CLIENTID|BW_CLIENTSECRET|GITHUB_SSH_PRIVATE_KEY|GLM_API_KEY|GITHUB_TOKEN|GH_TOKEN|API_KEY|TOKEN|BW_SESSION|UPTIME_KUMA_API|ZEROTIER_API_KEY)=[^ ]+/\1=***HIDDEN***/g')
         echo -e "${PURPLE}[DEBUG] $message${NC}"
     fi
 }
@@ -26,6 +29,12 @@ title() {
 }
 error() {
     local message="$*"
-    echo -e "${RED}[ERROR] $message${NC}"
+    echo -e "${RED}[ERROR] $message${NC}" >&2
     exit 1
+}
+
+warn() {
+    local message="$*"
+    echo -e "${RED}[ERROR] $message${NC}" >&2
+    # No exit - allows continuing
 }

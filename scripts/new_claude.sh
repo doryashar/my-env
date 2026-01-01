@@ -11,6 +11,11 @@ CONTAINER_IMAGE="${CONTAINER_IMAGE:-docker/sandbox-templates:claude-code}"
 DEVCONTAINER_IMAGE="anthropic-claude-devcontainer"
 CLAUDE_CONFIG_DIR="${HOME}/.claude"
 
+# Source shared virtualenv functions
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+ENV_DIR=$(dirname "$SCRIPT_DIR")
+source "$ENV_DIR/functions/virtualenv.sh"
+
 usage() {
   echo "Usage: $0 [--container] [--devcontainer] [--no_container] [--glm] [--branch] [--install_requirements] [--no-venv] [branch-name]"
   echo "  --container        Use Docker sandbox template (docker/sandbox-templates:claude-code) (default)"
@@ -74,125 +79,6 @@ else
   BRANCH="${BRANCH:-wt-$(date +%Y%m%d-%H%M%S)}"
 fi
 
-install_requirements() {
-  echo ">>> Installing repository requirements..."
-
-  # Python requirements
-  if [ -f "requirements.txt" ]; then
-    echo ">>> Installing Python requirements from requirements.txt"
-    pip install -r requirements.txt
-  fi
-
-  if [ -f "pyproject.toml" ]; then
-    echo ">>> Installing Python package from pyproject.toml"
-    pip install -e .
-  fi
-
-  # Node.js requirements
-  if [ -f "package.json" ]; then
-    echo ">>> Installing Node.js dependencies from package.json"
-    npm install
-  fi
-
-  # Rust dependencies
-  if [ -f "Cargo.toml" ]; then
-    echo ">>> Installing Rust dependencies"
-    cargo build
-  fi
-
-  # Go dependencies
-  if [ -f "go.mod" ]; then
-    echo ">>> Installing Go dependencies"
-    go mod download
-  fi
-
-  # Ruby dependencies
-  if [ -f "Gemfile" ]; then
-    echo ">>> Installing Ruby gems from Gemfile"
-    bundle install
-  fi
-
-  # Composer (PHP) dependencies
-  if [ -f "composer.json" ]; then
-    echo ">>> Installing PHP dependencies from composer.json"
-    composer install
-  fi
-
-  echo ">>> Requirements installation complete"
-}
-
-detect_and_activate_venv() {
-  if [ "$USE_VENV" = false ]; then
-    echo ">>> Virtual environment disabled"
-    return 0
-  fi
-
-  echo ">>> Detecting virtual environment..."
-
-  # Check if we're already in a virtual environment (host environment)
-  if [ -n "${VIRTUAL_ENV:-}" ] || [ -n "${CONDA_PREFIX:-}" ]; then
-    echo ">>> Detected active virtual environment on host"
-
-    # For venv, we need to recreate it inside the container
-    if [ -n "${VIRTUAL_ENV:-}" ]; then
-      VENV_NAME=$(basename "$VIRTUAL_ENV")
-      echo ">>> Recreating venv '$VENV_NAME' in container"
-      python -m venv "/workspace/$VENV_NAME"
-      source "/workspace/$VENV_NAME/bin/activate"
-      echo ">>> Activated virtual environment: /workspace/$VENV_NAME"
-    fi
-
-    # For conda, we need to recreate it inside the container
-    if [ -n "${CONDA_PREFIX:-}" ]; then
-      ENV_NAME=$(basename "$CONDA_PREFIX")
-      echo ">>> Recreating conda environment '$ENV_NAME' in container"
-      conda create -n "$ENV_NAME" --yes --clone base 2>/dev/null || conda create -n "$ENV_NAME" --yes
-      eval "$(conda shell.bash hook)"
-      conda activate "$ENV_NAME"
-      echo ">>> Activated conda environment: $ENV_NAME"
-    fi
-
-    return 0
-  fi
-
-  # Look for common virtual environment directories
-  VENV_DIRS=("venv" ".venv" "env" ".env")
-
-  for venv_dir in "${VENV_DIRS[@]}"; do
-    if [ -d "$venv_dir" ] && [ -f "$venv_dir/bin/activate" ]; then
-      echo ">>> Found virtual environment: $venv_dir"
-      source "/workspace/$venv_dir/bin/activate"
-      echo ">>> Activated virtual environment: $venv_dir"
-      return 0
-    fi
-  done
-
-  # Check for conda environments
-  if command -v conda &> /dev/null; then
-    # Look for environment.yml or conda environment files
-    if [ -f "environment.yml" ]; then
-      echo ">>> Found environment.yml, creating conda environment"
-      conda env create -f environment.yml --force
-      eval "$(conda shell.bash hook)"
-      conda activate "$(grep 'name:' environment.yml | head -1 | cut -d' ' -f2)"
-      echo ">>> Activated conda environment from environment.yml"
-      return 0
-    fi
-
-    # Activate default conda base environment if available
-    if conda info --envs | grep -q "^base"; then
-      echo ">>> Activating default conda base environment"
-      eval "$(conda shell.bash hook)"
-      conda activate base
-      echo ">>> Activated conda base environment"
-      return 0
-    fi
-  fi
-
-  echo ">>> No virtual environment found"
-  return 1
-}
-
 # Helper functions to reduce code duplication
 
 # Build GLM environment variables
@@ -216,98 +102,13 @@ build_container_command() {
     install_cmd="install_requirements && "
   fi
 
+  # Output the virtualenv functions (from shared file)
+  cat "$ENV_DIR/functions/virtualenv.sh"
+
+  echo ""
+
+  # Output git credential helper setup
   cat << 'EOF'
-install_requirements() {
-  echo ">>> Installing repository requirements..."
-  if [ -f "requirements.txt" ]; then
-    echo ">>> Installing Python requirements from requirements.txt"
-    pip install -r requirements.txt
-  fi
-  if [ -f "pyproject.toml" ]; then
-    echo ">>> Installing Python package from pyproject.toml"
-    pip install -e .
-  fi
-  if [ -f "package.json" ]; then
-    echo ">>> Installing Node.js dependencies from package.json"
-    npm install
-  fi
-  if [ -f "Cargo.toml" ]; then
-    echo ">>> Installing Rust dependencies"
-    cargo build
-  fi
-  if [ -f "go.mod" ]; then
-    echo ">>> Installing Go dependencies"
-    go mod download
-  fi
-  if [ -f "Gemfile" ]; then
-    echo ">>> Installing Ruby gems from Gemfile"
-    bundle install
-  fi
-  if [ -f "composer.json" ]; then
-    echo ">>> Installing PHP dependencies from composer.json"
-    composer install
-  fi
-  echo ">>> Requirements installation complete"
-}
-
-detect_and_activate_venv() {
-  if [ "$USE_VENV" = false ]; then
-    echo ">>> Virtual environment disabled"
-    return 0
-  fi
-
-  echo ">>> Detecting virtual environment..."
-  if [ -n "${VIRTUAL_ENV:-}" ] || [ -n "${CONDA_PREFIX:-}" ]; then
-    echo ">>> Detected active virtual environment on host"
-    if [ -n "${VIRTUAL_ENV:-}" ]; then
-      VENV_NAME=$(basename "$VIRTUAL_ENV")
-      echo ">>> Recreating venv '$VENV_NAME' in container"
-      python -m venv "/workspace/$VENV_NAME"
-      source "/workspace/$VENV_NAME/bin/activate"
-      echo ">>> Activated virtual environment: /workspace/$VENV_NAME"
-    fi
-    if [ -n "${CONDA_PREFIX:-}" ]; then
-      ENV_NAME=$(basename "$CONDA_PREFIX")
-      echo ">>> Recreating conda environment '$ENV_NAME' in container"
-      conda create -n "$ENV_NAME" --yes --clone base 2>/dev/null || conda create -n "$ENV_NAME" --yes
-      eval "$(conda shell.bash hook)"
-      conda activate "$ENV_NAME"
-      echo ">>> Activated conda environment: $ENV_NAME"
-    fi
-    return 0
-  fi
-
-  VENV_DIRS=("venv" ".venv" "env" ".env")
-  for venv_dir in "${VENV_DIRS[@]}"; do
-    if [ -d "$venv_dir" ] && [ -f "$venv_dir/bin/activate" ]; then
-      echo ">>> Found virtual environment: $venv_dir"
-      source "/workspace/$venv_dir/bin/activate"
-      echo ">>> Activated virtual environment: $venv_dir"
-      return 0
-    fi
-  done
-
-  if command -v conda &> /dev/null; then
-    if [ -f "environment.yml" ]; then
-      echo ">>> Found environment.yml, creating conda environment"
-      conda env create -f environment.yml --force
-      eval "$(conda shell.bash hook)"
-      conda activate "$(grep 'name:' environment.yml | head -1 | cut -d' ' -f2)"
-      echo ">>> Activated conda environment from environment.yml"
-      return 0
-    fi
-    if conda info --envs | grep -q "^base"; then
-      echo ">>> Activating default conda base environment"
-      eval "$(conda shell.bash hook)"
-      conda activate base
-      echo ">>> Activated conda base environment"
-      return 0
-    fi
-  fi
-
-  echo ">>> No virtual environment found"
-  return 0
-}
 
 if [ -n "$GITHUB_TOKEN" ]; then
   git config --global credential.helper "!f() { echo username=git; echo password=\$GITHUB_TOKEN; }; f"
@@ -456,7 +257,10 @@ if [ "$USE_GLM" = true ] && [ -z "${GLM_API_KEY:-}" ]; then
 fi
 
 # Get repository root and save current directory
-REPO_ROOT=$(git rev-parse --show-toplevel)
+REPO_ROOT=$(git rev-parse --show-toplevel) || {
+  echo "ERROR: Not in a git repository" >&2
+  exit 1
+}
 ORIGINAL_DIR=$(pwd)
 
 # Set worktree directory path after REPO_ROOT is defined
@@ -501,6 +305,10 @@ if [ "$USE_BRANCH" = true ]; then
 
   # Cleanup function for branch mode
   cleanup() {
+    # Clean up any temporary build directory
+    if [[ -n "${BUILD_DIR:-}" ]] && [[ -d "$BUILD_DIR" ]]; then
+      rm -rf "$BUILD_DIR"
+    fi
     echo ">>> Cleaning up branch $BRANCH in $DIR"
     # Go back to original directory
     cd "$REPO_ROOT/$RELATIVE_PATH" 2>/dev/null || cd "$ORIGINAL_DIR" 2>/dev/null || cd "$REPO_ROOT"
@@ -517,6 +325,10 @@ else
 
   # Cleanup function for worktree mode
   cleanup() {
+    # Clean up any temporary build directory
+    if [[ -n "${BUILD_DIR:-}" ]] && [[ -d "$BUILD_DIR" ]]; then
+      rm -rf "$BUILD_DIR"
+    fi
     echo ">>> Cleaning up worktree $DIR"
     # Remove worktree
     git worktree remove "$DIR" --force || true
@@ -558,7 +370,7 @@ if [ "$USE_DEVCONTAINER" = true ]; then
 
     # Create temporary directory for build context
     BUILD_DIR=$(mktemp -d)
-    trap "rm -rf $BUILD_DIR" EXIT
+    # BUILD_DIR will be cleaned up by the main cleanup function
 
     # Fetch Dockerfile and init-firewall.sh
     echo ">>> Downloading Dockerfile and init-firewall.sh"

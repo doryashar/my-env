@@ -1,7 +1,13 @@
 #!/bin/bash
+set -euo pipefail
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 ENV_DIR=$(dirname "$SCRIPT_DIR")
 source $ENV_DIR/functions/common_funcs
+
+# Load configuration (including BW_EMAIL)
+if [[ -f "$ENV_DIR/config/repo.conf" ]]; then
+    source "$ENV_DIR/config/repo.conf"
+fi
 
 # Configuration variables
 REMOTE_REPO="git@github.com:doryashar/encrypted.git"
@@ -12,12 +18,28 @@ TEMP_DIR="$ENV_DIR/tmp/private_encrypted-sync-temp"
 # IDENTITY_FILE="$ENV_DIR/tmp/private/age-key"
 RECIPIENTS_FILE="$ENV_DIR/tmp/private/age-recipients"
 
-# Function to check if a command exists
+# Check if a command exists in PATH
+#
+# Args:
+#   $1 - Command name to check
+#
+# Returns:
+#   0 - Command exists
+#   1 - Command does not exist
 command_exists() {
   command -v "$1" > /dev/null 2>&1
 }
 
-# Function to ensure age is installed
+# Ensure age encryption tool is installed
+#
+# Attempts to install age using the system's package manager if not found.
+#
+# Returns:
+#   0 - Age is installed
+#   1 - Failed to install age
+#
+# Side Effects:
+#   - May invoke sudo to install packages
 ensure_age_installed() {
   if ! command_exists age; then
     warning "age encryption tool not found. Attempting to install..."
@@ -42,7 +64,19 @@ ensure_age_installed() {
   debug "age encryption tool is installed."
 }
 
-# Function to encrypt a file or directory
+# Encrypt a file or directory using age
+#
+# Args:
+#   $1 - Source file or directory path
+#   $2 - Destination encrypted file path (.age extension)
+#
+# Returns:
+#   0 - Success
+#   Non-zero on encryption failure
+#
+# Side Effects:
+#   - Creates encrypted file at destination
+#   - Directories are tar'd before encryption
 encrypt_file() {
   local source="$1"
   local dest="$2"
@@ -56,29 +90,57 @@ encrypt_file() {
   fi
 }
 
-# Function to decrypt a file or directory
+# Decrypt a file or directory using age
+#
+# Args:
+#   $1 - Source encrypted file path (.age)
+#   $2 - Destination path for decrypted content
+#
+# Returns:
+#   0 - Success
+#   Non-zero on decryption failure
+#
+# Side Effects:
+#   - Creates destination directory if needed
+#   - Extracts tar archives if source is a directory
+#   - Creates unique temp file during decryption
 decrypt_file() {
   local source="$1"
   local dest="$2"
-  
+  local temp_file="$TEMP_DIR/decrypted_temp_$$.$RANDOM"
+
   # Create destination directory if it doesn't exist
   mkdir -p "$(dirname "$dest")"
-  
+
   # Decrypt the file
-  age -d -i <(echo "$AGE_SECRET") -o "$TEMP_DIR/decrypted_temp" "$source" #Instead of using -i $IDENTITY_FILE
+  age -d -i <(echo "$AGE_SECRET") -o "$temp_file" "$source" #Instead of using -i $IDENTITY_FILE
 
   # Check if it's a tar archive (directory)
-  if tar -tf "$TEMP_DIR/decrypted_temp" &> /dev/null; then
+  if tar -tf "$temp_file" &> /dev/null; then
     # Extract the tar archive
     mkdir -p "$dest"
-    tar -xf "$TEMP_DIR/decrypted_temp" -C "$dest"
+    tar -xf "$temp_file" -C "$dest"
   else
     # It's a regular file
-    mv "$TEMP_DIR/decrypted_temp" "$dest"
+    mv "$temp_file" "$dest"
   fi
+
+  # Clean up temp file
+  rm -f "$temp_file"
 }
 
-# Function to encrypt recursively
+# Encrypt all files in a directory recursively
+#
+# Args:
+#   $1 - Source directory path
+#   $2 - Destination directory path
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Creates .age files for each file in source
+#   - Skips hidden files (starting with .)
 encrypt_recursive() {
   local source_dir="$1"
   local dest_dir="$2"
@@ -94,7 +156,18 @@ encrypt_recursive() {
   done
 }
 
-# Function to decrypt recursively
+# Decrypt all .age files in a directory recursively
+#
+# Args:
+#   $1 - Source directory with .age files
+#   $2 - Destination directory path
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Removes .age extension from decrypted files
+#   - Creates destination directory structure
 decrypt_recursive() {
   local source_dir="$1"
   local dest_dir="$2"
@@ -111,13 +184,35 @@ decrypt_recursive() {
   done
 }
 
+# Generate hash file for directory contents
+#
+# Args:
+#   $1 - Directory path to hash
+#   $2 - Output hash file path
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Creates hash file with permissions, timestamps, paths, and SHA256 hashes
 hashit() {
   dir="$1"
   temp_hash_file="$2"
   find "$dir" -type f -not -path "*/\.*" -printf "%M %TY-%Tm-%Td %TH:%TM:%TS %p\n" -exec sha256sum {} \; | sort > "$temp_hash_file"
 }
 
-# Function to check if files have changed
+# Check if files in directory have changed since last hash
+#
+# Args:
+#   $1 - Directory path to check
+#   $2 - Previous hash file path
+#
+# Returns:
+#   0 - No changes detected
+#   1 - Changes detected or no previous hash exists
+#
+# Side Effects:
+#   - Creates temp hash file for comparison
 has_changed() {
   local dir="$1"
   local hash_file="$2"
@@ -138,7 +233,20 @@ has_changed() {
   fi
 }
 
-# Function to merge changes
+# Merge changes between remote and local directories
+#
+# Args:
+#   $1 - Remote directory path
+#   $2 - Local directory path
+#   $3 - Output merged directory path
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Creates merged directory with combined changes
+#   - May launch interactive merge tool for conflicts
+#   - Saves base versions for future merges
 merge_changes() {
   local remote_dir="$1"
   local local_dir="$2"
@@ -297,7 +405,19 @@ merge_changes() {
   info "Merged files are in: $merged_dir"
 }
 
-# Helper function to validate merged files recursively
+# Validate that conflict markers were removed from merged files
+#
+# Args:
+#   $1 - Space-separated list of files to validate
+#   $2 - Merged directory path
+#
+# Returns:
+#   0 - All conflicts resolved
+#   1 - Conflicts still present (recursive)
+#
+# Side Effects:
+#   - Prompts user to retry if conflicts remain
+#   - Recursive calls itself until validation passes
 validate_merged_files() {
   local conflict_files="$1"
   local merged_dir="$2"
@@ -322,6 +442,15 @@ validate_merged_files() {
   fi
 }
 
+# Prompt user for Bitwarden password
+#
+# Returns:
+#   0 - Success
+#   1 - Empty password provided (exits)
+#
+# Side Effects:
+#   - Sets BW_PASSWORD environment variable
+#   - Exits if password is empty
 get_bw_password() {
     # Read the password from the user
     read -s -p "Enter your BitWarden password: " BW_PASSWORD
@@ -332,8 +461,23 @@ get_bw_password() {
     export BW_PASSWORD
 }
 
+# Authenticate with Bitwarden and retrieve secret keys
+#
+# Returns:
+#   0 - Success
+#   1 - Authentication failed (exits)
+#
+# Side Effects:
+#   - Sets BW_SESSION environment variable
+#   - Sets GITHUB_SSH_PRIVATE_KEY environment variable
+#   - Sets AGE_SECRET environment variable
+#   - May call get_bw_password() if session is locked
 get_secret_keys() {
-    export BW_EMAIL="dor.yashar@gmail.com"
+    # BW_EMAIL should be set in config/repo.conf
+    if [[ -z "${BW_EMAIL:-}" ]]; then
+        error "BW_EMAIL environment variable not set. Please add it to config/repo.conf"
+        exit 1
+    fi
     BW_STATUS=$(bw status --raw)
     if [[ $BW_STATUS == *"unauthenticated"* ]]; then
         if [ -z "$BW_CLIENTID" ] || [ -z "$BW_CLIENTSECRET" ]; then
@@ -368,7 +512,22 @@ get_secret_keys() {
     fi
 }
 
-# Main function
+# Main entry point for encrypted files synchronization
+#
+# Handles:
+#   - Bitwarden authentication
+#   - Age encryption/decryption
+#   - Git operations on encrypted repository
+#   - Merge conflict resolution
+#
+# Returns:
+#   0 - Success
+#   Non-zero on failure
+#
+# Side Effects:
+#   - May create/update DECRYPTED_DIR
+#   - May commit/push changes to remote
+#   - Registers cleanup trap on EXIT
 main() {
   title "Synchronizing Private files"
   if  ! command_exists bw; then
@@ -406,12 +565,12 @@ main() {
     if [ ! -d "$LOCAL_REPO_PATH" ]; then
       info "Initializing local repository..."
       mkdir -p "$LOCAL_REPO_PATH"
-      temp_gz=$(mktemp)
+      temp_gz=$(mktemp) || exit 1
       curl -H "Authorization: token $GITHUB_SSH_PRIVATE_KEY" \
           -L https://api.github.com/repos/doryashar/encrypted/tarball \
-          -o $temp_gz
-      \tar xzf $temp_gz -C "$LOCAL_REPO_PATH" --strip-components=1 || exit 1
-      rm $temp_gz
+          -o "$temp_gz" || exit 1
+      tar xzf "$temp_gz" -C "$LOCAL_REPO_PATH" --strip-components=1 || exit 1
+      rm -f "$temp_gz"
     fi
 
     
@@ -591,7 +750,15 @@ main() {
   fi
 }
 
-# Cleanup function
+# Cleanup temporary files on exit
+#
+# Called automatically by trap on EXIT
+#
+# Returns:
+#   0 - Success
+#
+# Side Effects:
+#   - Removes TEMP_DIR
 cleanup() {
   debug "Cleaning up temporary files..."
   rm -rf "$TEMP_DIR"

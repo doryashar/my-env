@@ -1,3 +1,15 @@
+# Add a new secret to Bitwarden
+#
+# Args:
+#   $1 - Name/identifier for the secret
+#   $2 - Secret value to store
+#
+# Returns:
+#   0 - Success
+#   Non-zero on failure
+#
+# Side Effects:
+#   - Creates new Bitwarden item (type: secure note)
 add_secret() {
     name="$1"
     secret="$2"
@@ -15,11 +27,33 @@ add_secret() {
     echo "$item_json" | bw encode | bw create item > /dev/null
 }
 
+# Retrieve a secret password from Bitwarden
+#
+# Args:
+#   $1 - Name/identifier of the secret
+#
+# Outputs:
+#   Secret password value
+#
+# Returns:
+#   0 - Success
+#   Non-zero on failure
 get_secret() {
     name="$1"
     bw get item "$name" | jq -r '.login.password'
 }
 
+# Delete a secret from Bitwarden
+#
+# Args:
+#   $1 - Name/identifier of the secret to delete
+#
+# Returns:
+#   0 - Success
+#   Non-zero on failure
+#
+# Side Effects:
+#   - Permanently removes the item from Bitwarden
 delete_secret() {
     name="$1"
     bw delete item "$name"

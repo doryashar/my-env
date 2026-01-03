@@ -1,118 +1,278 @@
-## TODO:
-   - Simple command to run `prerun.sh`:
-   - `prerun.sh` will check if env is installed. 
-      - if not:
-         - get a valut cli
-         - run OAUTH2 authentication to get API key from the vault
-         - clone the repo with the the API key
-         - run `setup.sh`
-      - if yes:
-         - check if the remote is newer, if so update the local repo
-         - check if local has changes. if so, ask the user to push the changes
-   
-   - `setup.sh` will:
-      - setup dotfiles (including local, config, zsh, tmux, zellij, alacritty, conky etc)
-      - install packages (apt, snap, flatpak, brew, pip, npm, rustup, go, etc)
-      - setup services (backup)
-      - setup docker with the containers (zerotier, rclone)
-      - setup cron jobs
-      - setup z4h, zellij as default shell
-      - register with uptimekuma
-      - show screen with: IP, hostname, uptimekuma, Memory/CPU/Disk/Network Usage, tasks, calendar, weather.
-
 # My Environment Setup
 
 This repository contains my essential Linux environment configuration, contains submodule:
 
 - `private` (Private & Encrypted Repository): Contains sensitive data and configurations
 
+## Quick Start
+
+```bash
+# Clone the repository
+git clone git@github.com:doryashar/my_env.git ~/env
+cd ~/env
+
+# Run the pre-run check (handles first-time setup)
+./scripts/prerun.sh
+
+# Or run setup directly
+./scripts/setup.sh
+```
+
 ## Prerequisites
 
 - Git
-- GitHub API Key with appropriate permissions
+- Curl
 - Linux-based system
-- NFS server configuration (for mounting)
-- Docker (for running containerized services)
-
-## Setup
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/yourusername/my_env.git ~/env
-   cd ~/env
-   ```
-
-2. Run the setup script:
-   ```bash
-   ./setup.sh
-   ```
-
-   You will be prompted for:
-   - GitHub API Key (for accessing repositories)
-   - Decryption password (for private repository)
+- Bitwarden CLI (for encrypted secrets)
+- Docker (optional, for containerized services)
 
 ## What Gets Set Up
 
 The setup script will configure:
 
-- Desktop environment
-  - Desktop shortcuts
-  - Conky configuration
-- Dotfiles (.bashrc, .vimrc, etc.)
-- System configurations
-- Password management
-- Standalone binaries
-- NFS mounts
-- Custom aliases and scripts
-- Docker compose configurations
-- Automated tasks (cron jobs)
-  - Daily backups
-  - Other scheduled tasks
+- **Dotfiles**: Shell configurations (.zshrc, .vimrc, etc.)
+- **Packages**: Development tools (APT, PIP packages)
+- **Docker**: Container runtime and compose services
+- **ZSH**: Zsh for Humans (z4h) as default shell
+- **Fonts**: Custom font installation
+- **Encrypted Secrets**: Bitwarden + age encryption
+- **Cron Jobs**: Automated daily sync and backups
 
 ## Repository Structure
 
 ```
 env/
-├── AGENTS.md       # Agent instructions
-├── aliases         # Custom shell aliases
-├── bin/            # Standalone binaries
-├── config/         # Application configurations
-├── docker/         # Docker-compose files
-├── dotfiles/       # Dotfiles (e.g., .bashrc, .vimrc)
-├── env_vars        # Environment variables
-├── fonts/          # Custom fonts
-├── functions/      # Shell functions
-├── local/          # Local configurations
-├── private/        # Private encrypted submodule
-├── README.md       # This documentation
-├── scripts/        # Setup and utility scripts
-└── tmp/            # Temporary files
+├── AGENTS.md           # Agent instructions
+├── README.md           # This documentation
+├── aliases/            # Custom shell aliases
+├── bin/                # Standalone binaries
+├── config/             # Application configurations
+│   ├── dotfiles.conf   # Dotfiles sync configuration
+│   ├── repo.conf       # Repository configuration
+│   └── crontab         # Cron job definitions
+├── docker/             # Docker-compose files
+│   ├── rclone-mount/   # Rclone mount service
+│   └── zerotier/       # ZeroTier VPN service
+├── docs/               # Documentation
+│   ├── SETUP_SCRIPT.md
+│   ├── PRERUN_SCRIPT.md
+│   ├── SYNC_DOTFILES.md
+│   └── SYNC_ENCRYPTED.md
+├── dotfiles/           # Dotfiles (e.g., .bashrc, .vimrc)
+├── functions/          # Shell functions
+│   ├── common_funcs    # Common utility functions
+│   ├── bw_funcs        # Bitwarden integration
+│   └── monitors        # System monitoring functions
+├── local/              # Local configurations
+├── private/            # Private encrypted submodule (symlink)
+├── scripts/            # Setup and utility scripts
+│   ├── prerun.sh       # Pre-run check script
+│   ├── setup.sh        # Main setup script
+│   ├── sync_env.sh     # Environment sync wrapper
+│   ├── sync_dotfiles.sh # Dotfiles synchronization
+│   ├── sync_encrypted.sh # Encrypted files sync
+│   ├── install_fonts.sh # Font installation
+│   └── install_docker.sh # Docker installation
+├── tests/              # Test suite
+│   ├── setup_test.sh   # Setup script tests
+│   └── sync_dotfiles_test.sh # Dotfiles sync tests
+└── tmp/                # Temporary files
+    ├── private/        # Decrypted private files (symlink)
+    └── projects/       # GitHub projects
+```
+
+## Scripts
+
+### `scripts/prerun.sh`
+
+Entry point script that checks installation status and keeps the environment synchronized.
+
+**Features:**
+- Checks if environment is installed
+- Installs Bitwarden CLI if needed
+- OAuth2 authentication for vault access
+- Clones repository with API key
+- Checks for remote updates
+- Prompts to push local changes
+
+**Usage:**
+```bash
+~/env/scripts/prerun.sh
+```
+
+### `scripts/setup.sh`
+
+Main setup script that configures the complete environment.
+
+**Features:**
+- Installs APT and PIP packages
+- Sets up Docker and compose services
+- Installs ZSH and z4h
+- Syncs dotfiles and encrypted files
+- Installs fonts
+- Sets up cron jobs
+
+**Usage:**
+```bash
+~/env/scripts/setup.sh
+```
+
+### `scripts/sync_env.sh`
+
+Wrapper script for synchronizing all environment components.
+
+**Usage:**
+```bash
+# Sync everything (dotfiles, encrypted, git)
+~/env/scripts/sync_env.sh -d -e -l -p
+
+# Check for updates only
+~/env/scripts/sync_env.sh -u
+```
+
+### `scripts/sync_dotfiles.sh`
+
+Synchronizes dotfiles between repository and home directory.
+
+**Usage:**
+```bash
+~/env/scripts/sync_dotfiles.sh [config_file]
+```
+
+### `scripts/sync_encrypted.sh`
+
+Synchronizes encrypted files using age encryption and Bitwarden.
+
+**Usage:**
+```bash
+~/env/scripts/sync_encrypted.sh
+```
+
+## Configuration
+
+### `config/repo.conf`
+
+Main repository configuration:
+
+```bash
+# Remote git repository URL
+REMOTE_URL="git@github.com:doryashar/my_env"
+ENV_DIR="${HOME}/env"
+
+# Bitwarden configuration
+export BW_EMAIL="your-email@example.com"
+
+# Private encrypted repository
+PRIVATE_URL="git@github.com:doryashar/encrypted"
+
+# Display settings
+SHOW_DUFF=off
+SHOW_NEOFETCH=on
+```
+
+### `config/dotfiles.conf`
+
+Dotfiles synchronization configuration:
+
+```bash
+# Default link type (soft or hard)
+DEFAULT_LINK_TYPE="soft"
+
+# Default conflict resolution (ask, local, remote, rename, ignore)
+DEFAULT_CONFLICT_STRATEGY="ask"
+
+# File mappings
+dotfiles/.zshrc => ~/.zshrc
+config/nvim => ~/.config/nvim
+config/tmux => ~/.config/tmux
+```
+
+### `config/crontab`
+
+Automated tasks (example):
+
+```bash
+# Auto-sync dotfiles daily at 9 AM
+0 9 * * * $HOME/env/scripts/sync_env.sh -d -e -l -p > /tmp/env_sync.log 2>&1
+
+# Run backups daily at 2 AM
+0 2 * * * $HOME/env/scripts/backup.sh > /tmp/backup.log 2>&1
 ```
 
 ## Security
 
-- The `private` repository is encrypted to protect sensitive information
-- Decryption key is required during setup
+- The `private` repository is encrypted using age
+- Encryption keys are stored in Bitwarden
+- Bitwarden authentication via OAuth2 or password
 - Never commit unencrypted sensitive data
+
+### Bitwarden Setup
+
+1. Install Bitwarden CLI:
+   ```bash
+   brew install bitwarden-cli  # macOS
+   sudo apt-get install bw     # Ubuntu/Debian
+   ```
+
+2. Login:
+   ```bash
+   bw login
+   ```
+
+3. Store required secrets:
+   - `GITHUB_API_KEY`: GitHub token for repository access
+   - `AGE_SECRET`: Age encryption private key
 
 ## Maintenance
 
-To update your environment:
+### Update Environment
 
-1. Pull the latest changes:
-   ```bash
-   git pull
-   git submodule update --remote
-   ```
+```bash
+# Pull latest changes
+cd ~/env
+git pull
 
-2. Run the setup script again:
-   ```bash
-   ./setup.sh
-   ```
+# Run setup again (idempotent)
+./scripts/setup.sh
+```
 
-## Contributing
+### Sync Changes
 
-This is a personal environment setup repository. While you're welcome to fork and modify it for your own use, pull requests are not accepted.
+```bash
+# Sync dotfiles to repository
+~/env/scripts/sync_dotfiles.sh
+
+# Sync encrypted files
+~/env/scripts/sync_encrypted.sh
+
+# Sync everything
+~/env/scripts/sync_env.sh -d -e -p
+```
+
+### Run Tests
+
+```bash
+# Run all tests
+cd ~/env/tests
+./setup_test.sh
+./sync_dotfiles_test.sh
+```
+
+## Environment Variables
+
+- `ENV_DEBUG`: Set to `1` for debug output
+- `ENV_DIR`: Override environment directory (default: `~/env`)
+- `BW_EMAIL`: Bitwarden email address
+- `BW_CLIENTID`: Bitwarden OAuth2 client ID (optional)
+- `BW_CLIENTSECRET`: Bitwarden OAuth2 client secret (optional)
+- `BW_SESSION`: Bitwarden session token (auto-generated)
+
+## Documentation
+
+- [Setup Script](./docs/SETUP_SCRIPT.md) - Main setup script documentation
+- [Prerun Script](./docs/PRERUN_SCRIPT.md) - Pre-run check documentation
+- [Sync Dotfiles](./docs/SYNC_DOTFILES.md) - Dotfiles synchronization
+- [Sync Encrypted](./docs/SYNC_ENCRYPTED.md) - Encrypted files synchronization
 
 ## License
 

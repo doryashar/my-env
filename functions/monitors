@@ -91,8 +91,12 @@ zerotier_clients() {
         return 1
     fi
 
-    echo "$result" | jq -r '[.[] | select(.name != "" and .description != "")] | sort_by(.lastSeen | tonumber) |
-        .[] | "\(.name): \(.description) | IP Address(es): \(.config.ipAssignments | join(", ")) | Last Seen: \(.lastSeen | tonumber | . / 1000 | todate)"' |
-        column -t -s '|' | tee "$cache_file"
+    # Format output with header and sorted by last seen
+    {
+        echo "Client | IP Addresses | Last Seen"
+        echo "-------|--------------|----------"
+        echo "$result" | jq -r '[.[] | select(.name != "" and .description != "")] | sort_by(.lastSeen | tonumber) |
+            .[] | "\(.name): \(.description) | \(.config.ipAssignments | join(", ")) | \(.lastSeen | tonumber | . / 1000 | todate)"'
+    } | column -t -s '|' -o ' | ' | tee "$cache_file"
 }
 

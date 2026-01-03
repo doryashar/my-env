@@ -77,14 +77,22 @@ zerotier_clients() {
     # Fetch with timeout
     local result
     result=$(timeout -k 1 5 curl -s -H "Authorization: bearer $ZEROTIER_API_KEY" \
-        "https://my.zerotier.com/api/network/$ZEROTIER_NETWORK_ID/member" 2>/dev/null) || {
+        "https://my.zerotier.com/api/v1/network/$ZEROTIER_NETWORK_ID/member" 2>/dev/null) || {
         echo "Unable to reach ZeroTier API"
         [[ -f "$cache_file" ]] && cat "$cache_file"
         return 1
     }
 
-    echo "$result" | jq -r '.[] | select(.name != "" and .description != "") |
-        "\(.name): \(.description) | IP Address(es): \(.config.ipAssignments | join(", ")) | Last Seen: \(.lastSeen | tonumber | todate)"' |
-        sort -t ":" -k5,5n | tee "$cache_file"
+    # Check if result is valid JSON
+    if ! echo "$result" | jq . >/dev/null 2>&1; then
+        echo "Error: Invalid API response. Raw output:"
+        echo "$result"
+        [[ -f "$cache_file" ]] && cat "$cache_file"
+        return 1
+    fi
+
+    echo "$result" | jq -r '[.[] | select(.name != "" and .description != "")] | sort_by(.lastSeen | tonumber) |
+        .[] | "\(.name): \(.description) | IP Address(es): \(.config.ipAssignments | join(", ")) | Last Seen: \(.lastSeen | tonumber | . / 1000 | todate)"' |
+        column -t -s '|' | tee "$cache_file"
 }
 

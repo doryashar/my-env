@@ -53,7 +53,8 @@ error() {
 }
 
 # Get script directory and ENV_DIR
-SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+# Use BASH_SOURCE to get the correct path even when sourced
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ENV_DIR=$(dirname "$SCRIPT_DIR")
 
 # Source common functions if available
@@ -196,17 +197,18 @@ install_apt_packages() {
         "ripgrep"
         "fd-find"
         "bat"
-        "exa"
+        "eza"
+        "jq"
         "unzip"
         "zip"
         "fontconfig"
-        "fc-cache"
     )
 
     # Check which packages are missing
     local missing_packages=()
     for pkg in "${packages[@]}"; do
-        if ! dpkg -l | grep -q "^ii  $pkg"; then
+        # Use dpkg -s for exact package status check (avoids substring matches)
+        if ! dpkg -s "$pkg" &>/dev/null; then
             missing_packages+=("$pkg")
         fi
     done
@@ -364,9 +366,15 @@ setup_zsh() {
 
     # Install z4h (Zsh for Humans) if not already installed
     if [[ ! -f "$HOME/.z4h.zsh" ]]; then
-        info "Installing Zsh for Humans (z4h)..."
-        curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install |
-            bash -s -- --yes --skip-x11-checks
+        # Check if we have a TTY (interactive terminal)
+        if [[ -t 0 ]]; then
+            info "Installing Zsh for Humans (z4h)..."
+            curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install |
+                bash -s -- --yes --skip-x11-checks
+        else
+            warning "No TTY detected, skipping z4h installation (non-interactive environment)"
+            debug "z4h will be installed when you run setup in an interactive shell"
+        fi
     else
         debug "z4h already installed"
     fi
@@ -393,11 +401,120 @@ setup_zsh() {
 sync_encrypted_files() {
     info "Syncing encrypted files..."
 
-    if [[ -f "$ENV_DIR/scripts/sync_encrypted.sh" ]]; then
+    if [[ ! -f "$ENV_DIR/scripts/sync_encrypted.sh" ]]; then
+        warning "sync_encrypted.sh not found"
+        return 0
+    fi
+
+    # Load config to get PRIVATE_URL
+    local private_url=""
+    if [[ -f "$ENV_DIR/config/repo.conf" ]]; then
+        source "$ENV_DIR/config/repo.conf"
+        private_url="$PRIVATE_URL"
+    fi
+
+    if [[ -z "$private_url" ]]; then
+        warning "PRIVATE_URL not set in config/repo.conf"
+        return 0
+    fi
+
+    # Check if remote repo exists
+    info "Checking if private repository exists..."
+    if git ls-remote "$private_url" HEAD &>/dev/null; then
+        debug "Private repository exists, syncing..."
         bash "$ENV_DIR/scripts/sync_encrypted.sh"
     else
-        warning "sync_encrypted.sh not found"
+        warning "Private repository does not exist: $private_url"
+        echo ""
+        echo "Would you like to create a new private repository for encrypted files?"
+        read -p "Create repository? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            create_private_repo "$private_url"
+            # Now sync after creating
+            bash "$ENV_DIR/scripts/sync_encrypted.sh"
+        else
+            info "Skipping encrypted files sync. You can create it later:"
+            echo "  1. Create a private repo on GitHub"
+            echo "  2. Update PRIVATE_URL in $ENV_DIR/config/repo.conf"
+            echo "  3. Run: $ENV_DIR/scripts/sync_encrypted.sh"
+        fi
     fi
+}
+
+# Create a new private GitHub repository
+#
+# Args:
+#   $1 - Repository URL (e.g., git@github.com:owner/repo.git)
+#
+# Returns: 0 - Success, 1 - Failed
+create_private_repo() {
+    local repo_url="$1"
+    local repo_name=""
+    local owner=""
+
+    # Parse the repo URL
+    if [[ "$repo_url" =~ git@github\.com:([^/]+)/(.+)\.git ]]; then
+        owner="${BASH_REMATCH[1]}"
+        repo_name="${BASH_REMATCH[2]}"
+    elif [[ "$repo_url" =~ github\.com/([^/]+)/(.+)(\.git)? ]]; then
+        owner="${BASH_REMATCH[1]}"
+        repo_name="${BASH_REMATCH[2]%.git}"
+    else
+        error "Could not parse repository URL: $repo_url"
+        return 1
+    fi
+
+    info "Creating private repository: $owner/$repo_name"
+
+    # Check if gh CLI is available
+    if command -v gh &>/dev/null; then
+        if gh repo create "$owner/$repo_name" --private --source=. --remote=origin 2>/dev/null; then
+            info "Repository created successfully!"
+            return 0
+        else
+            warning "gh CLI failed. Trying manual creation..."
+        fi
+    fi
+
+    # Fallback: Check for GitHub token
+    local github_token=""
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        github_token="$GITHUB_TOKEN"
+    elif command -v bw &>/dev/null && [[ -n "${BW_SESSION:-}" ]]; then
+        github_token=$(bw get password GITHUB_API_KEY 2>/dev/null) || true
+    fi
+
+    if [[ -n "$github_token" ]]; then
+        # Create via GitHub API
+        local api_url="https://api.github.com/user/repos"
+        local response=$(curl -s -X POST -H "Authorization: token $github_token" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "{\"name\":\"$repo_name\",\"private\":true}" \
+            "$api_url")
+
+        if echo "$response" | jq -e '.clone_url' >/dev/null 2>&1; then
+            info "Repository created successfully via API!"
+            return 0
+        else
+            error "Failed to create repository via GitHub API"
+            echo "Response: $response"
+            return 1
+        fi
+    fi
+
+    # If all else fails, provide manual instructions
+    warning "Could not auto-create repository. Please create it manually:"
+    echo ""
+    echo "1. Visit: https://github.com/new"
+    echo "2. Repository name: $repo_name"
+    echo "3. Set to **Private**"
+    echo "4. Click 'Create repository'"
+    echo "5. Run: git init $ENV_DIR/tmp/private_encrypted"
+    echo "6. Run: git remote add origin $repo_url"
+    echo "7. Run: $ENV_DIR/scripts/sync_encrypted.sh"
+    echo ""
+    return 1
 }
 
 # Install fonts

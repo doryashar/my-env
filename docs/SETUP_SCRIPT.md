@@ -84,6 +84,29 @@ Extracts and sets up binaries:
 
 Calls `sync_encrypted.sh` to sync encrypted files via Bitwarden.
 
+**New behavior**:
+- Checks if the private repository exists (from `PRIVATE_URL` in config)
+- If repository doesn't exist, prompts to create it
+- Attempts to create the repository using `gh` CLI or GitHub API
+- Falls back to manual instructions if automated creation fails
+- Only syncs if repository exists
+
+### `create_private_repo(repo_url)`
+
+Creates a new private GitHub repository for encrypted files.
+
+**Args**:
+- `repo_url`: Repository URL (e.g., `git@github.com:owner/repo.git`)
+
+**Creation methods** (tried in order):
+1. `gh` CLI (GitHub CLI tool)
+2. GitHub API (requires `GITHUB_TOKEN` or Bitwarden `GITHUB_API_KEY`)
+3. Manual instructions
+
+**Returns**:
+- `0`: Success
+- `1`: Failed
+
 ### `install_dotfiles()`
 
 Calls `sync_dotfiles.sh` to sync configuration files.

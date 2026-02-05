@@ -1,0 +1,22 @@
+pingme() {
+  local message="$*"
+  if [[ -z "$message" ]]; then
+    message="Task completed!"
+  fi
+
+  # 1. Capture the HTTP response body in a variable
+  # 2. Capture the HTTP status code separately
+  local response
+  response=$(curl --silent --show-error \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"$message\", \"disable_notification\": true}" \
+    "https://api.telegram.org/$TELEGRAM_BOT_TOKEN/sendMessage")
+
+  # Check if curl succeeded and if the JSON response contains "ok":true
+  if [[ $? -ne 0 ]] || [[ "$response" != *"\"ok\":true"* ]]; then
+    echo "❌ Error: Failed to send Telegram message."
+    echo "Response from server: $response"
+    return 1
+  fi
+}

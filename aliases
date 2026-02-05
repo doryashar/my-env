@@ -68,3 +68,8 @@ alias claude_glm='ANTHROPIC_AUTH_TOKEN="${GLM_API_KEY}" ANTHROPIC_BASE_URL="http
 ## Environment sync
 ##################################
 alias envsync="${ENV_DIR:-$HOME/env}/scripts/sync_env.sh --dotfiles_sync --encrypted_sync --pull --push"
+
+##################################
+## Networking
+##################################
+alias nvdd='globalprotect connect --portal nvidia.gpcloudservice.com'

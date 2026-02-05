@@ -10,7 +10,7 @@ if [[ -f "$ENV_DIR/config/repo.conf" ]]; then
 fi
 
 # Configuration variables
-REMOTE_REPO="git@github.com:doryashar/encrypted.git"
+REMOTE_REPO="${PRIVATE_URL:-git@github.com:doryashar/encrypted.git}"
 LOCAL_REPO_PATH="$ENV_DIR/tmp/private_encrypted"
 DECRYPTED_DIR="$ENV_DIR/tmp/private"
 LOCAL_HASH_FILE="$ENV_DIR/tmp/local_hashes"
@@ -461,6 +461,40 @@ get_bw_password() {
     export BW_PASSWORD
 }
 
+# Check if the remote repository exists
+#
+# Returns:
+#   0 - Repository exists
+#   1 - Repository does not exist
+#
+# Side Effects:
+#   - None
+check_remote_repo_exists() {
+    local repo_url="$1"
+
+    # Extract owner and repo name from various URL formats
+    # Handles: git@github.com:owner/repo.git, https://github.com/owner/repo.git, etc.
+    if [[ "$repo_url" =~ git@github\.com:([^/]+)/(.+)\.git ]]; then
+        local owner="${BASH_REMATCH[1]}"
+        local repo_name="${BASH_REMATCH[2]}"
+    elif [[ "$repo_url" =~ github\.com/([^/]+)/(.+)(\.git)? ]]; then
+        local owner="${BASH_REMATCH[1]}"
+        local repo_name="${BASH_REMATCH[2]%.git}"
+    else
+        warning "Could not parse repository URL: $repo_url"
+        return 1
+    fi
+
+    debug "Checking if repo exists: $owner/$repo_name"
+
+    # Try to fetch via git ls-remote (works with SSH)
+    if git ls-remote "$repo_url" HEAD &>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Authenticate with Bitwarden and retrieve secret keys
 #
 # Returns:
@@ -530,6 +564,18 @@ get_secret_keys() {
 #   - Registers cleanup trap on EXIT
 main() {
   title "Synchronizing Private files"
+
+  # Check if remote repository exists first
+  if ! check_remote_repo_exists "$REMOTE_REPO"; then
+    error "Private repository does not exist: $REMOTE_REPO"
+    echo ""
+    echo "Please run setup.sh to create the private repository:"
+    echo "  ~/env/scripts/setup.sh"
+    echo ""
+    echo "Or manually create a private repo and update PRIVATE_URL in ~/env/config/repo.conf"
+    exit 1
+  fi
+
   if  ! command_exists bw; then
     error "Command BW not found, quitting"
     exit 1

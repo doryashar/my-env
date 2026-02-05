@@ -16,6 +16,7 @@ The `sync_encrypted.sh` script synchronizes encrypted files between your local s
 - **Merge Support**: Handles conflicts with three-way merge
 - **Automatic Decryption**: Decrypts files to a working directory
 - **Change Detection**: Uses file hashing to detect changes
+- **Repo Validation**: Checks if remote repository exists before syncing
 
 ## Usage
 
@@ -37,18 +38,55 @@ The `sync_encrypted.sh` script synchronizes encrypted files between your local s
 
 ### Repository Settings
 
-The script uses the following configuration (from `config/repo.conf`):
+The script uses `PRIVATE_URL` from `config/repo.conf`:
 
 ```bash
-PRIVATE_URL="git@github.com:doryashar/encrypted"
+PRIVATE_URL="git@github.com:your-username/encrypted.git"
 ```
+
+**Important**: The repository URL is now sourced from `PRIVATE_URL` in `config/repo.conf`, not hardcoded.
 
 ### Paths
 
-- **Remote Repository**: `git@github.com:doryashar/encrypted`
+- **Remote Repository**: From `PRIVATE_URL` in config
 - **Local Repository**: `~/env/tmp/private_encrypted`
 - **Decrypted Directory**: `~/env/tmp/private`
 - **Recipients File**: `~/env/tmp/private/age-recipients`
+
+## Repository Check
+
+The script now validates that the remote repository exists before attempting to sync.
+
+### If Repository Does Not Exist
+
+If the `PRIVATE_URL` repository doesn't exist, the script will:
+
+1. **Exit immediately** with an error message
+2. **Suggest running setup.sh** to create the repository
+3. **Provide manual instructions** for creating the repo yourself
+
+```
+[ERROR] Private repository does not exist: git@github.com:user/repo.git
+
+Please run setup.sh to create the private repository:
+  ~/env/scripts/setup.sh
+
+Or manually create a private repo and update PRIVATE_URL in ~/env/config/repo.conf
+```
+
+### Creating the Repository
+
+Run the setup script to create the repository:
+
+```bash
+~/env/scripts/setup.sh
+```
+
+The setup script will:
+1. Check if the repository exists
+2. Prompt you to create it if it doesn't exist
+3. Attempt to create it using `gh` CLI or GitHub API
+4. Fall back to manual instructions if automated creation fails
 
 ### Bitwarden Items
 

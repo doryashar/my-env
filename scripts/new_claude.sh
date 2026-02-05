@@ -125,32 +125,17 @@ detect_and_activate_venv && ${install_cmd}exec claude --dangerously-skip-permiss
 EOF
 }
 
-# Setup docker volume and permissions
+# Setup docker volume and permissions (now uses host mount instead of separate volume)
 setup_docker_volume() {
-  local volume_name="$1"
-  local claude_home="$2"
-  local user="$3"
-  local image="$4"
+  local claude_home="$1"
 
-  echo ">>> Using persistent Claude config volume: $volume_name"
+  echo ">>> Using host Claude config directory: $HOME/.claude -> $claude_home"
 
-  # Check if this is first run
-  local volume_exists=$(docker volume ls -q -f name="^${volume_name}$")
-  if [ -z "$volume_exists" ]; then
-    echo ">>> First run: Creating persistent credentials volume"
-    echo ">>> IMPORTANT: You'll need to complete Claude onboarding:"
-    echo ">>>   1. Select your preferred theme"
-    echo ">>>   2. Complete authentication (browser will open)"
-    echo ">>> Your credentials will persist across all worktree sessions"
-
-    # Create volume and set correct permissions
-    docker volume create "$volume_name" > /dev/null
-    docker run --rm --user root \
-      -v "$volume_name:$claude_home" \
-      "$image" \
-      sh -c "chown -R $user:$user $claude_home && chmod 700 $claude_home"
-  else
-    echo ">>> Using existing credentials from persistent volume"
+  # Ensure host .claude directory exists
+  if [ ! -d "$HOME/.claude" ]; then
+    echo ">>> Creating host .claude directory: $HOME/.claude"
+    mkdir -p "$HOME/.claude"
+    chmod 700 "$HOME/.claude"
   fi
 }
 
@@ -207,7 +192,6 @@ run_docker_container() {
   local image="$1"
   local user="$2"
   local claude_home="$3"
-  local volume_name="$4"
   local extra_args=()
 
   # Add user flag if specified
@@ -222,8 +206,8 @@ run_docker_container() {
   local cmd
   cmd=$(build_container_command)
 
-  # Setup volume
-  setup_docker_volume "$volume_name" "$claude_home" "$user" "$image"
+  # Setup host mount for .claude directory
+  setup_docker_volume "$claude_home"
 
   # Prepare environment variables and provide feedback
   local env_vars
@@ -237,10 +221,10 @@ run_docker_container() {
     echo ">>> Passing GitHub token as GH_TOKEN"
   fi
 
-  # Run the container
+  # Run the container with host .claude directory mounted
   docker run --rm -it \
     -v "$REPO_ROOT:/workspace" \
-    -v "$volume_name:$claude_home" \
+    -v "$HOME/.claude:$claude_home" \
     -w "/workspace/$RELATIVE_PATH" \
     "${env_vars[@]}" \
     "${extra_args[@]}" \
@@ -387,7 +371,7 @@ if [ "$USE_DEVCONTAINER" = true ]; then
   fi
 
   # Run the devcontainer with our unified function
-  run_docker_container "$DEVCONTAINER_IMAGE" "node" "/home/node/.claude" "claude-devcontainer-config"
+  run_docker_container "$DEVCONTAINER_IMAGE" "node" "/home/node/.claude"
 
 elif [ "$USE_CONTAINER" = true ]; then
   if [ "$USE_GLM" = true ]; then
@@ -409,7 +393,7 @@ elif [ "$USE_CONTAINER" = true ]; then
   fi
 
   # Run the container with our unified function
-  run_docker_container "$CONTAINER_IMAGE" "agent" "/home/agent/.claude" "claude-sandbox-config"
+  run_docker_container "$CONTAINER_IMAGE" "agent" "/home/agent/.claude"
 
 else
   if [ "$USE_GLM" = true ]; then

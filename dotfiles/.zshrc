@@ -109,3 +109,7 @@ setopt no_auto_menu  # require an extra TAB press to open the completion menu
 
 
 alias glm="ANTHROPIC_AUTH_TOKEN=\"\${GLM_API_KEY}\" ANTHROPIC_BASE_URL=\"https://api.z.ai/api/anthropic\" API_TIMEOUT_MS=\"3000000\" ANTHROPIC_DEFAULT_HAIKU_MODEL=\"glm-4.5-air\" ANTHROPIC_DEFAULT_SONNET_MODEL=\"glm-4.7\" ANTHROPIC_DEFAULT_OPUS_MODEL=\"glm-4.7\" claude --dangerously-skip-permissions"
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion

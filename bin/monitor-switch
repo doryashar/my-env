@@ -1,0 +1,238 @@
+#!/bin/bash
+
+# Monitor switching script for Wayland/GNOME
+# Toggles between two monitor profiles
+
+PYTHON_HELPER="$HOME/.local/bin/monitor-switch-gnome.py"
+
+# Monitor profiles
+# Physical arrangement (left to right): HP, DEL, LEN
+# Monitors must be adjacent in GNOME (no gaps)
+
+# Profile 1: HP + DEL (DVI-I-2-2 + DVI-I-1-1)
+PROFILE1_MONITORS=("DVI-I-2-2" "DVI-I-1-1")
+PROFILE1_PRIMARY="DVI-I-2-2"  # HP is primary
+PROFILE1_NAME="HP + DEL"
+
+# Profile 2: LEN (DP-1)
+PROFILE2_MONITORS=("DP-1")
+PROFILE2_PRIMARY="DP-1"  # LEN is primary
+PROFILE2_NAME="LEN"
+
+# Monitor order (left to right) - determines positioning
+declare -a MONITOR_ORDER=("DVI-I-2-2" "DVI-I-1-1" "DP-1")  # HP, DEL, LEN
+
+# Keybinding configuration
+KEYBINDING_NAME="Monitor Switch"
+KEYBINDING_BINDING="<Super><Shift>m"
+KEYBINDING_COMMAND="/home/yashar/env/bin/monitor-switch toggle"
+KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+
+# Verify and set up keybinding
+ensure_keybinding() {
+    # Check if custom keybinding exists and points to this script
+    local current_name=$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" name 2>/dev/null)
+    local current_command=$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" command 2>/dev/null)
+    local current_binding=$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" binding 2>/dev/null)
+
+    # Check if the keybinding is correctly configured
+    if [ "$current_name" = "'$KEYBINDING_NAME'" ] && \
+       [ "$current_command" = "'$KEYBINDING_COMMAND'" ] && \
+       [ "$current_binding" = "'$KEYBINDING_BINDING'" ]; then
+        return 0
+    fi
+
+    # Keybinding not set correctly - set it up
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" name "$KEYBINDING_NAME"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" command "$KEYBINDING_COMMAND"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" binding "$KEYBINDING_BINDING"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$KEYBINDING_PATH']"
+
+    echo "Keybinding registered: Super+Shift+M"
+}
+
+# Detect which monitors are currently active (Wayland-compatible)
+get_active_monitors() {
+    # xrandr --query | grep " connected" | grep -v "disconnected" | awk '{print $1}'
+    "$PYTHON_HELPER" get-active
+}
+
+# Determine current profile based on active monitors
+get_current_profile() {
+    local active_monitors=($(get_active_monitors))
+
+    # Convert to space-separated string for comparison
+    local active_str="${active_monitors[*]}"
+    local profile1_str="${PROFILE1_MONITORS[*]}"
+    local profile2_str="${PROFILE2_MONITORS[*]}"
+
+    # Sort both arrays for comparison
+    active_str=$(echo "$active_str" | tr ' ' '\n' | sort | tr '\n' ' ')
+    profile1_str=$(echo "$profile1_str" | tr ' ' '\n' | sort | tr '\n' ' ')
+    profile2_str=$(echo "$profile2_str" | tr ' ' '\n' | sort | tr '\n' ' ')
+
+    if [ "$active_str" = "$profile1_str" ]; then
+        echo "profile1"
+    elif [ "$active_str" = "$profile2_str" ]; then
+        echo "profile2"
+    else
+        # Default to profile1 if current state doesn't match either profile
+        echo "profile1"
+    fi
+}
+
+# Build position arguments for monitors based on their physical order
+# Monitors will be positioned adjacent to each other (no gaps)
+build_position_args() {
+    local enabled_monitors=("$@")
+    local args=()
+    local x_pos=0
+
+    # Standard widths for each monitor type
+    declare -A MONITOR_WIDTHS
+    MONITOR_WIDTHS["DVI-I-2-2"]=1920   # HP
+    MONITOR_WIDTHS["DVI-I-1-1"]=1920   # DEL
+    MONITOR_WIDTHS["DP-1"]=5120      # LEN
+
+    # Go through monitors in physical order, position only enabled ones
+    for monitor in "${MONITOR_ORDER[@]}"; do
+        # Check if this monitor is in the enabled list
+        local is_enabled=false
+        for enabled in "${enabled_monitors[@]}"; do
+            if [ "$monitor" = "$enabled" ]; then
+                is_enabled=true
+                break
+            fi
+        done
+
+        if [ "$is_enabled" = true ]; then
+            args+=("--pos" "$monitor" "$x_pos")
+            x_pos=$((x_pos + ${MONITOR_WIDTHS[$monitor]:-1920}))
+        fi
+    done
+
+    echo "${args[@]}"
+}
+
+# Toggle between profiles
+toggle_profiles() {
+    local current_profile=$(get_current_profile)
+
+    if [ "$current_profile" = "profile1" ]; then
+        echo "Switching to Profile 2: $PROFILE2_NAME (primary: $PROFILE2_PRIMARY)"
+        local pos_args=($(build_position_args "${PROFILE2_MONITORS[@]}"))
+        "$PYTHON_HELPER" profile --primary "$PROFILE2_PRIMARY" "${pos_args[@]}" "${PROFILE2_MONITORS[@]}"
+    else
+        echo "Switching to Profile 1: $PROFILE1_NAME (primary: $PROFILE1_PRIMARY)"
+        local pos_args=($(build_position_args "${PROFILE1_MONITORS[@]}"))
+        "$PYTHON_HELPER" profile --primary "$PROFILE1_PRIMARY" "${pos_args[@]}" "${PROFILE1_MONITORS[@]}"
+    fi
+}
+
+# Enable specific profile
+enable_profile() {
+    local profile=$1
+
+    if [ "$profile" = "1" ] || [ "$profile" = "profile1" ]; then
+        echo "Enabling Profile 1: $PROFILE1_NAME (primary: $PROFILE1_PRIMARY)"
+        local pos_args=($(build_position_args "${PROFILE1_MONITORS[@]}"))
+        "$PYTHON_HELPER" profile --primary "$PROFILE1_PRIMARY" "${pos_args[@]}" "${PROFILE1_MONITORS[@]}"
+    elif [ "$profile" = "2" ] || [ "$profile" = "profile2" ]; then
+        echo "Enabling Profile 2: $PROFILE2_NAME (primary: $PROFILE2_PRIMARY)"
+        local pos_args=($(build_position_args "${PROFILE2_MONITORS[@]}"))
+        "$PYTHON_HELPER" profile --primary "$PROFILE2_PRIMARY" "${pos_args[@]}" "${PROFILE2_MONITORS[@]}"
+    else
+        echo "Unknown profile: $profile"
+        echo "Valid profiles: 1 (or profile1), 2 (or profile2)"
+        return 1
+    fi
+}
+
+# Enable specific monitors
+enable_monitors() {
+    local monitors=("$@")
+    echo "Enabling monitors: ${monitors[*]}"
+    "$PYTHON_HELPER" profile "${monitors[@]}"
+}
+
+# List connected monitors
+list_monitors() {
+    "$PYTHON_HELPER" list
+    echo ""
+    echo "Current profile: $(get_current_profile)"
+    echo ""
+    echo "Profiles:"
+    echo "  Profile 1: $PROFILE1_NAME (${PROFILE1_MONITORS[*]}) - primary: $PROFILE1_PRIMARY"
+    echo "  Profile 2: $PROFILE2_NAME (${PROFILE2_MONITORS[*]}) - primary: $PROFILE2_PRIMARY"
+}
+
+# Show usage
+show_usage() {
+    cat << EOF
+Monitor Switching Tool (Wayland/GNOME)
+
+Usage:
+  monitor-switch              Toggle between profiles
+  monitor-switch toggle       Toggle between profiles
+  monitor-switch profile <1|2>     Enable specific profile
+  monitor-switch enable <monitors...>   Enable specific monitor(s)
+  monitor-switch list         List all monitors and profiles
+  monitor-switch help         Show this help message
+
+Profiles:
+  Profile 1: $PROFILE1_NAME (${PROFILE1_MONITORS[*]}) - primary: $PROFILE1_PRIMARY
+  Profile 2: $PROFILE2_NAME (${PROFILE2_MONITORS[*]}) - primary: $PROFILE2_PRIMARY
+
+Examples:
+  monitor-switch                     # Toggle between profiles
+  monitor-switch profile 1           # Enable Profile 1 (HP + DEL)
+  monitor-switch profile 2           # Enable Profile 2 (LEN)
+  monitor-switch enable DP-1         # Custom: enable specific monitors
+  monitor-switch list                # List all monitors
+
+Note:
+  This script uses GNOME's display management API on Wayland.
+  Profiles define which monitors are enabled side by side.
+EOF
+}
+
+# Main logic
+# Ensure keybinding is set up (silent for most operations)
+if [[ "$1" != "list" && "$1" != "help" && "$1" != "--help" && "$1" != "-h" ]]; then
+    ensure_keybinding
+fi
+
+case "${1:-toggle}" in
+    toggle)
+        toggle_profiles
+        ;;
+    profile)
+        shift
+        if [ $# -eq 0 ]; then
+            echo "Error: Please specify a profile (1 or 2)"
+            echo "Usage: monitor-switch profile <1|2>"
+            exit 1
+        fi
+        enable_profile "$1"
+        ;;
+    enable)
+        shift
+        if [ $# -eq 0 ]; then
+            echo "Error: Please specify at least one monitor"
+            echo "Usage: monitor-switch enable <monitor1> [monitor2] ..."
+            exit 1
+        fi
+        enable_monitors "$@"
+        ;;
+    list)
+        list_monitors
+        ;;
+    help|--help|-h)
+        show_usage
+        ;;
+    *)
+        echo "Unknown command: $1"
+        show_usage
+        exit 1
+        ;;
+esac

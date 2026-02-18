@@ -17,6 +17,8 @@ The `sync_encrypted.sh` script synchronizes encrypted files between your local s
 - **Automatic Decryption**: Decrypts files to a working directory
 - **Change Detection**: Uses file hashing to detect changes
 - **Repo Validation**: Checks if remote repository exists before syncing
+- **Diff Preview**: Shows changed files and allows viewing diffs before syncing
+- **Interactive Confirmation**: Prompts for confirmation before applying changes
 
 ## Usage
 
@@ -114,10 +116,76 @@ The script expects these items in your Bitwarden vault:
 1. Check for remote changes (git fetch)
 2. Check for local changes (file hashing)
 3. Handle four cases:
-   - No changes: Do nothing
-   - Only remote: Pull and decrypt
-   - Only local: Encrypt and push
-   - Both: Merge, encrypt, and push
+    - No changes: Do nothing
+    - Only remote: Show changes, prompt for confirmation, pull and decrypt
+    - Only local: Show changes, prompt for confirmation, encrypt and push
+    - Both: Show changes, prompt for confirmation, merge, encrypt, and push
+```
+
+## Diff Preview Feature
+
+When changes are detected, the script provides an interactive preview of modified files:
+
+### Remote Changes
+
+When only remote changes are detected:
+1. Shows list of changed remote files
+2. Offers options:
+   - `[1-N]`: View diff for specific file
+   - `[a]`: View all diffs
+   - `[y]`: Proceed with sync
+   - `[n]`: Cancel sync
+3. After reviewing, prompts for final confirmation
+
+### Local Changes
+
+When only local changes are detected:
+1. Shows list of changed local files
+2. Offers options:
+   - `[1-N]`: View diff for specific file
+   - `[a]`: View all diffs
+   - `[y]`: Proceed with sync
+   - `[n]`: Cancel sync
+3. After reviewing, prompts for final confirmation
+
+### Both Remote and Local Changes
+
+When both remote and local have changes:
+1. Shows both local and remote changed files separately
+2. Displays a summary of all changes
+3. Prompts for confirmation before proceeding with merge
+
+### Example Interaction
+
+```
+====== Remote Changes Detected ======
+
+The following files have changed remotely:
+
+  [1] config/ssh_config
+  [2] secrets/api_keys.txt
+
+Options:
+  [1-2] - View diff for specific file
+  [a]             - View all diffs
+  [y]             - Proceed with sync
+  [n]             - Cancel sync
+
+Choose an option: 1
+
+====== Diff for: config/ssh_config ======
+
+--- current version
++++ remote version
+@@ -1,5 +1,6 @@
+ Host github.com
+     User git
+     IdentityFile ~/.ssh/id_rsa
++    Compression yes
+
+Press Enter to continue...
+
+Do you want to proceed with the sync? (y/n) y
 ```
 
 ## Functions
@@ -186,6 +254,39 @@ Authenticates with Bitwarden and retrieves secret keys.
 - `BW_SESSION`: Bitwarden session token
 - `GITHUB_SSH_PRIVATE_KEY`: GitHub token
 - `AGE_SECRET`: Age encryption key
+
+### `show_changed_files_and_confirm(change_type, remote_temp_dir)`
+
+Displays changed files and allows user to review diffs before confirming sync.
+
+**Parameters**:
+- `change_type`: "remote" or "local"
+- `remote_temp_dir`: Optional temp directory with remote decrypted files
+
+**Offers**:
+- View diff for specific file
+- View all diffs
+- Proceed with sync
+- Cancel sync
+
+**Returns**:
+- `0`: User confirmed to proceed
+- `1`: User chose to abort
+
+### `show_file_diff(file, change_type)`
+
+Shows diff for a specific file.
+
+**Parameters**:
+- `file`: File path (relative)
+- `change_type`: "remote" or "local"
+
+**For remote changes**:
+- Decrypts current and remote versions
+- Shows unified diff
+
+**For local changes**:
+- Shows current file content
 
 ## File Format
 

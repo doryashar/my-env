@@ -546,6 +546,167 @@ get_secret_keys() {
     fi
 }
 
+# Display changed files and allow viewing diffs
+#
+# Args:
+#   $1 - Type of changes: "remote" or "local"
+#   $2 - Optional: temp directory with remote decrypted files (for remote changes)
+#
+# Returns:
+#   0 - User confirmed to proceed
+#   1 - User chose to abort
+#
+# Side Effects:
+#   - Displays changed files
+#   - Allows user to view diffs interactively
+show_changed_files_and_confirm() {
+    local change_type="$1"
+    local remote_temp_dir="$2"
+    local changed_files=()
+    local file_index=1
+
+    if [ "$change_type" = "remote" ]; then
+        title "Remote Changes Detected"
+        echo ""
+        info "The following files have changed remotely:"
+        echo ""
+
+        cd "$LOCAL_REPO_PATH" || exit 1
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            base_name="${file%.age}"
+            changed_files+=("$base_name")
+            echo "  [$file_index] $base_name"
+            ((file_index++))
+        done < <(git diff --name-only HEAD @{upstream} 2>/dev/null)
+
+    elif [ "$change_type" = "local" ]; then
+        title "Local Changes Detected"
+        echo ""
+        info "The following files have changed locally:"
+        echo ""
+
+        local temp_hash_file="$TEMP_DIR/temp_hashes_local"
+        hashit "$DECRYPTED_DIR" "$temp_hash_file"
+
+        while IFS= read -r local_file; do
+            [ -z "$local_file" ] && continue
+            changed_files+=("$local_file")
+            echo "  [$file_index] $local_file"
+            ((file_index++))
+        done < <(diff "$LOCAL_HASH_FILE" "$temp_hash_file" 2>/dev/null | grep "^>" | awk '{for (i=3; i<=NF; i++) printf $i " "; print ""}' | sed 's/ $//')
+    fi
+
+    if [ ${#changed_files[@]} -eq 0 ]; then
+        echo "  No specific file changes detected."
+        return 0
+    fi
+
+    echo ""
+    echo "Options:"
+    echo "  [1-${#changed_files[@]}] - View diff for specific file"
+    echo "  [a]             - View all diffs"
+    echo "  [y]             - Proceed with sync"
+    echo "  [n]             - Cancel sync"
+    echo ""
+    read -p "Choose an option: " choice
+
+    case "$choice" in
+        [yY])
+            echo ""
+            return 0
+            ;;
+        [nN])
+            echo ""
+            info "Sync cancelled by user."
+            exit 0
+            ;;
+        [aA])
+            echo ""
+            if [ "$change_type" = "remote" ]; then
+                for file in "${changed_files[@]}"; do
+                    show_file_diff "$file" "remote"
+                done
+            else
+                for file in "${changed_files[@]}"; do
+                    show_file_diff "$file" "local"
+                done
+            fi
+            ;;
+        *)
+            if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#changed_files[@]} ]; then
+                local selected_file="${changed_files[$((choice-1))]}"
+                show_file_diff "$selected_file" "$change_type"
+            else
+                error "Invalid option. Please try again."
+                show_changed_files_and_confirm "$change_type" "$remote_temp_dir"
+                return $?
+            fi
+            ;;
+    esac
+
+    echo ""
+    read -p "Do you want to proceed with the sync? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        info "Sync cancelled by user."
+        exit 0
+    fi
+
+    return 0
+}
+
+# Show diff for a specific file
+#
+# Args:
+#   $1 - File path (relative)
+#   $2 - Type: "remote" or "local"
+#
+# Returns:
+#   0 - Success
+show_file_diff() {
+    local file="$1"
+    local change_type="$2"
+    local encrypted_file="${file}.age"
+
+    echo ""
+    title "Diff for: $file"
+    echo ""
+
+    if [ "$change_type" = "remote" ]; then
+        local temp_file="$TEMP_DIR/remote_decrypted_temp_$$.txt"
+
+        git show HEAD:"$encrypted_file" 2>/dev/null | age -d -i <(echo "$AGE_SECRET") -o "$TEMP_DIR/current_decrypted" 2>/dev/null || true
+        git show @{upstream}:"$encrypted_file" 2>/dev/null | age -d -i <(echo "$AGE_SECRET") -o "$TEMP_DIR/remote_decrypted" 2>/dev/null || true
+
+        if [ -f "$TEMP_DIR/current_decrypted" ] && [ -f "$TEMP_DIR/remote_decrypted" ]; then
+            if command_exists diff; then
+                diff -u "$TEMP_DIR/current_decrypted" "$TEMP_DIR/remote_decrypted" || true
+            else
+                echo "Current version:"
+                cat "$TEMP_DIR/current_decrypted"
+                echo ""
+                echo "Remote version:"
+                cat "$TEMP_DIR/remote_decrypted"
+            fi
+        fi
+
+        rm -f "$TEMP_DIR/current_decrypted" "$TEMP_DIR/remote_decrypted"
+    else
+        local temp_hash_file="$TEMP_DIR/temp_hashes_local"
+        hashit "$DECRYPTED_DIR" "$temp_hash_file"
+        
+        echo "Changes detected in local file."
+        if [ -f "$DECRYPTED_DIR/$file" ]; then
+            echo "Current content:"
+            cat "$DECRYPTED_DIR/$file"
+        fi
+    fi
+
+    echo ""
+    read -p "Press Enter to continue..."
+}
+
 # Main entry point for encrypted files synchronization
 #
 # Handles:
@@ -697,101 +858,136 @@ main() {
 
   # Case 2: Only remote changed
   if [ "$remote_changed" -eq 1 ] && [ "$local_changed" -eq 0 ]; then
-    info "Only remote has changed. Updating local files..."
-    read -p "An update is available. Do you want to pull the changes? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        git pull
-        rm -rf "$DECRYPTED_DIR"/*
-        decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
-        hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
-        debug "Local files updated successfully."
-    fi
+    show_changed_files_and_confirm "remote"
+
+    info "Pulling remote changes..."
+    git pull
+    rm -rf "$DECRYPTED_DIR"/*
+    decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
+    hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
+    debug "Local files updated successfully."
     exit 0
   fi
   
   # Case 3: Only local changed
   if [ "$remote_changed" -eq 0 ] && [ "$local_changed" -eq 1 ]; then
-    info "Only local files have changed. Encrypting and pushing..."
-    read -p "Local changes detected. Do you want to push the changes? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        #TODO: sync only files that were changed / added / removed
+    show_changed_files_and_confirm "local"
 
-        # Remove old encrypted files
-        find "$LOCAL_REPO_PATH" -name "*.age" -type f -delete
-        
-        # Encrypt all decrypted files
-        encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"
-        
-        # Commit and push
-        cd "$LOCAL_REPO_PATH" || exit 1
-        git add .
-        git commit -m "Update encrypted files: $(date)"
-        git push
-        if [ $? -ne 0 ]; then
-          error "Failed to push changes."
-          exit 1
-        fi
-        mv "$TEMP_DIR/temp_hashes" "$LOCAL_HASH_FILE"
-        debug "Local changes encrypted and pushed successfully."
+    info "Encrypting and pushing local changes..."
+
+    #TODO: sync only files that were changed / added / removed
+
+    # Remove old encrypted files
+    find "$LOCAL_REPO_PATH" -name "*.age" -type f -delete
+
+    # Encrypt all decrypted files
+    encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"
+
+    # Commit and push
+    cd "$LOCAL_REPO_PATH" || exit 1
+    git add .
+    git commit -m "Update encrypted files: $(date)"
+    git push
+    if [ $? -ne 0 ]; then
+      error "Failed to push changes."
+      exit 1
     fi
+    mv "$TEMP_DIR/temp_hashes" "$LOCAL_HASH_FILE"
+    debug "Local changes encrypted and pushed successfully."
     exit 0
   fi
   
   # Case 4: Both changed
   if [ "$remote_changed" -eq 1 ] && [ "$local_changed" -eq 1 ]; then
-    info "Both remote and local files have changed. Merging..."
-    read -p "Both remote and local files have changed. Do you want to merge and push the changes? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm "$TEMP_DIR/temp_hashes"
+    title "Both Remote and Local Changes Detected"
+    echo ""
 
-        # Create temporary directory for remote files
-        REMOTE_TEMP="$TEMP_DIR/remote_decrypted"
-        mkdir -p "$REMOTE_TEMP"
-        
-        # Save current state
-        git stash
-        
-        # Get remote version
-        git pull
-        
-        # Decrypt remote files
-        decrypt_recursive "$LOCAL_REPO_PATH" "$REMOTE_TEMP"
-        
-        # Pop the stash to revert to our local state
-        git stash pop
-        
-        # Merged directory
-        MERGED_DIR="$TEMP_DIR/merged"
-        rm -rf "$MERGED_DIR"
-        mkdir -p "$MERGED_DIR"
-        
-        # Merge changes
-        merge_changes "$REMOTE_TEMP" "$DECRYPTED_DIR" "$MERGED_DIR"
-        
-        # Remove old decrypted and encrypted files
-        rm -rf "$DECRYPTED_DIR"/*
-        find "$LOCAL_REPO_PATH" -name "*.age" -type f -delete
-        
-        # Copy merged files to decrypted directory
-        cp -R "$MERGED_DIR/"* "$DECRYPTED_DIR/" 2>/dev/null || true
-        
-        # Encrypt merged files
-        encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"
-        
-        # Update hash file
-        hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
-        
-        # Commit and push
-        cd "$LOCAL_REPO_PATH" || exit 1
-        git add .
-        git commit -m "Merge changes: $(date)"
-        git push
-        
-        debug "Files merged, encrypted, and pushed successfully."
+    # Show local changes
+    local changed_files=()
+    local file_index=1
+    info "Local changes:"
+    echo ""
+    local temp_hash_file="$TEMP_DIR/temp_hashes_local"
+    hashit "$DECRYPTED_DIR" "$temp_hash_file"
+    while IFS= read -r local_file; do
+        [ -z "$local_file" ] && continue
+        changed_files+=("$local_file")
+        echo "  [$file_index] $local_file"
+        ((file_index++))
+    done < <(diff "$LOCAL_HASH_FILE" "$temp_hash_file" 2>/dev/null | grep "^>" | awk '{for (i=3; i<=NF; i++) printf $i " "; print ""}' | sed 's/ $//')
+
+    # Show remote changes
+    echo ""
+    info "Remote changes:"
+    echo ""
+    cd "$LOCAL_REPO_PATH" || exit 1
+    local remote_index=1
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        base_name="${file%.age}"
+        changed_files+=("$base_name (remote)")
+        echo "  [$remote_index] $base_name"
+        ((remote_index++))
+    done < <(git diff --name-only HEAD @{upstream} 2>/dev/null)
+
+    if [ ${#changed_files[@]} -eq 0 ]; then
+        echo "  No specific file changes detected."
     fi
+
+    echo ""
+    read -p "Do you want to merge and push the changes? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        info "Sync cancelled by user."
+        exit 0
+    fi
+
+    rm "$TEMP_DIR/temp_hashes"
+
+    # Create temporary directory for remote files
+    REMOTE_TEMP="$TEMP_DIR/remote_decrypted"
+    mkdir -p "$REMOTE_TEMP"
+
+    # Save current state
+    git stash
+
+    # Get remote version
+    git pull
+
+    # Decrypt remote files
+    decrypt_recursive "$LOCAL_REPO_PATH" "$REMOTE_TEMP"
+
+    # Pop the stash to revert to our local state
+    git stash pop
+
+    # Merged directory
+    MERGED_DIR="$TEMP_DIR/merged"
+    rm -rf "$MERGED_DIR"
+    mkdir -p "$MERGED_DIR"
+
+    # Merge changes
+    merge_changes "$REMOTE_TEMP" "$DECRYPTED_DIR" "$MERGED_DIR"
+
+    # Remove old decrypted and encrypted files
+    rm -rf "$DECRYPTED_DIR"/*
+    find "$LOCAL_REPO_PATH" -name "*.age" -type f -delete
+
+    # Copy merged files to decrypted directory
+    cp -R "$MERGED_DIR/"* "$DECRYPTED_DIR/" 2>/dev/null || true
+
+    # Encrypt merged files
+    encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"
+
+    # Update hash file
+    hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
+
+    # Commit and push
+    cd "$LOCAL_REPO_PATH" || exit 1
+    git add .
+    git commit -m "Merge changes: $(date)"
+    git push
+
+    debug "Files merged, encrypted, and pushed successfully."
     exit 0
   fi
 }

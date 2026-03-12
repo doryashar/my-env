@@ -87,11 +87,13 @@ logs/
 *.cache
 .npm/
 .pip/
+.uuid
+.fontconfig/
 
-# Backup files
-*.bak
-*.backup
-*.old
+# # Backup files
+# *.bak
+# *.backup
+# *.old
 
 # Lock files (keep some, ignore others)
 # pip
@@ -124,7 +126,7 @@ pip-delete-this-directory.txt
 *.dSYM
 
 # Archives
-*.zip
-*.tar.gz
-*.rar
-*.7z
+# *.zip
+# *.tar.gz
+# *.rar
+# *.7z

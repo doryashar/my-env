@@ -42,8 +42,13 @@ show_help() {
     echo "  full_setup              Test full setup integration"
     echo "  idempotency             Test idempotency"
     echo "  smoke                   Smoke tests (post-setup verification)"
-    echo "  docker                  Docker container tests"
+    echo "  docker                  Docker container comprehensive tests (120 tests)"
     echo "  all                     Run all tests (default)"
+    echo ""
+    echo "Docker Test Environment Variables:"
+    echo "  USE_REAL_BITWARDEN=true Use real Bitwarden (requires BW_SESSION)"
+    echo "  USE_REAL_GITHUB=true    Use real GitHub API (requires GH_TOKEN)"
+    echo "  USE_REAL_AGE=true       Use real age encryption"
     echo ""
     echo "Examples:"
     echo "  $0                      Run all tests"
@@ -233,7 +238,6 @@ fi
 if [[ $run_docker -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
 
-    # Check if Docker is available
     if command -v docker &> /dev/null; then
         echo -e "${BLUE}========================================${NC}"
         echo -e "${BLUE}Running Test Suite $suite_counter: Docker${NC}"
@@ -243,20 +247,41 @@ if [[ $run_docker -eq 1 ]]; then
         TOTAL_SUITES=$((TOTAL_SUITES + 1))
         SUITE_NAMES+=("Docker")
 
-        local start_time=$(date +%s)
+        start_time=$(date +%s)
 
-        # Build and run Docker test
-        if [[ $QUIET -eq 1 ]]; then
-            local output
-            output=$(docker build -t env-test -f "$SCRIPT_DIR/docker_test/Dockerfile" "$HOME/env" 2>&1)
-            local exit_code=$?
-        else
-            docker build -t env-test -f "$SCRIPT_DIR/docker_test/Dockerfile" "$HOME/env"
-            local exit_code=$?
+        DOCKERFILE="$SCRIPT_DIR/docker/Dockerfile.ubuntu"
+        if [[ ! -f "$DOCKERFILE" ]]; then
+            DOCKERFILE="$SCRIPT_DIR/docker_test/Dockerfile"
         fi
 
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
+        ENV_DIR="$(dirname "$SCRIPT_DIR")"
+        
+        if [[ $QUIET -eq 1 ]]; then
+            output=$(docker build -t env-test -f "$DOCKERFILE" "$ENV_DIR" 2>&1)
+            build_exit_code=$?
+        else
+            docker build -t env-test -f "$DOCKERFILE" "$ENV_DIR"
+            build_exit_code=$?
+        fi
+
+        if [[ $build_exit_code -eq 0 ]]; then
+            if [[ $QUIET -eq 1 ]]; then
+                output=$(docker run --rm env-test /home/testuser/env/tests/docker/run_tests.sh 2>&1)
+                run_exit_code=$?
+            else
+                docker run --rm env-test /home/testuser/env/tests/docker/run_tests.sh
+                run_exit_code=$?
+            fi
+            exit_code=$run_exit_code
+        else
+            exit_code=$build_exit_code
+            if [[ $QUIET -eq 1 ]]; then
+                echo "$output"
+            fi
+        fi
+
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
 
         if [[ $exit_code -eq 0 ]]; then
             echo -e "${GREEN}✓ Test suite 'Docker' PASSED${NC} (${duration}s)"
@@ -264,14 +289,10 @@ if [[ $run_docker -eq 1 ]]; then
             SUITE_RESULTS+=("PASS")
         else
             echo -e "${RED}✗ Test suite 'Docker' FAILED${NC} (${duration}s)"
-            if [[ $QUIET -eq 1 ]]; then
-                echo "$output"
-            fi
             FAILED_SUITES=$((FAILED_SUITES + 1))
             SUITE_RESULTS+=("FAIL")
         fi
 
-        # Clean up
         docker rmi env-test &>/dev/null || true
         echo ""
     else

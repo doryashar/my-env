@@ -33,8 +33,7 @@ error() {
     exit 1
 }
 
-warn() {
-    local message="$*"
-    echo -e "${RED}[ERROR] $message${NC}" >&2
-    # No exit - allows continuing
+expand_path() {
+    local path="$1"
+    echo "${path/#\~/$HOME}"
 }

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Description: Install Docker on Ubuntu 20.04
 
 # Check if Docker is already installed:

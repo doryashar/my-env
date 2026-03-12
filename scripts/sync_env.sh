@@ -1,6 +1,5 @@
 #!/bin/bash
-
-# set -euo pipefail  # Ensure robustness
+set -euo pipefail
 
 # Declare variables
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")

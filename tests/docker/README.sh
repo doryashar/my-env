@@ -1,0 +1,12 @@
+#!/bin/bash
+echo "Docker Test Environment for ENV Repository"
+echo ""
+echo "Quick Start:"
+echo "  cd /home/yashar/env"
+echo "  docker build -t env-test -f tests/docker/Dockerfile.ubuntu ."
+echo "  docker run --rm env-test"
+echo ""
+echo "Run specific suite:"
+echo "  docker run --rm env-test /home/testuser/env/tests/docker/run_tests.sh 01_setup"
+echo ""
+echo "Available suites: 01_setup, 02_sync_env, 03_sync_dotfiles, 04_sync_encrypted, 05_prerun, 06_env_zsh, 07_integration"

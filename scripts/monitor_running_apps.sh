@@ -33,7 +33,8 @@ monitor_scripts() {
 }
 
 # Ensure the script is running once
-source /path/to/ensure_single_instance.sh
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "$SCRIPT_DIR/ensure_single_instance.sh"
 
 # Start monitoring
 monitor_scripts

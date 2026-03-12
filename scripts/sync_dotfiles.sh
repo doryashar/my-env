@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 #########################################################################
 # Dotfiles Synchronizer
@@ -166,8 +167,8 @@ load_config() {
         if [[ "$line" =~ ^([A-Z_]+)=\"?([^\"]*)\"?$ ]]; then
             local var_name="${BASH_REMATCH[1]}"
             local var_value="${BASH_REMATCH[2]}"
-            # Use eval to set the variable
-            eval "$var_name=\"$var_value\""
+            # Use declare -g to safely set global variables
+            declare -g "$var_name=$var_value"
         fi
     done < "$config_path"
     
@@ -785,7 +786,7 @@ main() {
     
     # Sync dotfiles
     sync_dotfiles
-    remove_all_broken_links $HOME
+    remove_all_broken_links "$HOME"
     return 0
 
 }

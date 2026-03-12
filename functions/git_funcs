@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# Git Utility Functions
+# Shared git operations for environment sync scripts
+
+git_has_remote_updates() {
+    local repo_path="${1:-.}"
+    local original_dir
+    original_dir=$(pwd)
+    cd "$repo_path" || return 1
+    
+    if ! git fetch --quiet 2>/dev/null; then
+        cd "$original_dir"
+        return 1
+    fi
+    
+    local local_rev
+    local remote_rev
+    local_rev=$(git rev-parse HEAD 2>/dev/null)
+    remote_rev=$(git rev-parse @{upstream} 2>/dev/null)
+    
+    cd "$original_dir"
+    [[ "$local_rev" != "$remote_rev" ]]
+}
+
+git_has_local_changes() {
+    local repo_path="${1:-.}"
+    local original_dir
+    original_dir=$(pwd)
+    cd "$repo_path" || return 1
+    
+    local has_changes
+    has_changes=$(git status --porcelain 2>/dev/null)
+    
+    cd "$original_dir"
+    [[ -n "$has_changes" ]]
+}
+
+git_safe_pull() {
+    local repo_path="${1:-.}"
+    local original_dir
+    original_dir=$(pwd)
+    cd "$repo_path" || return 1
+    
+    if git pull --ff-only 2>/dev/null; then
+        cd "$original_dir"
+        return 0
+    fi
+    
+    local result
+    result=$(git pull 2>&1)
+    local exit_code=$?
+    cd "$original_dir"
+    return $exit_code
+}
+
+git_safe_push() {
+    local repo_path="${1:-.}"
+    local original_dir
+    original_dir=$(pwd)
+    cd "$repo_path" || return 1
+    
+    local result
+    result=$(git push 2>&1)
+    local exit_code=$?
+    cd "$original_dir"
+    return $exit_code
+}
+
+git_get_current_branch() {
+    local repo_path="${1:-.}"
+    local original_dir
+    original_dir=$(pwd)
+    cd "$repo_path" || return 1
+    
+    local branch
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    
+    cd "$original_dir"
+    echo "$branch"
+}
+
+git_get_remote_url() {
+    local repo_path="${1:-.}"
+    local remote="${2:-origin}"
+    local original_dir
+    original_dir=$(pwd)
+    cd "$repo_path" || return 1
+    
+    local url
+    url=$(git remote get-url "$remote" 2>/dev/null)
+    
+    cd "$original_dir"
+    echo "$url"
+}
+
+git_has_unpushed_commits() {
+    local repo_path="${1:-.}"
+    local original_dir
+    original_dir=$(pwd)
+    cd "$repo_path" || return 1
+    
+    local local_rev
+    local remote_rev
+    local_rev=$(git rev-parse HEAD 2>/dev/null)
+    remote_rev=$(git rev-parse @{upstream} 2>/dev/null)
+    
+    cd "$original_dir"
+    
+    if [[ -z "$remote_rev" ]]; then
+        return 1
+    fi
+    
+    git merge-base --is-ancestor "$remote_rev" "$local_rev" 2>/dev/null
+    local is_ancestor=$?
+    
+    [[ $is_ancestor -eq 0 ]] && [[ "$local_rev" != "$remote_rev" ]]
+}
+
+git_stash_if_needed() {
+    local repo_path="${1:-.}"
+    local original_dir
+    original_dir=$(pwd)
+    cd "$repo_path" || return 1
+    
+    if git_has_local_changes "$repo_path"; then
+        git stash push -m "Auto-stash before sync at $(date +%Y%m%d_%H%M%S)"
+        cd "$original_dir"
+        return 0
+    fi
+    
+    cd "$original_dir"
+    return 1
+}
+
+git_unstash_if_stashed() {
+    local repo_path="${1:-.}"
+    local original_dir
+    original_dir=$(pwd)
+    cd "$repo_path" || return 1
+    
+    local stash_list
+    stash_list=$(git stash list 2>/dev/null)
+    
+    if [[ -n "$stash_list" ]]; then
+        git stash pop 2>/dev/null
+        cd "$original_dir"
+        return 0
+    fi
+    
+    cd "$original_dir"
+    return 1
+}

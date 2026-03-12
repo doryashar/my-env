@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 #########################################################################
 # ENV Setup Script
@@ -158,14 +159,14 @@ setup_docker_compose() {
     # Setup rclone mount if docker compose file exists
     if [[ -f "$ENV_DIR/docker/rclone-mount/docker-compose.yml" ]]; then
         info "Setting up rclone mount service..."
-        cd "$ENV_DIR/docker/rclone-mount"
+        cd "$ENV_DIR/docker/rclone-mount" || exit 1
         docker compose up -d 2>/dev/null || warning "Failed to start rclone mount"
     fi
 
     # Setup ZeroTier if docker compose file exists
     if [[ -f "$ENV_DIR/docker/zerotier/docker-compose.yml" ]]; then
         info "Setting up ZeroTier service..."
-        cd "$ENV_DIR/docker/zerotier"
+        cd "$ENV_DIR/docker/zerotier" || exit 1
         docker compose up -d 2>/dev/null || warning "Failed to start ZeroTier"
     fi
 }

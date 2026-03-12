@@ -107,7 +107,8 @@ encrypt_file() {
 decrypt_file() {
   local source="$1"
   local dest="$2"
-  local temp_file="$TEMP_DIR/decrypted_temp_$$.$RANDOM"
+  local temp_file
+  temp_file=$(mktemp "${TEMP_DIR}/decrypted_temp.XXXXXX")
 
   # Create destination directory if it doesn't exist
   mkdir -p "$(dirname "$dest")"
@@ -561,7 +562,7 @@ get_secret_keys() {
 #   - Allows user to view diffs interactively
 show_changed_files_and_confirm() {
     local change_type="$1"
-    local remote_temp_dir="$2"
+    local remote_temp_dir="${2:-}"
     local changed_files=()
     local file_index=1
 
@@ -784,19 +785,33 @@ main() {
     info "Initial Decrypting now from $LOCAL_REPO_PATH to $DECRYPTED_DIR"
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
     hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
-    #TODO: remove
-    rm -rf ~/.ssh
-    ln -s "$DECRYPTED_DIR"/ssh ~/.ssh
     #TODO: the script should also set the file permissions
-    chmod 600 $DECRYPTED_DIR/ssh/*
-    chmod 600 $DECRYPTED_DIR/ssh/secrets
+    if [[ -d ~/.ssh ]]; then
+      if [[ -L ~/.ssh ]]; then
+        rm ~/.ssh
+      else
+        warning "Existing ~/.ssh is a directory, not a symlink"
+        read -p "Replace it? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+          backup_dir=~/.ssh.backup.$(date +%Y%m%d_%H%M%S)
+          info "Backing up ~/.ssh to $backup_dir"
+          mv ~/.ssh "$backup_dir"
+        else
+          error "Aborted. Please manually backup ~/.ssh and re-run."
+        fi
+      fi
+    fi
+    ln -s "$DECRYPTED_DIR"/ssh ~/.ssh
+    chmod 600 "$DECRYPTED_DIR"/ssh/*
+    chmod 600 "$DECRYPTED_DIR"/ssh/secrets
   fi
   
   
   if [ ! -d "$LOCAL_REPO_PATH"/.git ]; then 
     info "setting up git in encrypted dir"
     rm -rf "$LOCAL_REPO_PATH" || exit 1
-    mkdir -p  "$LOCAL_REPO_PATH" && git clone git@github.com:doryashar/encrypted.git "$LOCAL_REPO_PATH" || error "Could not glone git repo $REMOTE_REPO" && exit 1
+    mkdir -p  "$LOCAL_REPO_PATH" && git clone git@github.com:doryashar/encrypted.git "$LOCAL_REPO_PATH" || error "Could not clone git repo $REMOTE_REPO"
     hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
     exit 0
   fi

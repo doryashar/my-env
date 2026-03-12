@@ -44,10 +44,9 @@ function listen_for_incoming_connections() {
     if [[ "$CREATE_CERT" == "1" ]]; then
         echo "[+] Preparing the certificate..."
         openssl req -x509 -new -nodes -subj '/' -keyout "$cert" -out "$cert"
-        ! [ -r "$dhparam" ] && openssl dhparam -out "$dhparam" 1024
+        ! [ -r "$dhparam" ] && openssl dhparam -out "$dhparam" 2048
     fi
     echo "[+] Listening on $host:$port..."
-    # socat "openssl-listen:$port,cert=$cert,keepalive=1,verify=0" "EXEC:'script -q -c \"tmux attach\" /dev/null'"
     # cmd="tmux new-session -A -s socat_session;"
     cmd="zellij attach --create my-cool-session"
     socat "openssl-listen:$port,cert=$cert,keepalive=1,verify=0,fork" "EXEC:'$cmd',pty,raw,setsid,ctty,stderr" #openpty,rawer,
@@ -72,7 +71,7 @@ function wait_for_invite() {
     local dhparam="$HOME/.dhparam"
     echo "[+] Preparing the certificate..."
     openssl req -x509 -new -nodes -subj '/' -keyout "$cert" -out "$cert"
-    ! [ -r "$dhparam" ] && openssl dhparam -out "$dhparam" 1024
+    ! [ -r "$dhparam" ] && openssl dhparam -out "$dhparam" 2048
     echo "[+] Listening on $host:$port..."
     #SIMPLE(worked): socat "openssl-listen:$port,cert=$cert,verify=0" "SYSTEM:/bin/bash"
     socat openssl-listen:$port,verify=0,keepalive=1,cert=$cert stdio,raw,echo=0 #key=key, #Reverse(Worked)

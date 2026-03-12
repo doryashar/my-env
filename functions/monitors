@@ -95,7 +95,7 @@ zerotier_clients() {
     {
         echo "Client | IP Addresses | Last Seen"
         echo "-------|--------------|----------"
-        echo "$result" | jq -r '[.[] | select(.name != "" and .description != "")] | sort_by(.lastSeen | tonumber) |
+        echo "$result" | jq -r '[.[] | select(.name != "HIDE" and .description != "HIDE") | select((.lastSeen | tonumber) > ((now - 31536000) * 1000))] | sort_by(.lastSeen | tonumber) |
             .[] | "\(.name): \(.description) | \(.config.ipAssignments | join(", ")) | \(.lastSeen | tonumber | . / 1000 | todate)"'
     } | column -t -s '|' -o ' | ' | tee "$cache_file"
 }

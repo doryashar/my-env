@@ -391,7 +391,7 @@ sync_encrypted_files() {
     info "Checking if private repository exists..."
     if check_remote_repo_exists "$private_url"; then
         debug "Private repository exists, syncing..."
-        bash "$ENV_DIR/scripts/sync_encrypted.sh"
+        bash "$ENV_DIR/scripts/sync_encrypted.sh" || warning "Encrypted sync failed (non-fatal)"
     else
         warning "Private repository does not exist: $private_url"
         echo ""
@@ -400,7 +400,7 @@ sync_encrypted_files() {
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             if create_private_repo "$private_url"; then
-                bash "$ENV_DIR/scripts/sync_encrypted.sh"
+                bash "$ENV_DIR/scripts/sync_encrypted.sh" || warning "Encrypted sync failed (non-fatal)"
             fi
         else
             info "Skipping encrypted files sync. You can create it later:"
@@ -466,7 +466,7 @@ install_docker() {
     fi
 
     if [[ -f "$ENV_DIR/scripts/install_docker.sh" ]]; then
-        bash "$ENV_DIR/scripts/install_docker.sh"
+        bash "$ENV_DIR/scripts/install_docker.sh" || warning "Docker installation failed (non-fatal)"
     else
         warning "install_docker.sh not found, skipping Docker installation"
     fi
@@ -633,7 +633,7 @@ install_dotfiles() {
     info "Setting up Dotfiles..."
 
     if [[ -f "$ENV_DIR/scripts/sync_dotfiles.sh" ]]; then
-        bash "$ENV_DIR/scripts/sync_dotfiles.sh" "$ENV_DIR/config/dotfiles.conf"
+        bash "$ENV_DIR/scripts/sync_dotfiles.sh" "$ENV_DIR/config/dotfiles.conf" || warning "Dotfiles sync failed (non-fatal)"
     else
         warning "sync_dotfiles.sh not found"
     fi
@@ -678,7 +678,7 @@ install_fonts() {
     info "Installing fonts..."
 
     if [[ -f "$ENV_DIR/scripts/install_fonts.sh" ]]; then
-        bash "$ENV_DIR/scripts/install_fonts.sh"
+        bash "$ENV_DIR/scripts/install_fonts.sh" || warning "Font installation failed (non-fatal)"
     else
         warning "install_fonts.sh not found"
     fi

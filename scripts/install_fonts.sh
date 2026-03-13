@@ -8,6 +8,10 @@ NC='\033[0m' # No Color
 
 set -euo pipefail
 
+# Determine script location
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")"
+ENV_DIR="$(dirname "$SCRIPT_DIR")"
+
 # Print error message
 error() {
     local fatal=${2:-0}
@@ -32,7 +36,7 @@ info() {
 command -v fc-cache >/dev/null 2>&1 || error "fc-cache is required but not installed"
 
 # Ensure fonts directory exists
-FONT_DIR="$HOME/.local/share/fonts"
+FONT_DIR="${HOME:-$(cd ~ && pwd)}/.local/share/fonts"
 mkdir -p "$FONT_DIR" || error "Failed to create $FONT_DIR"
 
 # Count for installed, skipped and failed fonts
@@ -42,29 +46,34 @@ failed=0
 
 info "Installing fonts..."
 
+# Source fonts directory
+FONTS_SRC="${ENV_DIR}/local/share/fonts"
+
 # Check if fonts directory exists and is not empty
-if [ ! -d "./fonts" ]; then
-    error "The ./fonts directory does not exist" 1
+if [ ! -d "$FONTS_SRC" ]; then
+    info "No fonts directory at $FONTS_SRC, skipping font installation"
+    exit 0
 fi
 
 # Check if any .ttf files exist using find
-if ! find "./fonts" -maxdepth 1 -name "*.ttf" -print -quit | grep -q .; then
-    error "No .ttf files found in ./fonts directory" 1
+if ! find "$FONTS_SRC" -maxdepth 1 -name "*.ttf" -print -quit | grep -q .; then
+    info "No .ttf files found in $FONTS_SRC, skipping font installation"
+    exit 0
 fi
 
 # Process each .ttf file using find and while read
-find "./fonts" -maxdepth 1 -name "*.ttf" -print0 | while read -r -d $'\0' font; do
+find "$FONTS_SRC" -maxdepth 1 -name "*.ttf" -print0 | while read -r -d $'\0' font; do
     basename=$(basename "$font")
     if [ -f "$FONT_DIR/$basename" ]; then
         info "Skipping $basename (already installed)"
-        ((skipped++)) || true
+        skipped=$((skipped + 1))
     else
         if cp "$font" "$FONT_DIR/" 2>/dev/null; then
             success "Installed $basename"
-            ((installed++)) || true
+            installed=$((installed + 1))
         else
             error "Failed to install $basename" 0
-            ((failed++)) || true
+            failed=$((failed + 1))
         fi
     fi
 done

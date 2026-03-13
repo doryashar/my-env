@@ -53,3 +53,37 @@ require_common_funcs() {
         exit 1
     fi
 }
+
+#########################################################################
+# Interactive Prompts (work even when stdin is piped)
+#########################################################################
+
+prompt() {
+    local question="$1"
+    local var_name="${2:-REPLY}"
+    local answer
+    
+    if [[ -t 0 ]]; then
+        read -p "$question" "$var_name"
+    else
+        echo -n "$question"
+        read -r answer < /dev/tty
+        eval "$var_name=\$answer"
+    fi
+}
+
+prompt_yn() {
+    local question="$1"
+    local reply
+    
+    if [[ -t 0 ]]; then
+        read -p "$question" -n 1 -r
+        echo
+    else
+        echo -n "$question"
+        read -r reply < /dev/tty
+        REPLY="${reply:0:1}"
+    fi
+    
+    [[ "$REPLY" =~ ^[Yy]$ ]]
+}

@@ -352,7 +352,7 @@ handle_conflict() {
             echo "5) Ignore (keep both unchanged)"
             
             local choice
-            read -p "Enter choice [1-5]: " choice
+            prompt "Enter choice [1-5]: " choice
             
             case "$choice" in
                 1) cp -rf "$target" "$source" ;;

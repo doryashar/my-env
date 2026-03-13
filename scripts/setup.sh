@@ -115,6 +115,39 @@ error() {
     exit 1
 }
 
+# Prompt user for input (works even when piped via curl)
+# Usage: prompt "Question? " variable_name
+# Usage: prompt_yn "Continue? " && do_something
+prompt() {
+    local question="$1"
+    local var_name="${2:-REPLY}"
+    local answer
+    
+    if [[ -t 0 ]]; then
+        read -p "$question" "$var_name"
+    else
+        echo -n "$question"
+        read -r answer < /dev/tty
+        eval "$var_name=\$answer"
+    fi
+}
+
+prompt_yn() {
+    local question="$1"
+    local reply
+    
+    if [[ -t 0 ]]; then
+        read -p "$question" -n 1 -r
+        echo
+    else
+        echo -n "$question"
+        read -r reply < /dev/tty
+        REPLY="${reply:0:1}"
+    fi
+    
+    [[ "$REPLY" =~ ^[Yy]$ ]]
+}
+
 #########################################################################
 # Utility Functions
 #########################################################################
@@ -219,7 +252,12 @@ oauth2_authenticate() {
     if [[ "$status" == *"locked"* ]] || [[ -z "${BW_SESSION:-}" ]]; then
         info "Vault is locked. Unlocking..."
         local bw_password
-        read -s -p "Enter your Bitwarden password: " bw_password
+        if [[ -t 0 ]]; then
+            read -s -p "Enter your Bitwarden password: " bw_password
+        else
+            echo -n "Enter your Bitwarden password: "
+            read -s bw_password < /dev/tty
+        fi
         echo
         export BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") --raw 2>/dev/null) || {
             error "Failed to unlock vault"
@@ -336,7 +374,7 @@ create_private_repo() {
 
     if [[ -z "$github_token" ]]; then
         info "GitHub CLI not available or failed."
-        read -p "Enter your GitHub Personal Access Token (with repo scope): " github_token
+        prompt "Enter your GitHub Personal Access Token (with repo scope): " github_token
     fi
 
     if [[ -n "$github_token" ]]; then
@@ -396,9 +434,7 @@ sync_encrypted_files() {
         warning "Private repository does not exist: $private_url"
         echo ""
         echo "Would you like to create a new private repository for encrypted files?"
-        read -p "Create repository? (y/n) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if prompt_yn "Create repository? (y/n) "; then
             if create_private_repo "$private_url"; then
                 bash "$ENV_DIR/scripts/sync_encrypted.sh" || warning "Encrypted sync failed (non-fatal)"
             fi

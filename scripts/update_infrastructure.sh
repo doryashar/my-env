@@ -29,6 +29,21 @@ info() { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 
+# Prompt for y/n (works even when stdin is piped)
+prompt_yn() {
+    local question="$1"
+    local reply
+    if [[ -t 0 ]]; then
+        read -p "$question" -n 1 -r
+        echo
+    else
+        echo -n "$question"
+        read -r reply < /dev/tty
+        REPLY="${reply:0:1}"
+    fi
+    [[ "$REPLY" =~ ^[Yy]$ ]]
+}
+
 # Default upstream URL
 DEFAULT_UPSTREAM_URL="git@github.com:doryashar/my-env.git"
 
@@ -104,9 +119,9 @@ if [[ "$DRY_RUN" == "--dry-run" ]]; then
 fi
 
 echo ""
-read -p "Apply these updates? [y/N] " -n 1 -r
-echo
-if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+if prompt_yn "Apply these updates? [y/N] "; then
+    :  # continue
+else
     info "Aborted"
     exit 0
 fi

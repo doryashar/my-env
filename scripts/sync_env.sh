@@ -126,9 +126,7 @@ git_pull() {
                 debug "Skipping pull (strategy: local)"
                 ;;
             "ask")
-                read -p "Remote updates available. Pull? (y/n) " -n 1 -r
-                echo
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                if prompt_yn "Remote updates available. Pull? (y/n) "; then
                     if ! git pull --ff-only origin master 2>/dev/null; then
                         warning "Could not fast-forward merge. Trying auto-merge..."
                         if ! git pull origin master; then
@@ -150,9 +148,7 @@ git_pull() {
                 ;;
             *)
                 debug "Unknown strategy: $DEFAULT_CONFLICT_STRATEGY, asking..."
-                read -p "Remote updates available. Pull? (y/n) " -n 1 -r
-                echo
-                [[ $REPLY =~ ^[Yy]$ ]] && git pull origin master
+                prompt_yn "Remote updates available. Pull? (y/n) " && git pull origin master
                 ;;
         esac
     fi
@@ -175,17 +171,13 @@ git_push() {
                 git push origin master 2>/dev/null || warning "Failed to push changes"
                 ;;
             "ask")
-                read -p "Local changes detected. Push? (y/n) " -n 1 -r
-                echo
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                if prompt_yn "Local changes detected. Push? (y/n) "; then
                     debug "Pushing changes to git"
                     git push origin master 2>/dev/null || warning "Failed to push changes"
                 fi
                 ;;
             *)
-                read -p "Local changes detected. Push? (y/n) " -n 1 -r
-                echo
-                [[ $REPLY =~ ^[Yy]$ ]] && git push origin master 2>/dev/null
+                prompt_yn "Local changes detected. Push? (y/n) " && git push origin master 2>/dev/null
                 ;;
         esac
     fi
@@ -199,7 +191,7 @@ resolve_merge_conflict() {
             echo "2) Keep local changes"
             echo "3) Use remote changes"
             echo "4) Abort merge"
-            read -rp "Enter choice [1-4]: " choice
+            prompt "Enter choice [1-4]: " choice
             case "$choice" in
                 1) git mergetool ;;
                 2) git reset --hard HEAD ;;

@@ -453,10 +453,14 @@ validate_merged_files() {
 #   - Sets BW_PASSWORD environment variable
 #   - Exits if password is empty
 get_bw_password() {
-    # Read the password from the user
-    read -s -p "Enter your BitWarden password: " BW_PASSWORD
+    if [[ -t 0 ]]; then
+        read -s -p "Enter your BitWarden password: " BW_PASSWORD
+    else
+        echo -n "Enter your BitWarden password: "
+        read -s BW_PASSWORD < /dev/tty
+    fi
     if [ -z "$BW_PASSWORD" ]; then
-        error "GitHub master password is required"
+        error "Bitwarden master password is required"
         exit 1
     fi
     export BW_PASSWORD
@@ -610,7 +614,7 @@ show_changed_files_and_confirm() {
     echo "  [y]             - Proceed with sync"
     echo "  [n]             - Cancel sync"
     echo ""
-    read -p "Choose an option: " choice
+    prompt "Choose an option: " choice
 
     case "$choice" in
         [yY])
@@ -647,14 +651,12 @@ show_changed_files_and_confirm() {
     esac
 
     echo ""
-    read -p "Do you want to proceed with the sync? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    if prompt_yn "Do you want to proceed with the sync? (y/n) "; then
+        return 0
+    else
         info "Sync cancelled by user."
         exit 0
     fi
-
-    return 0
 }
 
 # Show diff for a specific file
@@ -705,7 +707,12 @@ show_file_diff() {
     fi
 
     echo ""
-    read -p "Press Enter to continue..."
+    if [[ -t 0 ]]; then
+        read -p "Press Enter to continue..."
+    else
+        echo "Press Enter to continue..."
+        read < /dev/tty
+    fi
 }
 
 # Main entry point for encrypted files synchronization
@@ -791,9 +798,7 @@ main() {
         rm ~/.ssh
       else
         warning "Existing ~/.ssh is a directory, not a symlink"
-        read -p "Replace it? [y/N] " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if prompt_yn "Replace it? [y/N] "; then
           backup_dir=~/.ssh.backup.$(date +%Y%m%d_%H%M%S)
           info "Backing up ~/.ssh to $backup_dir"
           mv ~/.ssh "$backup_dir"
@@ -950,9 +955,9 @@ main() {
     fi
 
     echo ""
-    read -p "Do you want to merge and push the changes? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    if prompt_yn "Do you want to merge and push the changes? (y/n) "; then
+        :
+    else
         info "Sync cancelled by user."
         exit 0
     fi

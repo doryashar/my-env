@@ -1,20 +1,23 @@
 # My Environment Setup
 
-This repository contains my essential Linux environment configuration, contains submodule:
-
-- `private` (Private & Encrypted Repository): Contains sensitive data and configurations
+Linux environment configuration with:
+- Dotfiles management and sync
+- Encrypted secrets via Bitwarden + age
+- One-liner installation via curl
+- Fork-friendly with upstream updates
 
 ## Quick Start
 
 ```bash
-# Clone the repository
-git clone git@github.com:doryashar/my_env.git ~/env
+# One-liner install (recommended)
+curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | bash
+
+# Or with custom fork:
+curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | ENV_URL=https://github.com/YOUR_USER/my-env bash
+
+# Or clone manually:
+git clone git@github.com:doryashar/my-env.git ~/env
 cd ~/env
-
-# Run the pre-run check (handles first-time setup)
-./scripts/prerun.sh
-
-# Or run setup directly
 ./scripts/setup.sh
 ```
 
@@ -55,7 +58,6 @@ env/
 │   └── zerotier/       # ZeroTier VPN service
 ├── docs/               # Documentation
 │   ├── SETUP_SCRIPT.md
-│   ├── PRERUN_SCRIPT.md
 │   ├── SYNC_DOTFILES.md
 │   └── SYNC_ENCRYPTED.md
 ├── dotfiles/           # Dotfiles (e.g., .bashrc, .vimrc)
@@ -66,11 +68,11 @@ env/
 ├── local/              # Local configurations
 ├── private/            # Private encrypted submodule (symlink)
 ├── scripts/            # Setup and utility scripts
-│   ├── prerun.sh       # Pre-run check script
-│   ├── setup.sh        # Main setup script
+│   ├── setup.sh        # Main setup script (entry point)
 │   ├── sync_env.sh     # Environment sync wrapper
 │   ├── sync_dotfiles.sh # Dotfiles synchronization
 │   ├── sync_encrypted.sh # Encrypted files sync
+│   ├── update_infrastructure.sh # Update scripts from upstream
 │   ├── install_fonts.sh # Font installation
 │   └── install_docker.sh # Docker installation
 ├── tests/              # Test suite
@@ -83,28 +85,12 @@ env/
 
 ## Scripts
 
-### `scripts/prerun.sh`
-
-Entry point script that checks installation status and keeps the environment synchronized.
-
-**Features:**
-- Checks if environment is installed
-- Installs Bitwarden CLI if needed
-- OAuth2 authentication for vault access
-- Clones repository with API key
-- Checks for remote updates
-- Prompts to push local changes
-
-**Usage:**
-```bash
-~/env/scripts/prerun.sh
-```
-
 ### `scripts/setup.sh`
 
-Main setup script that configures the complete environment.
+Main entry point - self-cloning setup script that configures the complete environment.
 
 **Features:**
+- Self-clones if not running from repo (works via curl)
 - Installs APT and PIP packages
 - Sets up Docker and compose services
 - Installs ZSH and z4h
@@ -114,6 +100,10 @@ Main setup script that configures the complete environment.
 
 **Usage:**
 ```bash
+# Via curl (recommended)
+curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | bash
+
+# From repo
 ~/env/scripts/setup.sh
 ```
 
@@ -148,6 +138,41 @@ Synchronizes encrypted files using age encryption and Bitwarden.
 ~/env/scripts/sync_encrypted.sh
 ```
 
+### `scripts/update_infrastructure.sh`
+
+Updates infrastructure scripts from upstream repository (useful for fork users).
+
+**Usage:**
+```bash
+# Check for updates (dry run)
+~/env/scripts/update_infrastructure.sh --dry-run
+
+# Apply updates
+~/env/scripts/update_infrastructure.sh
+```
+
+## For Fork Users
+
+If you've forked this repository:
+
+1. Set your fork URL in `config/repo.conf`:
+   ```bash
+   REMOTE_URL="git@github.com:YOUR_USER/my-env"
+   UPSTREAM_URL="git@github.com:doryashar/my-env.git"  # for updates
+   ```
+
+2. Install from your fork:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | ENV_URL=https://github.com/YOUR_USER/my-env bash
+   ```
+
+3. Update infrastructure scripts from upstream:
+   ```bash
+   ~/env/scripts/update_infrastructure.sh
+   ```
+
+Your customizations in `config/`, `dotfiles/`, `aliases/`, `env_vars/`, and `private/` are never overwritten.
+
 ## Configuration
 
 ### `config/repo.conf`
@@ -155,15 +180,25 @@ Synchronizes encrypted files using age encryption and Bitwarden.
 Main repository configuration:
 
 ```bash
-# Remote git repository URL
-REMOTE_URL="git@github.com:doryashar/my_env"
+# Your fork URL
+REMOTE_URL="git@github.com:YOUR_USER/my-env"
 ENV_DIR="${HOME}/env"
 
 # Bitwarden configuration
 export BW_EMAIL="your-email@example.com"
 
 # Private encrypted repository
-PRIVATE_URL="git@github.com:doryashar/encrypted"
+PRIVATE_URL="git@github.com:YOUR_USER/encrypted"
+
+# Upstream for infrastructure updates (keep pointing to original)
+UPSTREAM_URL="git@github.com:doryashar/my-env.git"
+
+# Sync timing (days)
+CHECK_INTERVAL_DAYS=1
+SYNC_INTERVAL_DAYS=7
+
+# Merge conflict resolution strategy
+DEFAULT_CONFLICT_STRATEGY="ask"
 
 # Display settings
 SHOW_DUFF=off
@@ -270,7 +305,6 @@ cd ~/env/tests
 ## Documentation
 
 - [Setup Script](./docs/SETUP_SCRIPT.md) - Main setup script documentation
-- [Prerun Script](./docs/PRERUN_SCRIPT.md) - Pre-run check documentation
 - [Sync Dotfiles](./docs/SYNC_DOTFILES.md) - Dotfiles synchronization
 - [Sync Encrypted](./docs/SYNC_ENCRYPTED.md) - Encrypted files synchronization
 

@@ -5,109 +5,110 @@ else
     env_debug() { :; }
 fi
 
-ENV_DIR=$HOME/env
-ENV_DIR="${ENV_DIR:-"$( dirname "$( dirname "$( readlink -f "${0}" )" )" )"}"
+ENV_DIR="${ENV_DIR:-$HOME/env}"
+
+# Helper function to get file age in days
+file_age_days() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then
+        echo 999999
+        return
+    fi
+    local file_time
+    file_time=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null)
+    echo $(( ($(date +%s) - file_time) / 86400 ))
+}
 
 # Load config
 env_debug "Loading config from ${ENV_DIR}/config/repo.conf"
-source ${ENV_DIR}/config/repo.conf
-env_debug "Loading env_vars from ${ENV_DIR}/env_vars"
-source ${ENV_DIR}/env_vars
-
-if [ -f "${ENV_DIR}/private/secrets" ]; then
-    env_debug "Loading secrets from ${ENV_DIR}/private/secrets"
-    . ${ENV_DIR}/private/secrets
-#     echo "BW session is: $BW_SESSION"
-# else
-#     echo "Secrets was not found in "${ENV_DIR}/private/secrets""
+if [[ -f "${ENV_DIR}/config/repo.conf" ]]; then
+    source "${ENV_DIR}/config/repo.conf"
 fi
 
+env_debug "Loading env_vars from ${ENV_DIR}/env_vars"
+if [[ -f "${ENV_DIR}/env_vars" ]]; then
+    source "${ENV_DIR}/env_vars"
+fi
+
+# Load secrets if available
+if [[ -f "${ENV_DIR}/private/secrets" ]]; then
+    env_debug "Loading secrets from ${ENV_DIR}/private/secrets"
+    source "${ENV_DIR}/private/secrets"
+fi
+
+# Source functions
 env_debug "Sourcing functions from ${ENV_DIR}/functions/*"
-for file in ${ENV_DIR}/functions/*; do
-  if [[ -f "$file" ]]; then
-    env_debug "Sourcing $file"
-    source "$file"
-  fi
+for file in "${ENV_DIR}"/functions/*; do
+    if [[ -f "$file" ]]; then
+        env_debug "Sourcing $file"
+        source "$file"
+    fi
 done
 
-. ${ENV_DIR}/aliases
-eval "$(zoxide init zsh)"
+# Load aliases
+if [[ -f "${ENV_DIR}/aliases" ]]; then
+    source "${ENV_DIR}/aliases"
+fi
 
-# If modified time of env is more than 1 day, check for updates
+# Initialize zoxide
+if command -v zoxide &>/dev/null; then
+    eval "$(zoxide init zsh)"
+fi
+
+# Interactive shell checks
 if [[ $- == *i* ]]; then
-    env_debug "Interactive shell detected, running startup checks"
-    local updates_detected_file="${ENV_DIR}/tmp/updates_detected"
-    local lock_file="${ENV_DIR}/tmp/update_check.lock"
-
-    if [ ! -f "${ENV_DIR}/tmp/updated" ] || [ "$(find "${ENV_DIR}/tmp/updated" -mtime +1 -print)" ]; then
-        env_debug "Checking for env updates (background)"
-        # Check for updates in background
-        (
-            flock -n 9 || exit 0  # Prevent concurrent checks
-            env_debug "Update check: acquired lock, running sync_env.sh --check-updates"
-            local update_status=$(${ENV_DIR}/scripts/sync_env.sh --check-updates)
-            env_debug "Update check: status=$update_status"
-
-            if [[ "$update_status" == "uncommitted" ]]; then
-                echo "Uncommitted changes detected in env repo"
-                touch "$updates_detected_file"
-            elif [[ "$update_status" == "remote" ]]; then
-                echo "Remote updates available for env repo"
-                touch "$updates_detected_file"
-            elif [[ "$update_status" == "none" ]]; then
-                # No updates, touch the updated file
-                touch "${ENV_DIR}/tmp/updated"
-                # Remove updates_detected file if it exists
-                rm -f "$updates_detected_file"
-            fi
-        ) 9>"$lock_file" &
+    env_debug "Interactive shell detected"
+    
+    # Check for updates in background (silent, based on CHECK_INTERVAL_DAYS)
+    check_interval="${CHECK_INTERVAL_DAYS:-1}"
+    last_check_age=$(file_age_days "${ENV_DIR}/tmp/last_check")
+    
+    if [[ $last_check_age -ge $check_interval ]]; then
+        env_debug "Running background update check (last check: $last_check_age days ago)"
+        ( "${ENV_DIR}/scripts/sync_env.sh" --check-only 2>/dev/null ) &
     else
-        env_debug "Update check skipped (updated file exists and is fresh)"
-    fi
-
-    # If updates have been available for more than 7 days, run full sync
-    if [[ -f "$updates_detected_file" ]]; then
-        local updates_age=$(( $(date +%s) - $(stat -c %Y "$updates_detected_file" 2>/dev/null || echo 0) ))
-        local days_since_detected=$(( updates_age / 86400 ))
-        env_debug "Updates detected $days_since_detected days ago"
-
-        if [[ $days_since_detected -ge 7 ]]; then
-            echo "Updates available for $days_since_detected days. Running full sync..."
-            ${ENV_DIR}/scripts/sync_env.sh --encrypted_sync --dotfiles_sync --push --pull && touch ${ENV_DIR}/tmp/updated && rm -f "$updates_detected_file"
-        else
-            echo "Env updates available (detected $days_since_detected days ago). Run 'envsync' to sync."
-        fi
-    else
-        env_debug "No pending updates detected"
+        env_debug "Skipping update check (last check: $last_check_age days ago)"
     fi
     
-    # title "Welcome"
-
-    # # If mount file variable exists, then mount it
-    # if [ -n "${MOUNT_FILE}" ]; then
-    #     title "Mounting volumes..."
-    #     mount -T ${MOUNT_FILE}
-    # fi
-
+    # Prompt for sync if overdue (based on SYNC_INTERVAL_DAYS)
+    sync_interval="${SYNC_INTERVAL_DAYS:-7}"
+    last_sync_age=$(file_age_days "${ENV_DIR}/tmp/last_sync")
+    
+    if [[ $last_sync_age -ge $sync_interval ]]; then
+        echo "Last sync was $last_sync_age days ago. Run 'envsync' to sync."
+    else
+        env_debug "Sync not needed (last sync: $last_sync_age days ago)"
+    fi
+    
+    # Display utilities
     if [[ "$SHOW_DUFF" = "on" ]]; then
         env_debug "SHOW_DUFF=on, running duf in background"
-        # echo "Running duf..."
-        (duf &)
+        if command -v duf &>/dev/null; then
+            (duf &)
+        fi
     else
         env_debug "SHOW_DUFF=off (set 'on' to enable)"
     fi
 
     if [[ "$SHOW_NEOFETCH" = "on" ]]; then
         env_debug "SHOW_NEOFETCH=on, running neofetch"
-        neofetch
+        if command -v neofetch &>/dev/null; then
+            neofetch
+        fi
     else
         env_debug "SHOW_NEOFETCH=off (set 'on' to enable)"
     fi
 
-    env_debug "Calling kuma_status"
-    kuma_status;
-    env_debug "Calling zerotier_clients"
-    zerotier_clients;
-    env_debug "Startup checks complete"
+    # Status checks
+    if type kuma_status &>/dev/null; then
+        env_debug "Calling kuma_status"
+        kuma_status
+    fi
     
+    if type zerotier_clients &>/dev/null; then
+        env_debug "Calling zerotier_clients"
+        zerotier_clients
+    fi
+    
+    env_debug "Startup checks complete"
 fi

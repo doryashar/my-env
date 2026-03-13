@@ -37,3 +37,19 @@ expand_path() {
     local path="$1"
     echo "${path/#\~/$HOME}"
 }
+
+get_script_dir() {
+    dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")"
+}
+
+get_env_dir() {
+    dirname "$(get_script_dir)"
+}
+
+require_common_funcs() {
+    local env_dir="${1:-$(get_env_dir)}"
+    if [[ ! -f "$env_dir/functions/common_funcs" ]]; then
+        echo "[ERROR] common_funcs not found at $env_dir/functions/common_funcs" >&2
+        exit 1
+    fi
+}

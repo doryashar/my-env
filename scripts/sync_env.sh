@@ -1,184 +1,196 @@
 #!/bin/bash
 set -euo pipefail
 
-# Declare variables
+#########################################################################
+# ENV Synchronization Script
+#
+# Orchestrates all syncing operations for the environment.
+#
+# Features:
+# - Git push/pull for main repo
+# - Dotfiles synchronization
+# - Encrypted files synchronization
+# - Timestamp tracking for last check/sync
+# - Silent mode for background checks
+# - Configurable conflict resolution
+#########################################################################
+
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 ENV_DIR=$(dirname "$SCRIPT_DIR")
 REPO_CONFIG_FILE="$ENV_DIR/config/repo.conf"
-CONFIG_FILE="$ENV_DIR/config/dotfiles.conf"
+DOTFILES_CONFIG_FILE="$ENV_DIR/config/dotfiles.conf"
 
-# Default configuration path
-ENV_DIR="${ENV_DIR/#\~/$HOME}"
-DEBUG=${ENV_DEBUG:-1}
+source "$ENV_DIR/functions/common_funcs"
 
-# Load external functions if needed
-[[ $(type -t title) ]] || source "$ENV_DIR/functions/common_funcs"
+ENV_DIR=$(expand_path "$ENV_DIR")
+DEBUG="${ENV_DEBUG:-}"
 
-# Source config file
-[[ -f "$REPO_CONFIG_FILE" ]] && source "$REPO_CONFIG_FILE"
+source "$REPO_CONFIG_FILE" 2>/dev/null || true
 
-# Function to display usage information
-show_help() {
-    cat <<EOF
-Usage: $0 [options]
+# Default conflict strategy if not set in config
+DEFAULT_CONFLICT_STRATEGY="${DEFAULT_CONFLICT_STRATEGY:-ask}"
 
-Options:
-  -h, --help                Show this help message
-  -i, --init                Initialize new dotfiles repository
-  -c, --config FILE         Use alternative config file
-  -r, --repo PATH           Set git repository path
-  -l, --pull                Pull changes from remote repository
-  -d, --dotfiles_sync       Sync dotfiles between local and repo
-  -e, --encrypted_sync      Sync encrypted files with remote repo
-  -p, --push                Push changes to remote repository
-  -u, --check-updates       Check for updates without syncing (quiet mode)
-EOF
+#########################################################################
+# Status Codes
+#########################################################################
+STATUS_NO_UPDATES=0
+STATUS_REMOTE_UPDATES=1
+STATUS_LOCAL_CHANGES=2
+STATUS_BOTH_CHANGES=3
+
+#########################################################################
+# Timestamp Management
+#########################################################################
+
+update_last_check() {
+    mkdir -p "$ENV_DIR/tmp"
+    touch "$ENV_DIR/tmp/last_check"
+    debug "Updated last_check timestamp"
 }
 
-# Initialize a new git repository for dotfiles
-#
-# Args:
-#   $1 - Repository path
-#
-# Returns:
-#   0 - Success or already initialized
-#
-# Side Effects:
-#   - Creates git repository
-#   - Creates default directories (bash, vim, git)
-#   - Creates initial README and commit
-init_repo() {
-    local repo_path="$1"
+update_last_sync() {
+    mkdir -p "$ENV_DIR/tmp"
+    touch "$ENV_DIR/tmp/last_sync"
+    debug "Updated last_sync timestamp"
+}
 
-    if [[ -d "$repo_path/.git" ]]; then
-        warning "Repository already initialized at $repo_path"
+#########################################################################
+# Git Functions
+#########################################################################
+
+git_has_uncommitted_changes() {
+    cd "$ENV_DIR" || return 1
+    [[ -n "$(git status --porcelain)" ]]
+}
+
+git_has_remote_updates() {
+    cd "$ENV_DIR" || return 1
+    
+    if [[ -z "${REMOTE_URL:-}" ]]; then
+        return 1
+    fi
+    
+    git remote | grep -q origin || git remote add origin "$REMOTE_URL"
+    
+    if ! git fetch --quiet 2>/dev/null; then
+        return 1
+    fi
+    
+    local local_rev
+    local remote_rev
+    local_rev=$(git rev-parse HEAD 2>/dev/null || echo "none")
+    remote_rev=$(git rev-parse @{upstream} 2>/dev/null || echo "none")
+    
+    [[ "$local_rev" != "$remote_rev" ]] && [[ "$remote_rev" != "none" ]]
+}
+
+git_commit_changes() {
+    cd "$ENV_DIR" || return 1
+    
+    if [[ -n "$(git status --porcelain)" ]]; then
+        info "Committing local changes..."
+        git submodule foreach 'git add . && git commit -m "Auto-sync submodule $(date "+%Y-%m-%d %H:%M:%S")"' 2>/dev/null || true
+        git add .
+        git commit -m "Auto-sync dotfiles $(date '+%Y-%m-%d %H:%M:%S')"
+    fi
+}
+
+git_pull() {
+    cd "$ENV_DIR" || return 1
+    
+    if [[ -z "${REMOTE_URL:-}" ]]; then
+        debug "No remote URL configured, skipping pull"
         return 0
     fi
-
-    git init "$repo_path"
-    cat <<EOF > "$repo_path/README.md"
-# Dotfiles
-My personal dotfiles managed with Dotfiles Synchronizer
-EOF
-
-    mkdir -p "$repo_path/bash" "$repo_path/vim" "$repo_path/git"
-    git -C "$repo_path" add README.md
-    git -C "$repo_path" commit -m "Initial commit"
-
-    info "Repository initialized at $repo_path"
-    echo "Edit your config file to add your dotfiles."
-}
-
-# Check for available updates without syncing or prompting
-#
-# Args:
-#   $1 - Repository path
-#
-# Outputs:
-#   "uncommitted" - Uncommitted changes detected
-#   "remote" - Remote updates available
-#   "none" - No updates
-#
-# Returns:
-#   0 - Success
-git_check_updates() {
-    local repo_path="$1"
-    local updates_available=0
-
-    (cd "$repo_path" && {
-        # Check for uncommitted changes
-        if [[ -n "$(git status --porcelain)" ]]; then
-            echo "uncommitted"
-            return 0
-        fi
-
-        # Check for remote updates
-        if [[ -n "$REMOTE_URL" ]]; then
-            git remote | grep -q origin || git remote add origin "$REMOTE_URL"
-            if git fetch --quiet 2>/dev/null; then
-                local local_rev=$(git rev-parse HEAD)
-                local remote_rev=$(git rev-parse @{upstream} 2>/dev/null) || return 0
-                if [[ "$local_rev" != "$remote_rev" ]]; then
-                    echo "remote"
-                    return 0
-                fi
-            fi
-        fi
-
-        echo "none"
-    })
-}
-
-
-# Sync with git repository (push or pull)
-#
-# Args:
-#   $1 - Direction: "push" or "pull"
-#   $2 - Repository path
-#
-# Returns:
-#   0 - Success
-#
-# Side Effects:
-#   - Commits uncommitted changes
-#   - May push/pull from remote
-#   - Prompts user for confirmation
-git_sync() {
-    local direction="$1"
-    local repo_path="$2"
-
-    (cd "$repo_path" && {
-        [[ -n "$(git status --porcelain)" ]] && {
-            info "Uncommitted changes detected. Committing changes..."
-            git submodule foreach 'git add . && git commit -m "Auto-sync submodule $(date "+%Y-%m-%d %H:%M:%S")'
-            git add .
-            git commit -m "Auto-sync dotfiles $(date '+%Y-%m-%d %H:%M:%S')"
-        }
-
-        if [[ -n "$REMOTE_URL" ]]; then
-            git remote | grep -q origin || git remote add origin "$REMOTE_URL"
-            if [[ "$direction" == "push" ]]; then
-                if [[ -n "$(git cherry -v)" ]]; then
-                    read -p "Local changes detected. Do you want to push the changes? (y/n) " -n 1 -r
-                    echo
-                    if [[ $REPLY =~ ^[Yy]$ ]]; then
-                        info "Pushing changes to git"
-                        debug $(git push origin master 2>&1)
+    
+    git remote | grep -q origin || git remote add origin "$REMOTE_URL"
+    
+    if ! git fetch --quiet 2>/dev/null; then
+        warning "Failed to fetch from remote"
+        return 1
+    fi
+    
+    if git status | grep -q "behind"; then
+        case "$DEFAULT_CONFLICT_STRATEGY" in
+            "remote")
+                debug "Auto-pulling (strategy: remote)"
+                if ! git pull --ff-only origin master 2>/dev/null; then
+                    info "Fast-forward failed, trying merge..."
+                    if ! git pull origin master; then
+                        warning "Merge conflict detected"
+                        resolve_merge_conflict
                     fi
                 fi
-            elif [[ "$direction" == "pull" ]]; then
-                git fetch && git status | grep -q "behind" && {
-                    read -p "An update is available. Do you want to pull the changes? (y/n) " -n 1 -r
-                    echo
-                    if [[ $REPLY =~ ^[Yy]$ ]]; then
-                        info "Pulling changes from git"
-                        debug $(git pull --ff-only origin master 2>&1)
+                ;;
+            "local")
+                debug "Skipping pull (strategy: local)"
+                ;;
+            "ask")
+                read -p "Remote updates available. Pull? (y/n) " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    if ! git pull --ff-only origin master 2>/dev/null; then
+                        warning "Could not fast-forward merge. Trying auto-merge..."
+                        if ! git pull origin master; then
+                            error "Merge conflict detected."
+                            resolve_merge_conflict
+                        fi
                     fi
-                }
-            else
-                warning "Could not fast-forward merge. Trying auto-merge..."
-                if ! git pull origin master; then
-                    error "Merge conflict detected."
-                    resolve_merge_conflict
                 fi
-            fi
-        else
-            warning "No remote URL configured. Skipping $direction."
-        fi
-    })
+                ;;
+            "rename")
+                debug "Backing up and pulling (strategy: rename)"
+                local backup_branch="backup-$(date +%Y%m%d%H%M%S)"
+                git branch "$backup_branch"
+                info "Created backup branch: $backup_branch"
+                git pull --ff-only origin master 2>/dev/null || git reset --hard origin/master
+                ;;
+            "ignore")
+                debug "Ignoring remote updates (strategy: ignore)"
+                ;;
+            *)
+                debug "Unknown strategy: $DEFAULT_CONFLICT_STRATEGY, asking..."
+                read -p "Remote updates available. Pull? (y/n) " -n 1 -r
+                echo
+                [[ $REPLY =~ ^[Yy]$ ]] && git pull origin master
+                ;;
+        esac
+    fi
 }
 
-# Resolve merge conflicts based on DEFAULT_CONFLICT_STRATEGY
-#
-# Uses global variable:
-#   DEFAULT_CONFLICT_STRATEGY - Strategy to use (ask, local, remote, rename, ignore)
-#
-# Returns:
-#   0 - Success
-#
-# Side Effects:
-#   - May modify git state (reset, branch, merge --abort)
-#   - May prompt user for input if strategy is "ask"
+git_push() {
+    cd "$ENV_DIR" || return 1
+    
+    if [[ -z "${REMOTE_URL:-}" ]]; then
+        debug "No remote URL configured, skipping push"
+        return 0
+    fi
+    
+    git remote | grep -q origin || git remote add origin "$REMOTE_URL"
+    
+    if [[ -n "$(git cherry -v 2>/dev/null)" ]]; then
+        case "$DEFAULT_CONFLICT_STRATEGY" in
+            "remote"|"local")
+                debug "Auto-pushing (strategy: $DEFAULT_CONFLICT_STRATEGY)"
+                git push origin master 2>/dev/null || warning "Failed to push changes"
+                ;;
+            "ask")
+                read -p "Local changes detected. Push? (y/n) " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    debug "Pushing changes to git"
+                    git push origin master 2>/dev/null || warning "Failed to push changes"
+                fi
+                ;;
+            *)
+                read -p "Local changes detected. Push? (y/n) " -n 1 -r
+                echo
+                [[ $REPLY =~ ^[Yy]$ ]] && git push origin master 2>/dev/null
+                ;;
+        esac
+    fi
+}
+
 resolve_merge_conflict() {
     case "$DEFAULT_CONFLICT_STRATEGY" in
         "ask")
@@ -194,98 +206,194 @@ resolve_merge_conflict() {
                 3) git reset --hard origin/master ;;
                 4) git merge --abort ;;
                 *) git merge --abort ;;
-            esac ;;
-        "local") git reset --hard HEAD ;;
-        "remote") git reset --hard origin/master ;;
+            esac
+            ;;
+        "local")
+            git reset --hard HEAD
+            ;;
+        "remote")
+            git reset --hard origin/master
+            ;;
         "rename")
             git merge --abort
             local backup_branch="backup-$(date +%Y%m%d%H%M%S)"
             git branch "$backup_branch"
             info "Created backup branch: $backup_branch"
-            git reset --hard origin/master ;;
-        "ignore") git merge --abort ;;
-        *) git merge --abort ;;
+            git reset --hard origin/master
+            ;;
+        "ignore")
+            git merge --abort
+            ;;
+        *)
+            git merge --abort
+            ;;
     esac
 }
 
-# Add script to .bashrc for automatic execution
-#
-# Returns:
-#   0 - Success or already present
-#
-# Side Effects:
-#   - Appends script entry to ~/.bashrc
-update_bashrc() {
-    local script_path
-    script_path="$(realpath "$0")"
-    local bashrc="$HOME/.bashrc"
+#########################################################################
+# Check Functions
+#########################################################################
 
-    grep -Fq "$script_path" "$bashrc" || {
-        cat <<EOL >> "$bashrc"
-
-# Environment Synchronizer
-if [[ -f "$script_path" && "\$-" == *i* ]]; then
-    "$script_path" --dotfiles_sync --encrypted_sync --pull --push
-    alias envsync="$script_path"
-fi
-EOL
-        info "Added to .bashrc. You can now use 'envsync' command."
-    }
+check_updates() {
+    local has_local=0
+    local has_remote=0
+    
+    cd "$ENV_DIR" || return $STATUS_BOTH_CHANGES
+    
+    if git_has_uncommitted_changes; then
+        has_local=1
+    fi
+    
+    if git_has_remote_updates; then
+        has_remote=1
+    fi
+    
+    if [[ $has_local -eq 1 ]] && [[ $has_remote -eq 1 ]]; then
+        return $STATUS_BOTH_CHANGES
+    elif [[ $has_local -eq 1 ]]; then
+        return $STATUS_LOCAL_CHANGES
+    elif [[ $has_remote -eq 1 ]]; then
+        return $STATUS_REMOTE_UPDATES
+    else
+        return $STATUS_NO_UPDATES
+    fi
 }
 
-# Main entry point for the script
-#
-# Args:
-#   Command line arguments (see show_help for options)
-#
-# Returns:
-#   0 - Success
-#   Non-zero on error
-#
-# Side Effects:
-#   - May initialize repo
-#   - May check/sync with git
-#   - May sync dotfiles/encrypted files
+#########################################################################
+# Help
+#########################################################################
+
+show_help() {
+    cat <<EOF
+Usage: $0 [options]
+
+Options:
+  -c, --check-only    Check for updates silently, return status code
+  -s, --sync          Full sync (pull + push + dotfiles + encrypted)
+  -f, --force         Force sync even if recently synced
+  -d, --dotfiles      Sync dotfiles only
+  -e, --encrypted     Sync encrypted files only
+  -p, --push          Push to remote
+  -l, --pull          Pull from remote
+  -h, --help          Show this help message
+
+Status Codes (for --check-only):
+  0 = No updates
+  1 = Remote updates available
+  2 = Uncommitted local changes
+  3 = Both remote and local changes
+EOF
+}
+
+#########################################################################
+# Main
+#########################################################################
+
 main() {
-    local custom_config=""
-    # Initialize flags to prevent "unbound variable" errors
-
-    declare -A actions=(
-        [-h]=show_help [-help]=show_help
-        [-c]=set_custom_config [--config]=set_custom_config
-        [-r]=set_env_dir [--repo]=set_env_dir
-        [-d]=enable_dotfiles_sync [--dotfiles_sync]=enable_dotfiles_sync
-        [-e]=enable_encrypted_sync [--encrypted_sync]=enable_encrypted_sync
-        [-p]=enable_push [--push]=enable_push
-        [-l]=enable_pull [--pull]=enable_pull
-        [-i]=enable_init [--init]=enable_init
-        [-u]=enable_check_updates [--check-updates]=enable_check_updates
-    )
-
+    local perform_check_only=0
+    local perform_sync=0
+    local perform_force=0
+    local perform_dotfiles=0
+    local perform_encrypted=0
+    local perform_push=0
+    local perform_pull=0
+    
     while [[ $# -gt 0 ]]; do
-        ${actions[$1]:-invalid_option} "$@"
-        shift
+        case "$1" in
+            -c|--check-only|-u|--check-updates)
+                perform_check_only=1
+                shift
+                ;;
+            -s|--sync)
+                perform_sync=1
+                shift
+                ;;
+            -f|--force)
+                perform_force=1
+                shift
+                ;;
+            -d|--dotfiles|--dotfiles_sync)
+                perform_dotfiles=1
+                shift
+                ;;
+            -e|--encrypted|--encrypted_sync)
+                perform_encrypted=1
+                shift
+                ;;
+            -p|--push)
+                perform_push=1
+                shift
+                ;;
+            -l|--pull)
+                perform_pull=1
+                shift
+                ;;
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -i|--init)
+                warning "Init option deprecated, use setup.sh instead"
+                shift
+                ;;
+            -r|--repo)
+                shift 2
+                ;;
+            --config)
+                shift 2
+                ;;
+            *)
+                warning "Unknown option: $1"
+                shift
+                ;;
+        esac
     done
-
-    [[ -n "$PERFORM_INIT" ]] && init_repo "$ENV_DIR" && update_bashrc
-    [[ -n "$PERFORM_CHECK_UPDATES" ]] && { git_check_updates "$ENV_DIR"; exit 0; }
-    [[ -n "$PERFORM_PULL" ]] && git_sync "pull" "$ENV_DIR"
-    [[ -n "$PERFORM_ENCRYPTED_SYNC" ]] && "$ENV_DIR/scripts/sync_encrypted.sh"
-    [[ -n "$PERFORM_DOTFILES_SYNC" ]] && "$ENV_DIR/scripts/sync_dotfiles.sh" "$CONFIG_FILE"
-    [[ -n "$PERFORM_PUSH" ]] && git_sync "push" "$ENV_DIR"
-    debug Finished!
+    
+    if [[ $perform_check_only -eq 1 ]]; then
+        local status=0
+        check_updates || status=$?
+        update_last_check
+        exit $status
+    fi
+    
+    if [[ $perform_sync -eq 1 ]]; then
+        perform_pull=1
+        perform_push=1
+        perform_dotfiles=1
+        perform_encrypted=1
+    fi
+    
+    if [[ $perform_pull -eq 1 ]]; then
+        git_commit_changes
+        git_pull
+    fi
+    
+    if [[ $perform_dotfiles -eq 1 ]]; then
+        if [[ -f "$ENV_DIR/scripts/sync_dotfiles.sh" ]]; then
+            bash "$ENV_DIR/scripts/sync_dotfiles.sh" "$DOTFILES_CONFIG_FILE"
+        else
+            warning "sync_dotfiles.sh not found"
+        fi
+    fi
+    
+    if [[ $perform_encrypted -eq 1 ]]; then
+        if [[ -f "$ENV_DIR/scripts/sync_encrypted.sh" ]]; then
+            bash "$ENV_DIR/scripts/sync_encrypted.sh"
+        else
+            warning "sync_encrypted.sh not found"
+        fi
+    fi
+    
+    if [[ $perform_push -eq 1 ]]; then
+        git_commit_changes
+        git_push
+    fi
+    
+    if [[ $perform_sync -eq 1 ]] || [[ $perform_pull -eq 1 ]] || [[ $perform_push -eq 1 ]]; then
+        update_last_sync
+    fi
+    
+    debug "Finished!"
 }
 
-# Functions for argument handling
-set_custom_config() { CONFIG_FILE="$2"; shift; }
-set_env_dir() { ENV_DIR="$2"; shift; }
-enable_dotfiles_sync() { PERFORM_DOTFILES_SYNC=1; }
-enable_encrypted_sync() { PERFORM_ENCRYPTED_SYNC=1; }
-enable_push() { PERFORM_PUSH=1; }
-enable_pull() { PERFORM_PULL=1; }
-enable_init() { PERFORM_INIT=1; }
-enable_check_updates() { PERFORM_CHECK_UPDATES=1; }
-invalid_option() { error "Unknown option: $1"; show_help; exit 1; }
-
-# Start script
 main "$@"

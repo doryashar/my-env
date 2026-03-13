@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Helper functions for environment scripts
+
+# Get the age of a file in days
+#
+# Args:
+#   $1 - File path
+#
+# Outputs:
+#   Number of days since file was last modified
+#   999999 if file doesn't exist
+#
+# Returns:
+#   0 - Success
+file_age_days() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then
+        echo 999999
+        return 0
+    fi
+    local file_time
+    file_time=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null)
+    echo $(( ($(date +%s) - file_time) / 86400 ))
+}
+
+# Ensure a directory exists
+#
+# Args:
+#   $1 - Directory path
+#
+# Returns:
+#   0 - Success
+ensure_dir() {
+    local dir="$1"
+    if [[ ! -d "$dir" ]]; then
+        mkdir -p "$dir"
+    fi
+}
+
+# Check if a command exists
+#
+# Args:
+#   $1 - Command name
+#
+# Returns:
+#   0 - Command exists
+#   1 - Command does not exist
+command_exists() {
+    command -v "$1" > /dev/null 2>&1
+}

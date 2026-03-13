@@ -54,12 +54,12 @@ assert_file_exists() {
 
     if [[ -f "$file" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_file_unchanged() {
@@ -71,16 +71,16 @@ assert_file_unchanged() {
         local checksum2=$(sha256sum "$file" 2>/dev/null | cut -d' ' -f1)
         if [[ "$checksum1" == "$checksum2" ]]; then
             echo -e "${GREEN}✓${NC} $message"
-            ((TESTS_PASSED++))
+            TESTS_PASSED=$((TESTS_PASSED + 1))
         else
             echo -e "${RED}✗${NC} $message"
-            ((TESTS_FAILED++))
+            TESTS_FAILED=$((TESTS_FAILED + 1))
         fi
     else
         echo -e "${RED}✗${NC} $message (file missing)"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_no_duplicate_lines() {
@@ -89,20 +89,20 @@ assert_no_duplicate_lines() {
 
     if [[ ! -f "$file" ]]; then
         echo -e "${YELLOW}⊘${NC} $message (file not found)"
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
     local duplicates=$(sort "$file" | uniq -d)
     if [[ -z "$duplicates" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
         echo "  Duplicates found: $duplicates"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_command_succeeds() {
@@ -111,12 +111,12 @@ assert_command_succeeds() {
 
     if eval "$cmd" &>/dev/null; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: running config generation twice produces same result
@@ -152,12 +152,12 @@ EOF
 
     if [[ "$checksum1" == "$checksum2" ]]; then
         echo -e "${GREEN}✓${NC} Config generation should be idempotent"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} Config generation should be idempotent"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: sourcing .env.zsh twice doesn't cause errors
@@ -166,19 +166,19 @@ test_env_zsh_idempotent() {
 
     if [[ ! -f "$env_file" ]]; then
         echo -e "${YELLOW}⊘${NC} .env.zsh not found, skipping idempotency test"
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
     # Source it twice and check for errors
     if zsh -c "source '$env_file' && source '$env_file'" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} .env.zsh should be idempotent (can be sourced multiple times)"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} .env.zsh should be idempotent (can be sourced multiple times)"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: functions can be sourced multiple times
@@ -188,7 +188,7 @@ test_functions_idempotent() {
 
     if [[ ! -d "$functions_dir" ]]; then
         echo -e "${YELLOW}⊘${NC} functions directory not found, skipping test"
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
@@ -203,12 +203,12 @@ test_functions_idempotent() {
 
     if [[ $failed -eq 0 ]]; then
         echo -e "${GREEN}✓${NC} All function files should be idempotent"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} All function files should be idempotent"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: aliases can be sourced multiple times
@@ -217,18 +217,18 @@ test_aliases_idempotent() {
 
     if [[ ! -f "$aliases_file" ]]; then
         echo -e "${YELLOW}⊘${NC} aliases file not found, skipping test"
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
     if zsh -c "source '$aliases_file' && source '$aliases_file'" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} aliases should be idempotent"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} aliases should be idempotent"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: no duplicate entries in config after regeneration
@@ -237,7 +237,7 @@ test_no_duplicate_configs() {
 
     if [[ ! -f "$config_file" ]]; then
         echo -e "${YELLOW}⊘${NC} config file not found, skipping test"
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
@@ -250,7 +250,7 @@ test_setup_script_structure() {
 
     if [[ ! -f "$setup_file" ]]; then
         echo -e "${YELLOW}⊘${NC} setup.sh not found, skipping test"
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
@@ -258,12 +258,12 @@ test_setup_script_structure() {
     # Look for "if [ -f ]" or "if [ -d ]" checks before creating
     if grep -q "if \[ -[df] " "$setup_file" || grep -q "if \[\[ -[df] " "$setup_file"; then
         echo -e "${GREEN}✓${NC} setup.sh should have idempotency checks"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${YELLOW}⊘${NC} setup.sh should have idempotency checks (not found)"
-        ((TESTS_PASSED++))  # Not a failure, just a warning
+        TESTS_PASSED=$((TESTS_PASSED + 1))  # Not a failure, just a warning
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: tmp directory handling is idempotent
@@ -277,22 +277,22 @@ test_tmp_dir_idempotent() {
     # Try creating again (should not fail or overwrite)
     if mkdir -p "$tmp_dir" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} tmp directory creation should be idempotent"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
 
         # Check that test file still exists
         if [[ -f "$tmp_dir/test_file" ]]; then
             echo -e "${GREEN}✓${NC} tmp directory should preserve existing files"
-            ((TESTS_PASSED++))
+            TESTS_PASSED=$((TESTS_PASSED + 1))
         else
             echo -e "${RED}✗${NC} tmp directory should preserve existing files"
-            ((TESTS_FAILED++))
+            TESTS_FAILED=$((TESTS_FAILED + 1))
         fi
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
     else
         echo -e "${RED}✗${NC} tmp directory creation should be idempotent"
-        ((TESTS_FAILED++))
-        ((TESTS_RUN++))
-        ((TESTS_RUN++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_RUN=$((TESTS_RUN + 1))
     fi
 }
 

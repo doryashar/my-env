@@ -52,12 +52,12 @@ assert_file_exists() {
 
     if [[ -f "$file" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_dir_exists() {
@@ -66,12 +66,12 @@ assert_dir_exists() {
 
     if [[ -d "$dir" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_symlink_exists() {
@@ -80,12 +80,12 @@ assert_symlink_exists() {
 
     if [[ -L "$link" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: setup.sh script exists in test environment
@@ -112,24 +112,24 @@ test_functions_directory() {
     # Check that at least one function file exists
     if [[ -n "$(ls -A "$TEST_ENV_DIR/functions" 2>/dev/null)" ]]; then
         echo -e "${GREEN}✓${NC} functions directory should not be empty"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} functions directory should not be empty"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: .env.zsh is syntax valid
 test_env_zsh_syntax() {
     if zsh -n "$TEST_ENV_DIR/dotfiles/.env.zsh" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} .env.zsh should have valid syntax"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} .env.zsh should have valid syntax"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: repo.conf is valid
@@ -138,19 +138,19 @@ test_repo_conf_valid() {
 
     if [[ ! -f "$repo_conf" ]]; then
         echo -e "${YELLOW}⊘${NC} repo.conf does not exist (will be generated)"
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
     # Check for required variables
     if grep -q "ENV_DIR=" "$repo_conf"; then
         echo -e "${GREEN}✓${NC} repo.conf should contain ENV_DIR"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} repo.conf should contain ENV_DIR"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: setup.sh functions are defined
@@ -166,12 +166,12 @@ test_setup_functions() {
     for func in "${functions_to_check[@]}"; do
         if grep -q "^$func()" "$setup_file"; then
             echo -e "${GREEN}✓${NC} setup.sh should contain $func function"
-            ((TESTS_PASSED++))
+            TESTS_PASSED=$((TESTS_PASSED + 1))
         else
             echo -e "${RED}✗${NC} setup.sh should contain $func function"
-            ((TESTS_FAILED++))
+            TESTS_FAILED=$((TESTS_FAILED + 1))
         fi
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
     done
 }
 
@@ -202,12 +202,12 @@ test_setup_dry_run() {
     # Check that setup.sh has proper shebang
     if head -1 "$setup_file" | grep -q "#!/"; then
         echo -e "${GREEN}✓${NC} setup.sh should have proper shebang"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} setup.sh should have proper shebang"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Run all tests

@@ -60,12 +60,12 @@ assert_file_exists() {
 
     if [[ -f "$file" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_dir_exists() {
@@ -74,12 +74,12 @@ assert_dir_exists() {
 
     if [[ -d "$dir" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # ============================================================================
@@ -124,12 +124,12 @@ echo ""
 cd "$ENV_DIR"
 if bash -c 'source scripts/setup.sh && generate_config' 2>&1; then
     echo -e "${GREEN}✓${NC} generate_config completed"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "${YELLOW}⚠${NC} generate_config had issues"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
-((TESTS_RUN++))
+TESTS_RUN=$((TESTS_RUN + 1))
 echo ""
 
 # Verify config file was created
@@ -180,34 +180,34 @@ echo ""
 echo -e "${BLUE}[TEST]${NC} Testing validate_commands()..."
 if bash -c 'cd /home/testuser/env && source scripts/setup.sh && validate_commands' 2>&1; then
     echo -e "${GREEN}✓${NC} validate_commands passed"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "${RED}✗${NC} validate_commands failed"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
-((TESTS_RUN++))
+TESTS_RUN=$((TESTS_RUN + 1))
 echo ""
 
 echo -e "${BLUE}[TEST]${NC} Testing setup_binaries()..."
 if bash -c 'cd /home/testuser/env && source scripts/setup.sh && setup_binaries' 2>&1; then
     echo -e "${GREEN}✓${NC} setup_binaries passed"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "${YELLOW}⚠${NC} setup_binaries had issues"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
-((TESTS_RUN++))
+TESTS_RUN=$((TESTS_RUN + 1))
 echo ""
 
 echo -e "${BLUE}[TEST]${NC} Testing clone_github_projects()..."
 if bash -c 'cd /home/testuser/env && source scripts/setup.sh && clone_github_projects' 2>&1; then
     echo -e "${GREEN}✓${NC} clone_github_projects passed"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "${YELLOW}⚠${NC} clone_github_projects had issues (expected)"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
-((TESTS_RUN++))
+TESTS_RUN=$((TESTS_RUN + 1))
 echo ""
 
 # ============================================================================
@@ -238,12 +238,12 @@ if [[ -f "$ENV_DIR/scripts/sync_encrypted.sh" ]]; then
     else
         echo -e "${RED}✗${NC} sync_encrypted_files() function not found"
     fi
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "${YELLOW}⚠${NC} sync_encrypted.sh not found"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
-((TESTS_RUN++))
+TESTS_RUN=$((TESTS_RUN + 1))
 echo ""
 
 # ============================================================================
@@ -265,23 +265,23 @@ echo ""
 echo -e "${BLUE}[TEST]${NC} generate_config"
 if bash -c 'cd /home/testuser/env && source scripts/setup.sh && generate_config' 2>&1 | tee /tmp/setup_output.txt; then
     echo -e "${GREEN}✓${NC} generate_config completed"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "${YELLOW}⚠${NC} generate_config had issues"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
-((TESTS_RUN++))
+TESTS_RUN=$((TESTS_RUN + 1))
 echo ""
 
 echo -e "${BLUE}[TEST]${NC} setup_cron_jobs"
 if bash -c 'cd /home/testuser/env && source scripts/setup.sh && setup_cron_jobs' 2>&1 | tee -a /tmp/setup_output.txt; then
     echo -e "${GREEN}✓${NC} setup_cron_jobs completed"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "${YELLOW}⚠${NC} setup_cron_jobs had issues"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
-((TESTS_RUN++))
+TESTS_RUN=$((TESTS_RUN + 1))
 echo ""
 
 # ============================================================================
@@ -310,12 +310,12 @@ echo ""
 echo -e "${BLUE}[TEST]${NC} Testing .env.zsh loading..."
 if zsh -c "export ENV_DIR=$ENV_DIR; source $ENV_DIR/dotfiles/.env.zsh 2>/dev/null && echo 'SUCCESS'" | grep -q SUCCESS; then
     echo -e "${GREEN}✓${NC} .env.zsh loads successfully"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "${RED}✗${NC} .env.zsh failed to load"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
-((TESTS_RUN++))
+TESTS_RUN=$((TESTS_RUN + 1))
 echo ""
 
 # Show crontab if created

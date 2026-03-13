@@ -22,11 +22,11 @@ _assert_result() {
   local expected="${3:-}"
   local actual="${4:-}"
   
-  ((TESTS_RUN++))
+  TESTS_RUN=$((TESTS_RUN + 1))
   
   if [[ $result -eq 0 ]]; then
     echo -e "  ${GREEN}✓${NC} $message"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
     return 0
   else
     echo -e "  ${RED}✗${NC} $message"
@@ -34,7 +34,7 @@ _assert_result() {
       echo -e "    ${YELLOW}Expected:${NC} $expected"
       echo -e "    ${YELLOW}Actual:${NC} $actual"
     fi
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
     return 1
   fi
 }

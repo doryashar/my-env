@@ -25,14 +25,14 @@ assert_equals() {
 
     if [[ "$expected" == "$actual" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
         echo "  Expected: $expected"
         echo "  Actual:   $actual"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_contains() {
@@ -42,14 +42,14 @@ assert_contains() {
 
     if [[ "$haystack" == *"$needle"* ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
         echo "  String: $haystack"
         echo "  Should contain: $needle"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_not_contains() {
@@ -59,14 +59,14 @@ assert_not_contains() {
 
     if [[ "$haystack" != *"$needle"* ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
         echo "  String: $haystack"
         echo "  Should NOT contain: $needle"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: jq timestamp conversion from milliseconds to ISO date
@@ -94,12 +94,12 @@ test_jq_timestamp_millisecond_bug() {
     # The bug should produce a year far in the future (50000+)
     if [[ "$wrong_result" =~ [0-9]{5} ]]; then
         echo -e "${GREEN}✓${NC} Bug confirmed: using milliseconds directly produces astronomical year: $wrong_result"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} Expected astronomical year from bug, got: $wrong_result"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: jq handles zero/epoch timestamp correctly
@@ -132,12 +132,12 @@ test_zerotier_clients_function_exists() {
 
     if grep -q "^zerotier_clients()" "$monitors_file"; then
         echo -e "${GREEN}✓${NC} zerotier_clients function should exist"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} zerotier_clients function should exist"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: the jq expression in zerotier_clients should use millisecond conversion
@@ -146,12 +146,12 @@ test_zerotier_clients_has_millisecond_fix() {
 
     if grep -q "lastSeen.*\/ 1000" "$monitors_file"; then
         echo -e "${GREEN}✓${NC} zerotier_clients should divide by 1000 for lastSeen"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${YELLOW}!${NC} zerotier_clients should divide by 1000 for lastSeen (this is the bug being fixed)"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Run all tests

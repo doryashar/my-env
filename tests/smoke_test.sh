@@ -20,9 +20,9 @@ test_env_dir_set() {
             assert_equals "$HOME/env" "$ENV_DIR" "ENV_DIR should point to $HOME/env"
         else
             echo -e "${RED}✗${NC} Failed to source .env.zsh"
-            ((TESTS_FAILED++))
+            TESTS_FAILED=$((TESTS_FAILED + 1))
         fi
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
     fi
 }
 
@@ -32,13 +32,13 @@ test_env_zsh_loads() {
 
     if [[ "$output" == *"SUCCESS"* ]]; then
         echo -e "${GREEN}✓${NC} .env.zsh should load successfully in zsh"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} .env.zsh should load successfully in zsh"
         echo "  Output: $output"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: .zshrc sources .env.zsh
@@ -47,18 +47,18 @@ test_zshrc_sources_env_zsh() {
 
     if [[ ! -f "$zshrc_file" ]]; then
         echo -e "${YELLOW}⊘${NC} .zshrc not found, skipping test"
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
     if grep -q "\.env\.zsh" "$zshrc_file" || grep -q "source.*env\.zsh" "$zshrc_file"; then
         echo -e "${GREEN}✓${NC} .zshrc should source .env.zsh"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${YELLOW}⊘${NC} .zshrc may not source .env.zsh (handled by z4h)"
-        ((TESTS_PASSED++))  # Not necessarily a failure with z4h
+        TESTS_PASSED=$((TESTS_PASSED + 1))  # Not necessarily a failure with z4h
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: core directories exist
@@ -98,19 +98,19 @@ test_config_valid() {
 
     if [[ ! -f "$config_file" ]]; then
         echo -e "${YELLOW}⊘${NC} config/repo.conf does not exist, skipping test"
-        ((TESTS_RUN++))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
     # Test that it can be sourced
     if source "$config_file" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} config/repo.conf should be valid"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} config/repo.conf should be valid"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: functions can be loaded
@@ -120,8 +120,8 @@ test_functions_loadable() {
 
     if [[ ! -d "$functions_dir" ]]; then
         echo -e "${RED}✗${NC} functions directory should exist"
-        ((TESTS_FAILED++))
-        ((TESTS_RUN++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
@@ -136,12 +136,12 @@ test_functions_loadable() {
 
     if [[ $failed -eq 0 ]]; then
         echo -e "${GREEN}✓${NC} All function files should be loadable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} All function files should be loadable"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: aliases file is loadable
@@ -150,19 +150,19 @@ test_aliases_loadable() {
 
     if [[ ! -f "$aliases_file" ]]; then
         echo -e "${RED}✗${NC} aliases file should exist"
-        ((TESTS_FAILED++))
-        ((TESTS_RUN++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
-    if source "$aliases_file" 2>/dev/null; then
+    if source "$aliases_file" </dev/null 2>/dev/null; then
         echo -e "${GREEN}✓${NC} aliases file should be loadable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} aliases file should be loadable"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: env_vars file is loadable
@@ -171,31 +171,31 @@ test_env_vars_loadable() {
 
     if [[ ! -f "$env_vars" ]]; then
         echo -e "${RED}✗${NC} env_vars file should exist"
-        ((TESTS_FAILED++))
-        ((TESTS_RUN++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        TESTS_RUN=$((TESTS_RUN + 1))
         return
     fi
 
     if source "$env_vars" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} env_vars should be loadable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} env_vars should be loadable"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: .env.zsh has no syntax errors
 test_env_zsh_syntax_valid() {
     if zsh -n "$HOME/env/dotfiles/.env.zsh" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} .env.zsh should have valid syntax"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} .env.zsh should have valid syntax"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Run all tests

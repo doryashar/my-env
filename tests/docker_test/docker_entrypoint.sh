@@ -60,12 +60,12 @@ assert_dir_exists() {
 
     if [[ -d "$dir" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_file_exists() {
@@ -74,12 +74,12 @@ assert_file_exists() {
 
     if [[ -f "$file" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_command_exists() {
@@ -88,12 +88,12 @@ assert_command_exists() {
 
     if command -v "$cmd" &> /dev/null; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_var_set() {
@@ -103,12 +103,12 @@ assert_var_set() {
 
     if [[ -n "$value" ]]; then
         echo -e "${GREEN}✓${NC} $message (value: $value)"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 run_test() {
@@ -118,12 +118,12 @@ run_test() {
     echo -e "${BLUE}[TEST]${NC} $name"
     if eval "$cmd" 2>&1; then
         echo -e "${GREEN}✓${NC} $name - PASSED"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $name - FAILED"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
     echo ""
 }
 
@@ -195,12 +195,12 @@ echo ""
 # Test: We are running as testuser
 if [[ "$(whoami)" == "testuser" ]]; then
     echo -e "${GREEN}✓${NC} Running as testuser"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     echo -e "${RED}✗${NC} Running as $(whoami) (expected testuser)"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
-((TESTS_RUN++))
+TESTS_RUN=$((TESTS_RUN + 1))
 
 # Test: ENV_DIR is set
 assert_var_set ENV_DIR "ENV_DIR should be set"

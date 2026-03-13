@@ -27,38 +27,32 @@ test_setup_script_exists() {
     assert_file_exists "$HOME/env/scripts/setup.sh" "setup.sh script should exist"
 }
 
-# Test: prerun.sh script exists
-test_prerun_script_exists() {
-    assert_file_exists "$HOME/env/scripts/prerun.sh" "prerun.sh script should exist"
-}
-
 # Test: setup.sh is executable
 test_setup_script_executable() {
     if [[ -x "$HOME/env/scripts/setup.sh" ]]; then
         echo -e "${GREEN}✓${NC} setup.sh should be executable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} setup.sh should be executable"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: common functions are sourced correctly
 test_common_functions_source() {
     if source "$HOME/env/functions/common_funcs" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} common_funcs should be sourceable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} common_funcs should be sourceable"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: validate_commands function works
 test_validate_commands() {
-    # Both git and curl should be available on most systems
     assert_command_exists git "git command should exist"
     assert_command_exists curl "curl command should exist"
 }
@@ -81,60 +75,54 @@ test_functions_directory() {
     assert_file_exists "$HOME/env/functions/common_funcs" "common_funcs should exist"
 }
 
-# Test: setup.sh contains required functions
+# Test: setup.sh contains required functions (merged from prerun.sh)
 test_setup_script_functions() {
     local setup_file="$HOME/env/scripts/setup.sh"
 
-    # Check for function definitions
     if grep -q "^generate_config()" "$setup_file"; then
         echo -e "${GREEN}✓${NC} setup.sh should contain generate_config function"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} setup.sh should contain generate_config function"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if grep -q "^install_apt_packages()" "$setup_file"; then
         echo -e "${GREEN}✓${NC} setup.sh should contain install_apt_packages function"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} setup.sh should contain install_apt_packages function"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if grep -q "^setup_zsh()" "$setup_file"; then
         echo -e "${GREEN}✓${NC} setup.sh should contain setup_zsh function"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} setup.sh should contain setup_zsh function"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
-}
+    TESTS_RUN=$((TESTS_RUN + 1))
 
-# Test: prerun.sh contains required functions
-test_prerun_script_functions() {
-    local prerun_file="$HOME/env/scripts/prerun.sh"
-
-    if grep -q "^is_env_installed()" "$prerun_file"; then
-        echo -e "${GREEN}✓${NC} prerun.sh should contain is_env_installed function"
-        ((TESTS_PASSED++))
+    if grep -q "^is_env_installed()" "$setup_file"; then
+        echo -e "${GREEN}✓${NC} setup.sh should contain is_env_installed function (from prerun.sh)"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}✗${NC} prerun.sh should contain is_env_installed function"
-        ((TESTS_FAILED++))
+        echo -e "${RED}✗${NC} setup.sh should contain is_env_installed function (from prerun.sh)"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
-    if grep -q "^check_remote_updates()" "$prerun_file"; then
-        echo -e "${GREEN}✓${NC} prerun.sh should contain check_remote_updates function"
-        ((TESTS_PASSED++))
+    if grep -q "^create_private_repo()" "$setup_file"; then
+        echo -e "${GREEN}✓${NC} setup.sh should contain create_private_repo function"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}✗${NC} prerun.sh should contain check_remote_updates function"
-        ((TESTS_FAILED++))
+        echo -e "${RED}✗${NC} setup.sh should contain create_private_repo function"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Run all tests
@@ -146,7 +134,6 @@ run_all_tests() {
 
     # Setup tests
     test_setup_script_exists
-    test_prerun_script_exists
     test_setup_script_executable
     test_common_functions_source
 
@@ -157,7 +144,6 @@ run_all_tests() {
 
     # Function tests
     test_setup_script_functions
-    test_prerun_script_functions
 
     # Command tests
     test_validate_commands

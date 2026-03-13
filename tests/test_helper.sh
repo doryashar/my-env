@@ -12,20 +12,69 @@ TESTS_RUN=0
 TESTS_PASSED=0
 TESTS_FAILED=0
 
-assert_equals() {
-    local expected="$1"
-    local actual="$2"
-    local message="${3:-Values should be equal}"
-    if [[ "$expected" == "$actual" ]]; then
+assert_command_exists() {
+    local cmd="$1"
+    local message="${2:-Command $cmd should exist}"
+    if command -v "$cmd" &>/dev/null; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        echo "  Expected: $expected"
-        echo "  Actual:   $actual"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+assert_dir_exists() {
+    local dir="$1"
+    local message="${2:-Directory $dir should exist}"
+    if [[ -d "$dir" ]]; then
+        echo -e "${GREEN}✓${NC} $message"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} $message"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+assert_file_exists() {
+    local file="$1"
+    local message="${2:-File $file should exist}"
+    if [[ -f "$file" ]]; then
+        echo -e "${GREEN}✓${NC} $message"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} $message"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+assert_file_not_exists() {
+    local file="$1"
+    local message="${2:-File $file should not exist}"
+    if [[ ! -f "$file" ]]; then
+        echo -e "${GREEN}✓${NC} $message"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} $message"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+assert_symlink_exists() {
+    local link="$1"
+    local message="${2:-Symlink $link should exist}"
+    if [[ -L "$link" ]]; then
+        echo -e "${GREEN}✓${NC} $message"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} $message"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_not_equals() {
@@ -34,13 +83,13 @@ assert_not_equals() {
     local message="${3:-Values should not be equal}"
     if [[ "$expected" != "$actual" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
         echo "  Both values are: $expected"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_command_exists() {
@@ -48,12 +97,12 @@ assert_command_exists() {
     local message="${2:-Command $cmd should exist}"
     if command -v "$cmd" &>/dev/null; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_file_exists() {
@@ -61,12 +110,12 @@ assert_file_exists() {
     local message="${2:-File $file should exist}"
     if [[ -f "$file" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_file_not_exists() {
@@ -74,12 +123,12 @@ assert_file_not_exists() {
     local message="${2:-File $file should not exist}"
     if [[ ! -f "$file" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_dir_exists() {
@@ -87,12 +136,12 @@ assert_dir_exists() {
     local message="${2:-Directory $dir should exist}"
     if [[ -d "$dir" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_symlink_exists() {
@@ -100,12 +149,12 @@ assert_symlink_exists() {
     local message="${2:-Symlink $link should exist}"
     if [[ -L "$link" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_contains() {
@@ -114,14 +163,14 @@ assert_contains() {
     local message="${3:-String should contain substring}"
     if [[ "$haystack" == *"$needle"* ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
         echo "  Looking for: $needle"
         echo "  In: $haystack"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_exit_code() {
@@ -130,14 +179,14 @@ assert_exit_code() {
     local message="${3:-Exit code should be $expected}"
     if [[ "$expected" -eq "$actual" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
         echo "  Expected: $expected"
         echo "  Actual:   $actual"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 print_test_summary() {
@@ -167,12 +216,12 @@ assert_source_succeeds() {
     local message="${2:-File $file should source successfully}"
     if source "$file" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_var_set() {
@@ -180,16 +229,16 @@ assert_var_set() {
     local message="${2:-Variable $var_name should be set}"
     if [[ -n "${!var_name}" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 skip_test() {
     local message="${1:-Test skipped}"
     echo -e "${YELLOW}⊘${NC} $message"
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }

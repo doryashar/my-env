@@ -25,14 +25,14 @@ assert_equals() {
 
     if [[ "$expected" == "$actual" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
         echo "  Expected: $expected"
         echo "  Actual: $actual"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_file_exists() {
@@ -41,12 +41,12 @@ assert_file_exists() {
 
     if [[ -f "$file" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_dir_exists() {
@@ -55,12 +55,12 @@ assert_dir_exists() {
 
     if [[ -d "$dir" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_source_succeeds() {
@@ -69,12 +69,12 @@ assert_source_succeeds() {
 
     if source "$file" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_var_set() {
@@ -83,12 +83,12 @@ assert_var_set() {
 
     if [[ -n "${!var_name}" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: .env.zsh file exists
@@ -101,12 +101,12 @@ test_env_dir_definition() {
     local env_file="$HOME/env/dotfiles/.env.zsh"
     if grep -q "^ENV_DIR=" "$env_file"; then
         echo -e "${GREEN}✓${NC} ENV_DIR should be defined in .env.zsh"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} ENV_DIR should be defined in .env.zsh"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: config/repo.conf exists and is valid
@@ -119,12 +119,12 @@ test_repo_conf_sourceable() {
     local repo_conf="$HOME/env/config/repo.conf"
     if source "$repo_conf" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} repo.conf should be sourceable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} repo.conf should be sourceable"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: env_vars file exists
@@ -137,12 +137,12 @@ test_env_vars_sourceable() {
     local env_vars="$HOME/env/env_vars"
     if source "$env_vars" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} env_vars should be sourceable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} env_vars should be sourceable"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: functions directory exists
@@ -164,11 +164,11 @@ test_functions_sourceable() {
 
     if [[ $failed -eq 0 ]]; then
         echo -e "${GREEN}✓${NC} All function files should be sourceable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: aliases file exists
@@ -181,24 +181,24 @@ test_aliases_sourceable() {
     local aliases_file="$HOME/env/aliases"
     if source "$aliases_file" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} aliases should be sourceable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} aliases should be sourceable"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: .env.zsh has no syntax errors
 test_env_zsh_syntax() {
     if zsh -n "$HOME/env/dotfiles/.env.zsh" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} .env.zsh should have no syntax errors"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} .env.zsh should have no syntax errors"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: .env.zsh sources files in correct order
@@ -208,22 +208,22 @@ test_source_order() {
     # Check that config/repo.conf is sourced
     if grep -q "source.*config/repo.conf" "$env_file" || grep -q "\. *config/repo.conf" "$env_file"; then
         echo -e "${GREEN}✓${NC} .env.zsh should source config/repo.conf"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} .env.zsh should source config/repo.conf"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     # Check that env_vars is sourced
     if grep -q "source.*env_vars" "$env_file" || grep -q "\. *env_vars" "$env_file"; then
         echo -e "${GREEN}✓${NC} .env.zsh should source env_vars"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} .env.zsh should source env_vars"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: tmp directory exists
@@ -236,12 +236,12 @@ test_tmp_dir_used() {
     local env_file="$HOME/env/dotfiles/.env.zsh"
     if grep -q "tmp" "$env_file"; then
         echo -e "${GREEN}✓${NC} .env.zsh should reference tmp directory"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} .env.zsh should reference tmp directory"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: ENV_DEBUG function exists
@@ -249,12 +249,12 @@ test_env_debug_function() {
     local env_file="$HOME/env/dotfiles/.env.zsh"
     if grep -q "^env_debug()" "$env_file" || grep -q "env_debug.*{.*:" "$env_file"; then
         echo -e "${GREEN}✓${NC} .env.zsh should define env_debug function"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} .env.zsh should define env_debug function"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Run all tests

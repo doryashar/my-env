@@ -24,12 +24,12 @@ assert_success() {
 
     if [[ $result -eq 0 ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_file_exists() {
@@ -38,12 +38,12 @@ assert_file_exists() {
 
     if [[ -f "$file" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 assert_symlink_exists() {
@@ -52,12 +52,12 @@ assert_symlink_exists() {
 
     if [[ -L "$link" ]]; then
         echo -e "${GREEN}✓${NC} $message"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} $message"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Setup test environment
@@ -158,12 +158,12 @@ test_script_exists() {
 
     if [[ -x "$HOME/env/scripts/sync_dotfiles.sh" ]]; then
         echo -e "${GREEN}✓${NC} sync_dotfiles.sh should be executable"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} sync_dotfiles.sh should be executable"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: config file exists
@@ -175,24 +175,24 @@ test_config_file_exists() {
 test_load_config_function() {
     if grep -q "^load_config()" "$HOME/env/scripts/sync_dotfiles.sh"; then
         echo -e "${GREEN}✓${NC} sync_dotfiles.sh should contain load_config function"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} sync_dotfiles.sh should contain load_config function"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: sync_file function exists
 test_sync_file_function() {
     if grep -q "^sync_file()" "$HOME/env/scripts/sync_dotfiles.sh"; then
         echo -e "${GREEN}✓${NC} sync_dotfiles.sh should contain sync_file function"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "${RED}✗${NC} sync_dotfiles.sh should contain sync_file function"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Save original HOME

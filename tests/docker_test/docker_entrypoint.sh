@@ -146,7 +146,7 @@ echo -e "${CYAN}─────────────────────�
 mkdir -p "$ENV_DIR/config"
 cat > "$ENV_DIR/config/repo.conf" << 'EOF'
 # Remote git repository URL (optional)
-REMOTE_URL="git@github.com:doryashar/my_env"
+REMOTE_URL="git@github.com:doryashar/my-env"
 ENV_DIR="${HOME}/env"
 
 # Bitwarden configuration

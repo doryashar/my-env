@@ -51,6 +51,13 @@ copy_env_files() {
   cp "$ORIGINAL_ENV_DIR"/env_vars "$TEST_ENV_DIR/env_vars" 2>/dev/null || true
   
   chmod +x "$TEST_ENV_DIR"/scripts/*.sh 2>/dev/null || true
+  
+  mkdir -p "$TEST_ENV_DIR/tests/docker/lib" "$TEST_ENV_DIR/tests/docker/suites"
+  cp -r "$ORIGINAL_ENV_DIR"/tests/docker/lib/* "$TEST_ENV_DIR/tests/docker/lib/" 2>/dev/null || true
+  cp -r "$ORIGINAL_ENV_DIR"/tests/docker/suites/* "$TEST_ENV_DIR/tests/docker/suites/" 2>/dev/null || true
+  cp -r "$ORIGINAL_ENV_DIR"/tests/docker/run_tests.sh "$TEST_ENV_DIR/tests/docker/" 2>/dev/null || true
+  chmod +x "$TEST_ENV_DIR"/tests/docker/*.sh 2>/dev/null || true
+  chmod +x "$TEST_ENV_DIR"/tests/docker/suites/*.sh 2>/dev/null || true
 }
 
 setup_test_git_config() {

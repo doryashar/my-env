@@ -1,12 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="/home/testuser/env/tests/docker"
-ENV_DIR="/home/testuser/env"
+DOCKER_TEST_SCRIPT_DIR="/home/testuser/env/tests/docker"
+DOCKER_TEST_ENV_DIR="/home/testuser/env"
+ORIGINAL_ENV_DIR="/home/testuser/env"
 
-source "$SCRIPT_DIR/lib/test_framework.sh"
-source "$SCRIPT_DIR/lib/mocks.sh"
-source "$SCRIPT_DIR/lib/state_manager.sh"
+source "$DOCKER_TEST_SCRIPT_DIR/lib/test_framework.sh"
+source "$DOCKER_TEST_SCRIPT_DIR/lib/mocks.sh"
+source "$DOCKER_TEST_SCRIPT_DIR/lib/state_manager.sh"
 
 SUITES=()
 SUITE_PASSED=0
@@ -29,7 +30,7 @@ Options:
 Environment Variables:
   USE_REAL_BITWARDEN=true    Use real Bitwarden (requires BW_SESSION)
   USE_REAL_GITHUB=true       Use real GitHub API (requires GH_TOKEN)
-  USE_REAL_AGE=true          Use real age encryption
+  USE_REAL_AGE=true           Use real age encryption
 
 Examples:
   $0                        Run all tests
@@ -103,31 +104,35 @@ parse_args() {
 
 run_suite() {
   local suite_name="$1"
-  local suite_script="$SCRIPT_DIR/suites/${suite_name}.sh"
+  local suite_script="$DOCKER_TEST_SCRIPT_DIR/suites/${suite_name}.sh"
   
   if [[ ! -f "$suite_script" ]]; then
     echo -e "${RED}Error: Suite not found: $suite_script${NC}"
     return 1
   fi
   
-  source "$suite_script"
-  
-  if declare -f run_all_tests &>/dev/null; then
-    run_all_tests
-    local result=$?
+  (
+    export SCRIPT_DIR="$DOCKER_TEST_SCRIPT_DIR"
+    export ENV_DIR="$DOCKER_TEST_ENV_DIR"
+    source "$suite_script"
     
-    if [[ $result -eq 0 ]]; then
-      ((SUITE_PASSED++))
+    if declare -f run_all_tests &>/dev/null; then
+      run_all_tests
+      exit $?
     else
-      ((SUITE_FAILED++))
+      echo -e "${RED}Error: run_all_tests function not found in $suite_script${NC}"
+      exit 1
     fi
-    
-    return $result
+  )
+  local result=$?
+  
+  if [[ $result -eq 0 ]]; then
+    ((SUITE_PASSED++))
   else
-    echo -e "${RED}Error: run_all_tests function not found in $suite_script${NC}"
     ((SUITE_FAILED++))
-    return 1
   fi
+  
+  return $result
 }
 
 main() {
@@ -138,7 +143,6 @@ main() {
   echo -e "${BOLD}========================================${NC}"
   echo ""
   
-  init_state_manager
   setup_mocks
   
   local start_time=$(date +%s)
@@ -153,7 +157,6 @@ main() {
   local duration=$((end_time - start_time))
   
   teardown_mocks
-  cleanup_state
   
   echo -e "${BOLD}========================================${NC}"
   echo -e "${BOLD}Test Summary${NC}"

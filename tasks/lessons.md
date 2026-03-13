@@ -97,3 +97,61 @@ bash "$ENV_DIR/scripts/sync_dotfiles.sh" "$config" || warning "Dotfiles sync fai
 **Rule:**
 1. Always use `${VAR:-default}` for potentially unset variables
 2. All external script calls in setup.sh should be wrapped with `|| warning` to prevent cascading failures
+
+---
+
+### Pattern: Prompts fail when running via curl
+**Problem:** `read -p "Question?"` fails when stdin is piped (curl | bash) because stdin is not connected to a terminal.
+
+**Solution:** Read from `/dev/tty` when stdin is not a terminal:
+
+```bash
+# Helper function for y/n prompts
+prompt_yn() {
+    local question="$1"
+    if [[ -t 0 ]]; then
+        read -p "$question" -n 1 -r
+        echo
+    else
+        echo -n "$question"
+        read -r reply < /dev/tty
+        REPLY="${reply:0:1}"
+    fi
+    [[ "$REPLY" =~ ^[Yy]$ ]]
+}
+
+# Usage
+if prompt_yn "Continue? (y/n) "; then
+    do_something
+fi
+```
+
+For regular prompts:
+```bash
+prompt() {
+    local question="$1"
+    local var_name="${2:-REPLY}"
+    if [[ -t 0 ]]; then
+        read -p "$question" "$var_name"
+    else
+        echo -n "$question"
+        read -r answer < /dev/tty
+        eval "$var_name=\$answer"
+    fi
+}
+
+# Usage
+prompt "Enter name: " username
+```
+
+For password input (hidden):
+```bash
+if [[ -t 0 ]]; then
+    read -s -p "Password: " password
+else
+    echo -n "Password: "
+    read -s password < /dev/tty
+fi
+```
+
+**Rule:** All scripts that may be run via curl must use `/dev/tty` for interactive prompts. Use `prompt()` and `prompt_yn()` from `common_funcs`.

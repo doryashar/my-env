@@ -78,3 +78,22 @@ sleep 0.1  # Add small delay
 **Solution:** Always use consistent naming. GitHub repo is `my-env` (hyphen).
 
 **Rule:** Use `my-env` consistently. Update any `my_env` references.
+
+---
+
+### Pattern: Unbound variables in subscripts
+**Problem:** Scripts called from setup.sh may fail due to unbound variables (e.g., `$USER` not set), killing the entire setup.
+
+**Solution:**
+1. Use default values for common variables: `${USER:-$(whoami)}`, `${HOME:-~}`
+2. Wrap external script calls with error handling:
+
+```bash
+# In setup.sh - wrap calls with || warning
+bash "$ENV_DIR/scripts/install_docker.sh" || warning "Docker installation failed (non-fatal)"
+bash "$ENV_DIR/scripts/sync_dotfiles.sh" "$config" || warning "Dotfiles sync failed (non-fatal)"
+```
+
+**Rule:**
+1. Always use `${VAR:-default}` for potentially unset variables
+2. All external script calls in setup.sh should be wrapped with `|| warning` to prevent cascading failures

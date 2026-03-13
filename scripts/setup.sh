@@ -1,5 +1,4 @@
 #!/bin/bash
-set -euo pipefail
 
 #########################################################################
 # ENV Setup Script
@@ -9,6 +8,8 @@ set -euo pipefail
 #
 # Can be run directly via curl:
 #   curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | bash
+#   # Or with custom repo:
+#   curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | ENV_URL=https://github.com/user/repo bash
 #
 # Features:
 # - Self-cloning if not running from repo
@@ -29,28 +30,41 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Determine script location and whether we need to clone
-SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+# Default repository URL (can be overridden via ENV_URL)
+DEFAULT_REPO_URL="https://github.com/doryashar/my-env.git"
 
-# Check if we're running from inside the repo by looking for key files
-is_in_repo() {
-    [[ -f "$SCRIPT_DIR/../config/repo.conf" ]] && [[ -f "$SCRIPT_DIR/../functions/common_funcs" ]]
-}
+# Check if running from a file (not piped)
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "")"
+    SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+    
+    # Check if we're running from inside the repo by looking for key files
+    if [[ -f "$SCRIPT_DIR/../config/repo.conf" ]] && [[ -f "$SCRIPT_DIR/../functions/common_funcs" ]]; then
+        # We're in the repo, set ENV_DIR and continue
+        ENV_DIR="$(dirname "$SCRIPT_DIR")"
+    else
+        # Running from a file but not in repo - need to clone
+        NEEDS_CLONE=1
+    fi
+else
+    # Running via curl (piped) - need to clone
+    NEEDS_CLONE=1
+fi
 
-# If not in repo, clone it and re-run
-if ! is_in_repo; then
+# If we need to clone the repo first
+if [[ "${NEEDS_CLONE:-0}" == "1" ]]; then
     ENV_TARGET="${ENV_DIR:-$HOME/env}"
+    REPO_URL="${ENV_URL:-$DEFAULT_REPO_URL}"
     
     echo -e "${BLUE}== ENV Setup ==${NC}"
-    echo "Setup script not running from repo. Cloning to $ENV_TARGET..."
+    echo "Cloning environment repository to $ENV_TARGET..."
     
     if [[ -d "$ENV_TARGET/.git" ]]; then
         echo -e "${GREEN}[INFO]${NC} Repository already exists at $ENV_TARGET"
     else
         if command -v git &>/dev/null; then
-            git clone https://github.com/doryashar/my-env.git "$ENV_TARGET"
+            echo -e "${GREEN}[INFO]${NC} Cloning $REPO_URL ..."
+            git clone "$REPO_URL" "$ENV_TARGET"
             echo -e "${GREEN}[INFO]${NC} Repository cloned successfully"
         else
             echo -e "${RED}[ERROR]${NC} git is required but not installed."
@@ -63,18 +77,18 @@ if ! is_in_repo; then
     exec bash "$ENV_TARGET/scripts/setup.sh" "$@"
 fi
 
-# Now we know we're in the repo
+# Now we're running from within the repo
+# Enable strict mode after we've handled the cloning logic
+set -euo pipefail
+
+# Script directory (we know we're in repo now)
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 ENV_DIR="$(dirname "$SCRIPT_DIR")"
 
 #########################################################################
-# Embedded Logging Functions (no external dependencies)
+# Additional Logging Functions
 #########################################################################
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
-NC='\033[0m'
 
 info() {
     echo -e "${GREEN}[INFO] $*${NC}"
@@ -230,7 +244,17 @@ clone_public_repo() {
         return 0
     fi
 
-    local public_url="git@github.com:doryashar/my-env.git"
+    # Get URL from config or use default
+    local public_url="${REMOTE_URL:-}"
+    if [[ -z "$public_url" ]]; then
+        # Try to get from git remote if we're somehow running from within a git repo
+        public_url="$(git -C "$ENV_DIR" remote get-url origin 2>/dev/null || echo "")"
+    fi
+    if [[ -z "$public_url" ]]; then
+        # Fallback to default
+        public_url="git@github.com:doryashar/my-env.git"
+        warning "No REMOTE_URL configured, using default: $public_url"
+    fi
 
     local github_token="${GITHUB_TOKEN:-}"
 
@@ -238,9 +262,11 @@ clone_public_repo() {
         github_token=$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")
     fi
 
-    if [[ -n "$github_token" ]]; then
+    if [[ -n "$github_token" ]] && [[ "$public_url" == *"github.com"* ]]; then
         debug "Cloning with HTTPS token..."
-        git clone "https://${github_token}@github.com/doryashar/my-env.git" "$ENV_DIR" 2>/dev/null || {
+        local https_url
+        https_url=$(echo "$public_url" | sed 's|git@github.com:|https://github.com/|' | sed 's|\.git$||')
+        git clone "https://${github_token}@${https_url#https://}" "$ENV_DIR" 2>/dev/null || {
             warning "HTTPS clone failed, trying SSH..."
             git clone "$public_url" "$ENV_DIR" 2>/dev/null || error "Failed to clone repository"
         }

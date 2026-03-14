@@ -616,6 +616,120 @@ get_secret_keys() {
     return 0
 }
 
+# Verify a repository was successfully cloned
+#
+# Args:
+#   $1 - Target directory path
+#
+# Returns:
+#   0 - Repository has valid .git directory
+#   1 - Not a valid git repository
+verify_repo_cloned() {
+    local target_dir="$1"
+    [[ -d "$target_dir/.git" ]] && [[ -f "$target_dir/.git/HEAD" ]]
+}
+
+# Verify a file is valid gzip format
+#
+# Args:
+#   $1 - File path to verify
+#
+# Returns:
+#   0 - File exists and is gzip format
+#   1 - File doesn't exist or isn't gzip
+verify_gzip_file() {
+    local file="$1"
+    [[ -f "$file" ]] && file "$file" 2>/dev/null | grep -q "gzip"
+}
+
+# Clone private repository using available authentication method
+#
+# Tries in order:
+#   1. gh CLI (if authenticated)
+#   2. GitHub token via curl tarball
+#   3. SSH key via git clone
+#
+# Args:
+#   $1 - Target directory path
+#   $2 - Repository URL
+#
+# Returns:
+#   0 - Success
+#   1 - All methods failed
+#
+# Side Effects:
+#   - Creates target directory
+#   - Clones repository content
+clone_private_repo() {
+    local target_dir="$1"
+    local repo_url="$2"
+    local owner_repo
+    
+    owner_repo=$(echo "$repo_url" | sed -E 's|.*github.com[:/]([^/]+/[^/]+).*|\1|; s|\.git$||')
+    
+    if [ -d "$target_dir/.git" ]; then
+        debug "Repository already cloned at $target_dir"
+        return 0
+    fi
+    
+    mkdir -p "$target_dir"
+    
+    if command_exists gh && gh auth status &>/dev/null; then
+        info "Cloning private repo via gh CLI..."
+        if gh repo clone "$owner_repo" "$target_dir" 2>/dev/null; then
+            if verify_repo_cloned "$target_dir"; then
+                info "Successfully cloned via gh CLI"
+                return 0
+            fi
+        fi
+        warning "gh clone failed, trying next method..."
+        rm -rf "$target_dir"
+        mkdir -p "$target_dir"
+    fi
+    
+    if [[ -n "${GITHUB_SSH_PRIVATE_KEY:-}" ]]; then
+        info "Cloning private repo via GitHub token..."
+        local temp_gz http_code
+        temp_gz=$(mktemp)
+        
+        http_code=$(curl -fsSL -w "%{http_code}" -o "$temp_gz" \
+            -H "Authorization: token $GITHUB_SSH_PRIVATE_KEY" \
+            -L "https://api.github.com/repos/$owner_repo/tarball" 2>/dev/null || echo "000")
+        
+        if [[ "$http_code" == "200" ]] && verify_gzip_file "$temp_gz"; then
+            if tar xzf "$temp_gz" -C "$target_dir" --strip-components=1 2>/dev/null; then
+                rm -f "$temp_gz"
+                cd "$target_dir" && git init -q && git remote add origin "$repo_url" 2>/dev/null
+                if verify_repo_cloned "$target_dir"; then
+                    info "Successfully cloned via token"
+                    cd - > /dev/null
+                    return 0
+                fi
+            fi
+        fi
+        
+        rm -f "$temp_gz"
+        warning "Token clone failed (HTTP $http_code), trying next method..."
+        rm -rf "$target_dir"
+        mkdir -p "$target_dir"
+    fi
+    
+    if [[ -f ~/.ssh/id_rsa ]] || [[ -f ~/.ssh/id_ed25519 ]]; then
+        info "Cloning private repo via SSH..."
+        if git clone "$repo_url" "$target_dir" 2>/dev/null; then
+            if verify_repo_cloned "$target_dir"; then
+                info "Successfully cloned via SSH"
+                return 0
+            fi
+        fi
+        warning "SSH clone failed"
+        rm -rf "$target_dir"
+    fi
+    
+    rm -rf "$target_dir"
+    return 1
+}
+
 # Display changed files and allow viewing diffs
 #
 # Args:
@@ -853,18 +967,12 @@ main() {
   if [ ! -d "$DECRYPTED_DIR" ]; then
     # Initial decrypt after clone
 
-    # Setup local repo if it doesn't exist
-    if [ ! -d "$LOCAL_REPO_PATH" ]; then
-      info "Initializing local repository..."
-      mkdir -p "$LOCAL_REPO_PATH"
-      temp_gz=$(mktemp) || exit 1
-      curl -H "Authorization: token ${GITHUB_SSH_PRIVATE_KEY:-}" \
-          -L https://api.github.com/repos/doryashar/encrypted/tarball \
-          -o "$temp_gz" || exit 1
-      tar xzf "$temp_gz" -C "$LOCAL_REPO_PATH" --strip-components=1 || exit 1
-      rm -f "$temp_gz"
+    if [ ! -d "$LOCAL_REPO_PATH/.git" ]; then
+        if ! clone_private_repo "$LOCAL_REPO_PATH" "$REMOTE_REPO"; then
+            error "Failed to clone private repository"
+            exit 1
+        fi
     fi
-
     
     info "Initial Decrypting now from $LOCAL_REPO_PATH to $DECRYPTED_DIR"
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
@@ -891,9 +999,12 @@ main() {
   
   
   if [ ! -d "$LOCAL_REPO_PATH"/.git ]; then 
-    info "setting up git in encrypted dir"
-    rm -rf "$LOCAL_REPO_PATH" || exit 1
-    mkdir -p  "$LOCAL_REPO_PATH" && git clone git@github.com:doryashar/encrypted.git "$LOCAL_REPO_PATH" || error "Could not clone git repo $REMOTE_REPO"
+    info "Re-initializing git in encrypted dir..."
+    rm -rf "$LOCAL_REPO_PATH"
+    if ! clone_private_repo "$LOCAL_REPO_PATH" "$REMOTE_REPO"; then
+        error "Failed to re-clone private repository"
+        exit 1
+    fi
     hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
     exit 0
   fi

@@ -445,8 +445,8 @@ sync_file() {
             ln -sf "$source" "$target"
             info "Added to repository: $source_rel"
         else
-            error "Neither source nor target exists: $source_rel"
-            return 1
+            warning "Skipping $source_rel - neither source nor target exists"
+            return 0
         fi
     fi
     

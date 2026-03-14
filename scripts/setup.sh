@@ -319,6 +319,9 @@ clone_public_repo() {
 check_remote_repo_exists() {
     local repo_url="$1"
 
+    mkdir -p ~/.ssh
+    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+
     if [[ "$repo_url" =~ git@github\.com:([^/]+)/(.+)\.git ]]; then
         local owner="${BASH_REMATCH[1]}"
         local repo_name="${BASH_REMATCH[2]}"
@@ -591,7 +594,8 @@ install_pip_packages() {
     for pkg in "${packages[@]}"; do
         if ! pip3 show "$pkg" &> /dev/null; then
             info "Installing $pkg..."
-            pip3 install --user "$pkg" 2>/dev/null || warning "Failed to install $pkg"
+            local err
+            err=$(pip3 install --user "$pkg" 2>&1) || warning "Failed to install $pkg: $err"
         else
             debug "$pkg already installed"
         fi

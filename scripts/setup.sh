@@ -271,6 +271,56 @@ oauth2_authenticate() {
 }
 
 #########################################################################
+# GitHub Authentication Functions
+#########################################################################
+
+get_github_token() {
+    local token="${GITHUB_TOKEN:-}"
+    
+    if [[ -n "$token" ]]; then
+        echo "$token"
+        return 0
+    fi
+    
+    if command_exists bw && [[ -n "${BW_SESSION:-}" ]]; then
+        token=$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")
+        if [[ -n "$token" ]]; then
+            echo "$token"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+ensure_gh_auth() {
+    if command_exists gh && gh auth status &>/dev/null; then
+        return 0
+    fi
+    
+    if ! command_exists gh; then
+        info "Installing GitHub CLI..."
+        if command_exists apt-get; then
+            sudo apt-get update -qq
+            sudo apt-get install -y gh
+        elif command_exists brew; then
+            brew install gh
+        else
+            warning "Could not install gh CLI. Please install manually."
+            return 1
+        fi
+    fi
+    
+    if ! gh auth status &>/dev/null; then
+        warning "GitHub CLI not authenticated. Please login:"
+        gh auth login
+        return $?
+    fi
+    
+    return 0
+}
+
+#########################################################################
 # Repository Functions
 #########################################################################
 
@@ -289,16 +339,12 @@ clone_public_repo() {
         public_url="$(git -C "$ENV_DIR" remote get-url origin 2>/dev/null || echo "")"
     fi
     if [[ -z "$public_url" ]]; then
-        # Fallback to default
         public_url="git@github.com:doryashar/my-env.git"
         warning "No REMOTE_URL configured, using default: $public_url"
     fi
 
-    local github_token="${GITHUB_TOKEN:-}"
-
-    if [[ -z "$github_token" ]] && command_exists bw && [[ -n "${BW_SESSION:-}" ]]; then
-        github_token=$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")
-    fi
+    local github_token
+    github_token=$(get_github_token)
 
     if [[ -n "$github_token" ]] && [[ "$public_url" == *"github.com"* ]]; then
         debug "Cloning with HTTPS token..."
@@ -318,10 +364,7 @@ clone_public_repo() {
 
 check_remote_repo_exists() {
     local repo_url="$1"
-
-    mkdir -p ~/.ssh
-    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-
+    
     if [[ "$repo_url" =~ git@github\.com:([^/]+)/(.+)\.git ]]; then
         local owner="${BASH_REMATCH[1]}"
         local repo_name="${BASH_REMATCH[2]}"
@@ -332,12 +375,46 @@ check_remote_repo_exists() {
         warning "Could not parse repository URL: $repo_url"
         return 1
     fi
-
+    
     debug "Checking if repo exists: $owner/$repo_name"
-
+    
+    local github_token
+    github_token=$(get_github_token)
+    if [[ -n "$github_token" ]]; then
+        debug "Checking repo via GitHub API..."
+        local http_code
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token $github_token" \
+            "https://api.github.com/repos/$owner/$repo_name")
+        if [[ "$http_code" == "200" ]]; then
+            debug "Repo exists (API)"
+            return 0
+        elif [[ "$http_code" == "404" ]]; then
+            debug "Repo does not exist (API)"
+            return 1
+        fi
+        debug "API check returned $http_code, trying other methods..."
+    fi
+    
+    if command_exists gh && gh auth status &>/dev/null; then
+        debug "Checking repo via gh CLI..."
+        if gh repo view "$owner/$repo_name" &>/dev/null; then
+            debug "Repo exists (gh CLI)"
+            return 0
+        else
+            debug "Repo does not exist (gh CLI)"
+            return 1
+        fi
+    fi
+    
+    mkdir -p ~/.ssh
+    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+    debug "Checking repo via git ls-remote..."
     if git ls-remote "$repo_url" HEAD &>/dev/null; then
+        debug "Repo exists (git ls-remote)"
         return 0
     else
+        debug "Repo does not exist or no access (git ls-remote)"
         return 1
     fi
 }
@@ -361,22 +438,26 @@ create_private_repo() {
     info "Creating private repository: $owner/$repo_name"
 
     if command_exists gh; then
-        if gh repo create "$owner/$repo_name" --private 2>/dev/null; then
-            info "Repository created successfully!"
-            return 0
-        else
-            warning "GitHub CLI failed. Trying manual creation..."
+        if ! gh auth status &>/dev/null; then
+            warning "GitHub CLI not authenticated. Please login:"
+            gh auth login || warning "gh auth login failed"
+        fi
+        
+        if gh auth status &>/dev/null; then
+            if gh repo create "$owner/$repo_name" --private 2>/dev/null; then
+                info "Repository created successfully!"
+                return 0
+            else
+                warning "GitHub CLI failed. Trying API..."
+            fi
         fi
     fi
 
-    local github_token="${GITHUB_TOKEN:-}"
-
-    if [[ -z "$github_token" ]] && command_exists bw && [[ -n "${BW_SESSION:-}" ]]; then
-        github_token=$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")
-    fi
+    local github_token
+    github_token=$(get_github_token)
 
     if [[ -z "$github_token" ]]; then
-        info "GitHub CLI not available or failed."
+        info "No GitHub token available."
         prompt "Enter your GitHub Personal Access Token (with repo scope): " github_token
     fi
 
@@ -427,6 +508,35 @@ sync_encrypted_files() {
     if [[ -z "$private_url" ]]; then
         warning "PRIVATE_URL not set in config/repo.conf"
         return 0
+    fi
+
+    local has_auth=false
+    if get_github_token &>/dev/null; then
+        has_auth=true
+    elif command_exists gh && gh auth status &>/dev/null; then
+        has_auth=true
+    elif [[ -f ~/.ssh/id_rsa ]] || [[ -f ~/.ssh/id_ed25519 ]]; then
+        has_auth=true
+    fi
+    
+    if [[ "$has_auth" == "false" ]]; then
+        warning "No GitHub authentication available (no token, gh CLI, or SSH key)"
+        echo ""
+        echo "Would you like to authenticate with GitHub CLI?"
+        if prompt_yn "Authenticate with gh? (y/n) "; then
+            if ensure_gh_auth; then
+                has_auth=true
+            else
+                warning "Authentication failed. Skipping encrypted files sync."
+                return 0
+            fi
+        else
+            info "Skipping encrypted files sync. Set up authentication later:"
+            echo "  1. Run: gh auth login"
+            echo "  2. Or set GITHUB_TOKEN environment variable"
+            echo "  3. Or set up SSH keys"
+            return 0
+        fi
     fi
 
     info "Checking if private repository exists..."

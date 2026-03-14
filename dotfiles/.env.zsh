@@ -31,9 +31,15 @@ if [[ -f "${ENV_DIR}/env_vars" ]]; then
 fi
 
 # Load secrets if available
-if [[ -f "${ENV_DIR}/private/secrets" ]]; then
-    env_debug "Loading secrets from ${ENV_DIR}/private/secrets"
-    source "${ENV_DIR}/private/secrets"
+# Try symlink first (~/private -> ENV_DIR/tmp/private), then direct path
+if [[ -f ~/private/secrets ]]; then
+    env_debug "Loading secrets from ~/private/secrets"
+    source ~/private/secrets
+elif [[ -f "${ENV_DIR}/tmp/private/secrets" ]]; then
+    env_debug "Loading secrets from ${ENV_DIR}/tmp/private/secrets"
+    source "${ENV_DIR}/tmp/private/secrets"
+else
+    env_debug "No secrets file found (run setup.sh to sync encrypted files)"
 fi
 
 # Source functions

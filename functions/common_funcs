@@ -7,26 +7,30 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 NC='\033[0m' # No Color
+
 info() {
     local message="$*"
     echo -e "${GREEN}[INFO] $message${NC}"
 }
+
 debug() {
     local message="$*"
     if [[ -n "${ENV_DEBUG:-}" ]]; then
-        # Sanitize sensitive values
         message=$(echo "$message" | sed -E 's/(AGE_SECRET|BW_PASSWORD|BW_CLIENTID|BW_CLIENTSECRET|GITHUB_SSH_PRIVATE_KEY|GLM_API_KEY|GITHUB_TOKEN|GH_TOKEN|API_KEY|TOKEN|BW_SESSION|UPTIME_KUMA_API|ZEROTIER_API_KEY)=[^ ]+/\1=***HIDDEN***/g')
         echo -e "${PURPLE}[DEBUG] $message${NC}"
     fi
 }
+
 warning() {
     local message="$*"
     echo -e "${YELLOW}[WARNING] $message${NC}"
 }
+
 title() {
     local message="$*"
     echo -e "${BLUE}$message${NC}"
 }
+
 error() {
     local message="$*"
     echo -e "${RED}[ERROR] $message${NC}" >&2
@@ -86,4 +90,195 @@ prompt_yn() {
     fi
     
     [[ "$REPLY" =~ ^[Yy]$ ]]
+}
+
+#########################################################################
+# GitHub Authentication Functions
+#########################################################################
+
+get_github_token() {
+    local token="${GITHUB_TOKEN:-}"
+    
+    if [[ -n "$token" ]]; then
+        echo "$token"
+        return 0
+    fi
+    
+    if command -v bw &>/dev/null && [[ -n "${BW_SESSION:-}" ]]; then
+        token=$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")
+        if [[ -n "$token" ]]; then
+            echo "$token"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+validate_github_token() {
+    local token="${1:-}"
+    
+    if [[ -z "$token" ]]; then
+        token=$(get_github_token)
+    fi
+    
+    if [[ -z "$token" ]]; then
+        return 1
+    fi
+    
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "Authorization: token $token" \
+        "https://api.github.com/user")
+    
+    case "$http_code" in
+        200) 
+            return 0 
+            ;;
+        401) 
+            warning "GitHub token is invalid or expired"
+            return 1 
+            ;;
+        403)
+            warning "GitHub token rate limited or missing required scopes"
+            return 1
+            ;;
+        *)
+            warning "GitHub token validation failed (HTTP $http_code)"
+            return 1
+            ;;
+    esac
+}
+
+ensure_gh_auth() {
+    if command -v gh &>/dev/null && gh auth status &>/dev/null; then
+        return 0
+    fi
+    
+    if ! command -v gh &>/dev/null; then
+        info "Installing GitHub CLI..."
+        if command -v apt-get &>/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y gh
+        elif command -v brew &>/dev/null; then
+            brew install gh
+        else
+            warning "Could not install gh CLI. Please install manually."
+            return 1
+        fi
+    fi
+    
+    if ! gh auth status &>/dev/null; then
+        warning "GitHub CLI not authenticated. Please login:"
+        gh auth login
+        return $?
+    fi
+    
+    return 0
+}
+
+ensure_github_auth() {
+    if validate_github_token; then
+        debug "Valid GitHub token available"
+        return 0
+    fi
+    
+    if command -v gh &>/dev/null && gh auth status &>/dev/null; then
+        debug "GitHub CLI authenticated"
+        return 0
+    fi
+    
+    warning "GitHub authentication required"
+    echo ""
+    echo "Options:"
+    echo "  1) Login with GitHub CLI (gh auth login)"
+    echo "  2) Enter a GitHub Personal Access Token"
+    echo "  3) Continue without GitHub access"
+    echo ""
+    local choice
+    prompt "Choose option [1-3]: " choice
+    
+    case "$choice" in
+        1) 
+            ensure_gh_auth
+            return $?
+            ;;
+        2)
+            local new_token
+            prompt "Enter GitHub Personal Access Token: " new_token
+            export GITHUB_TOKEN="$new_token"
+            if validate_github_token "$new_token"; then
+                return 0
+            else
+                return 1
+            fi
+            ;;
+        3)
+            info "Continuing without GitHub access..."
+            return 1
+            ;;
+        *)
+            warning "Invalid choice"
+            return 1
+            ;;
+    esac
+}
+
+check_github_repo_exists() {
+    local repo_url="$1"
+    
+    if [[ "$repo_url" =~ git@github\.com:([^/]+)/(.+)\.git ]]; then
+        local owner="${BASH_REMATCH[1]}"
+        local repo_name="${BASH_REMATCH[2]}"
+    elif [[ "$repo_url" =~ github\.com/([^/]+)/(.+)(\.git)? ]]; then
+        local owner="${BASH_REMATCH[1]}"
+        local repo_name="${BASH_REMATCH[2]%.git}"
+    else
+        warning "Could not parse repository URL: $repo_url"
+        return 1
+    fi
+    
+    debug "Checking if repo exists: $owner/$repo_name"
+    
+    local github_token
+    github_token=$(get_github_token)
+    if [[ -n "$github_token" ]]; then
+        if validate_github_token "$github_token"; then
+            debug "Checking repo via GitHub API..."
+            local http_code
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+                -H "Authorization: token $github_token" \
+                "https://api.github.com/repos/$owner/$repo_name")
+            if [[ "$http_code" == "200" ]]; then
+                debug "Repo exists (API)"
+                return 0
+            elif [[ "$http_code" == "404" ]]; then
+                debug "Repo does not exist (API)"
+                return 1
+            fi
+            debug "API check returned $http_code, trying other methods..."
+        fi
+    fi
+    
+    if command -v gh &>/dev/null && gh auth status &>/dev/null; then
+        debug "Checking repo via gh CLI..."
+        if gh repo view "$owner/$repo_name" &>/dev/null; then
+            debug "Repo exists (gh CLI)"
+            return 0
+        else
+            debug "Repo does not exist (gh CLI)"
+            return 1
+        fi
+    fi
+    
+    mkdir -p ~/.ssh
+    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+    debug "Checking repo via git ls-remote..."
+    if git ls-remote "$repo_url" HEAD &>/dev/null; then
+        debug "Repo exists (git ls-remote)"
+        return 0
+    else
+        debug "Repo does not exist or no access (git ls-remote)"
+        return 1
+    fi
 }

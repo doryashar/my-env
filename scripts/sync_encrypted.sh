@@ -469,40 +469,6 @@ get_bw_password() {
     export BW_PASSWORD
 }
 
-# Check if the remote repository exists
-#
-# Returns:
-#   0 - Repository exists
-#   1 - Repository does not exist
-#
-# Side Effects:
-#   - None
-check_remote_repo_exists() {
-    local repo_url="$1"
-
-    # Extract owner and repo name from various URL formats
-    # Handles: git@github.com:owner/repo.git, https://github.com/owner/repo.git, etc.
-    if [[ "$repo_url" =~ git@github\.com:([^/]+)/(.+)\.git ]]; then
-        local owner="${BASH_REMATCH[1]}"
-        local repo_name="${BASH_REMATCH[2]}"
-    elif [[ "$repo_url" =~ github\.com/([^/]+)/(.+)(\.git)? ]]; then
-        local owner="${BASH_REMATCH[1]}"
-        local repo_name="${BASH_REMATCH[2]%.git}"
-    else
-        warning "Could not parse repository URL: $repo_url"
-        return 1
-    fi
-
-    debug "Checking if repo exists: $owner/$repo_name"
-
-    # Try to fetch via git ls-remote (works with SSH)
-    if git ls-remote "$repo_url" HEAD &>/dev/null; then
-        return 0
-    else
-        return 1
-    fi
-}
-
 # Authenticate with Bitwarden and retrieve secret keys
 #
 # Returns:
@@ -737,8 +703,12 @@ show_file_diff() {
 main() {
   title "Synchronizing Private files"
 
-  # Check if remote repository exists first
-  if ! check_remote_repo_exists "$REMOTE_REPO"; then
+  if ! ensure_github_auth; then
+    error "GitHub authentication required to sync encrypted files"
+    exit 1
+  fi
+
+  if ! check_github_repo_exists "$REMOTE_REPO"; then
     error "Private repository does not exist: $REMOTE_REPO"
     echo ""
     echo "Please run setup.sh to create the private repository:"
@@ -748,15 +718,10 @@ main() {
     exit 1
   fi
 
-  if  ! command_exists bw; then
+  if ! command_exists bw; then
     error "Command BW not found, quitting"
     exit 1
   fi
-    
-  # if  ! command_exists bw; then
-  #   error "Command BW not found, quitting"
-  #   exit 1
-  # fi
     
   # Ensure age is installed
   debug "Ensuring AGE is installed and setting up the secret from BW"

@@ -692,6 +692,7 @@ install_apt_packages() {
         "unzip"
         "zip"
         "fontconfig"
+        "gawk"
     )
 
     local missing_packages=()

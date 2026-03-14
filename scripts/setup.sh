@@ -184,7 +184,14 @@ get_vault_cli() {
     temp_dir=$(mktemp -d)
     cd "$temp_dir" || return 1
 
-    local bw_version="${BW_VERSION:-2024.1.0}"
+    local bw_version="${BW_VERSION:-}"
+    if [[ -z "$bw_version" ]]; then
+        bw_version=$(curl -s https://api.github.com/repos/bitwarden/clients/releases 2>/dev/null | \
+            grep -m1 '"tag_name":.*cli' | sed 's/.*cli-v\([0-9.]*\).*/\1/')
+    fi
+    if [[ -z "$bw_version" ]]; then
+        bw_version="2026.2.0"
+    fi
     debug "Installing Bitwarden CLI version: $bw_version"
 
     if ! curl -fsSL -o bw.zip "https://github.com/bitwarden/clients/releases/download/cli-v${bw_version}/bw-linux-${bw_version}.zip" 2>/dev/null; then
@@ -228,6 +235,7 @@ oauth2_authenticate() {
     if ! command_exists bw; then
         if ! get_vault_cli; then
             warning "Failed to get vault CLI"
+            export BW_AUTH_STATUS="failed"
             return 1
         fi
     fi
@@ -235,6 +243,8 @@ oauth2_authenticate() {
     if [[ -n "${BW_SESSION:-}" ]]; then
         if bw get status &>/dev/null; then
             debug "BW_SESSION already set and valid"
+            export BW_AUTH_STATUS="success"
+            export BW_SESSION
             return 0
         else
             warning "BW_SESSION is set but appears invalid"
@@ -251,6 +261,7 @@ oauth2_authenticate() {
             info "Logging in with OAuth2..."
             if ! bw login --apikey --raw > /dev/null 2>&1; then
                 warning "OAuth2 authentication failed"
+                export BW_AUTH_STATUS="failed"
                 return 1
             fi
         else
@@ -262,10 +273,12 @@ oauth2_authenticate() {
                     info "Logged in to Bitwarden"
                 else
                     warning "Bitwarden login failed"
+                    export BW_AUTH_STATUS="failed"
                     return 1
                 fi
             else
                 info "Continuing without Bitwarden..."
+                export BW_AUTH_STATUS="skipped"
                 return 1
             fi
         fi
@@ -285,6 +298,7 @@ oauth2_authenticate() {
         echo
         export BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") --raw 2>/dev/null) || {
             warning "Failed to unlock vault"
+            export BW_AUTH_STATUS="failed"
             return 1
         }
         info "Vault unlocked successfully"
@@ -292,6 +306,8 @@ oauth2_authenticate() {
         debug "Already authenticated and unlocked"
     fi
 
+    export BW_AUTH_STATUS="success"
+    export BW_SESSION
     return 0
 }
 
@@ -824,13 +840,17 @@ setup_zsh() {
     fi
 
     if [[ ! -f "$HOME/.z4h.zsh" ]]; then
-        if [[ -t 0 ]] || [[ -c /dev/tty ]]; then
-            info "Installing Zsh for Humans (z4h)..."
-            curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install |
+        info "Installing Zsh for Humans (z4h)..."
+        
+        if [[ -c /dev/tty ]]; then
+            curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install | \
+                bash -s -- --yes --skip-x11-checks < /dev/tty
+        elif [[ -t 0 ]]; then
+            curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install | \
                 bash -s -- --yes --skip-x11-checks
         else
-            warning "No TTY detected, skipping z4h installation (non-interactive environment)"
-            debug "z4h will be installed when you run setup in an interactive shell"
+            warning "No TTY detected, skipping z4h installation"
+            warning "Run this manually later: curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install | bash -s -- --yes"
         fi
     else
         debug "z4h already installed"

@@ -469,6 +469,61 @@ get_bw_password() {
     export BW_PASSWORD
 }
 
+# Retrieve AGE_SECRET using fallback chain
+#
+# Checks in order:
+#   1. AGE_SECRET environment variable
+#   2. ~/.config/age/secret file
+#   3. Bitwarden (if BW_SESSION available)
+#   4. Interactive prompt (if TTY available)
+#
+# Returns:
+#   0 - Success (AGE_SECRET is set)
+#   1 - Failed to get AGE_SECRET
+#
+# Side Effects:
+#   - Sets AGE_SECRET environment variable
+get_age_secret() {
+    if [[ -n "${AGE_SECRET:-}" ]]; then
+        debug "Using AGE_SECRET from environment"
+        return 0
+    fi
+
+    local secret_file="$HOME/.config/age/secret"
+    if [[ -f "$secret_file" ]]; then
+        export AGE_SECRET=$(cat "$secret_file")
+        debug "Using AGE_SECRET from $secret_file"
+        return 0
+    fi
+
+    if [[ -n "${BW_SESSION:-}" ]] && command_exists bw; then
+        local secret
+        secret=$(bw get password AGE_SECRET 2>/dev/null || echo "")
+        if [[ -n "$secret" ]]; then
+            export AGE_SECRET="$secret"
+            debug "Using AGE_SECRET from Bitwarden"
+            return 0
+        fi
+    fi
+
+    if [[ -t 0 ]] || [[ -c /dev/tty ]]; then
+        echo -n "Enter AGE_SECRET (encryption key): "
+        if [[ -t 0 ]]; then
+            read -rs AGE_SECRET
+        else
+            read -rs AGE_SECRET < /dev/tty
+        fi
+        echo
+        if [[ -n "$AGE_SECRET" ]]; then
+            export AGE_SECRET
+            debug "Using AGE_SECRET from manual input"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 # Authenticate with Bitwarden and retrieve secret keys
 #
 # Returns:
@@ -481,62 +536,83 @@ get_bw_password() {
 #   - Sets AGE_SECRET environment variable
 #   - May call get_bw_password() if session is locked
 get_secret_keys() {
-    if [[ -z "${BW_EMAIL:-}" ]]; then
-        warning "BW_EMAIL environment variable not set. Please add it to config/repo.conf"
-        echo ""
-        echo "Would you like to continue without Bitwarden?"
-        if prompt_yn "Skip Bitwarden? (y/n) "; then
+    if get_age_secret; then
+        debug "AGE_SECRET obtained via fallback chain"
+    else
+        if [[ "${BW_AUTH_STATUS:-}" == "skipped" ]]; then
+            debug "Bitwarden skipped in parent process"
             return 1
         fi
-        return 1
-    fi
-    
-    BW_STATUS=$(bw status --raw)
-    if [[ $BW_STATUS == *"unauthenticated"* ]]; then
-        if [ -n "${BW_CLIENTID:-}" ] && [ -n "${BW_CLIENTSECRET:-}" ]; then
-            info "Logging in to Bitwarden with OAuth2..."
-            bw login --apikey --raw > /dev/null 2>&1 || {
-                warning "OAuth2 login failed"
-            }
+
+        if [[ "${BW_AUTH_STATUS:-}" == "failed" ]]; then
+            debug "Bitwarden auth failed in parent process"
+            return 1
+        fi
+
+        if [[ -n "${BW_SESSION:-}" ]] && bw get status &>/dev/null; then
+            debug "Using existing BW_SESSION from parent process"
         else
-            warning "BW_CLIENTID and BW_CLIENTSECRET not set"
-            echo ""
-            echo "Would you like to login to Bitwarden manually?"
-            if prompt_yn "Login to Bitwarden? (y/n) "; then
-                if bw login; then
-                    info "Logged in to Bitwarden"
-                else
-                    warning "Bitwarden login failed"
+            if [[ -z "${BW_EMAIL:-}" ]]; then
+                warning "BW_EMAIL environment variable not set. Please add it to config/repo.conf"
+                echo ""
+                echo "Would you like to continue without Bitwarden?"
+                if prompt_yn "Skip Bitwarden? (y/n) "; then
                     return 1
                 fi
-            else
-                info "Continuing without Bitwarden..."
                 return 1
             fi
-        fi
-    fi
+            
+            BW_STATUS=$(bw status --raw)
+            if [[ $BW_STATUS == *"unauthenticated"* ]]; then
+                if [ -n "${BW_CLIENTID:-}" ] && [ -n "${BW_CLIENTSECRET:-}" ]; then
+                    info "Logging in to Bitwarden with OAuth2..."
+                    bw login --apikey --raw > /dev/null 2>&1 || {
+                        warning "OAuth2 login failed"
+                    }
+                else
+                    warning "BW_CLIENTID and BW_CLIENTSECRET not set"
+                    echo ""
+                    echo "Would you like to login to Bitwarden manually?"
+                    if prompt_yn "Login to Bitwarden? (y/n) "; then
+                        if bw login; then
+                            info "Logged in to Bitwarden"
+                        else
+                            warning "Bitwarden login failed"
+                            return 1
+                        fi
+                    else
+                        info "Continuing without Bitwarden..."
+                        return 1
+                    fi
+                fi
+            fi
 
-    BW_STATUS=$(bw status --raw)
-    if [ -z "${BW_SESSION:-}" ] && [[ $BW_STATUS == *"locked"* ]]; then
-        if [ -z "${BW_PASSWORD:-}" ]; then
-            get_bw_password
+            BW_STATUS=$(bw status --raw)
+            if [ -z "${BW_SESSION:-}" ] && [[ $BW_STATUS == *"locked"* ]]; then
+                if [ -z "${BW_PASSWORD:-}" ]; then
+                    get_bw_password
+                fi
+                export BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
+                if [ -z "${BW_SESSION:-}" ]; then
+                    warning "Failed to unlock Bitwarden vault"
+                    return 1
+                fi
+                info "Vault unlocked successfully!"
+            else
+                debug "Using existing BitWarden session."
+            fi
         fi
-        export BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
-        if [ -z "${BW_SESSION:-}" ]; then
-            warning "Failed to unlock Bitwarden vault"
+
+        if ! get_age_secret; then
+            warning "Could not retrieve AGE_SECRET"
             return 1
         fi
-        info "Vault unlocked successfully!"
-    else
-        debug "Using existing BitWarden session."
     fi
 
-    export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")}
-    export AGE_SECRET=${AGE_SECRET:-"$(bw get password AGE_SECRET 2>/dev/null || echo "")"}
-    if [[ -z "${AGE_SECRET:-}" ]] || [[ -z "${GITHUB_SSH_PRIVATE_KEY:-}" ]]; then
-        warning "Could not retrieve AGE_SECRET or GITHUB_API_KEY from Bitwarden"
-        return 1
+    if [[ -n "${BW_SESSION:-}" ]] && command_exists bw; then
+        export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")}
     fi
+
     return 0
 }
 
@@ -748,12 +824,16 @@ main() {
   ensure_age_installed
   
   if ! get_secret_keys; then
-    warning "Bitwarden authentication skipped or failed"
-    echo ""
-    echo "Encrypted files sync requires Bitwarden. You can:"
-    echo "  1. Set BW_EMAIL, BW_CLIENTID, BW_CLIENTSECRET in your environment"
-    echo "  2. Run: bw login"
-    echo "  3. Re-run this script after authenticating"
+    if [[ -z "${BW_AUTH_STATUS:-}" ]]; then
+      warning "Bitwarden authentication skipped or failed"
+      echo ""
+      echo "Encrypted files sync requires Bitwarden. You can:"
+      echo "  1. Set BW_EMAIL, BW_CLIENTID, BW_CLIENTSECRET in your environment"
+      echo "  2. Run: bw login"
+      echo "  3. Re-run this script after authenticating"
+    else
+      debug "Bitwarden unavailable, skipping encrypted sync"
+    fi
     exit 0
   fi
 

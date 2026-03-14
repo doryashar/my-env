@@ -488,7 +488,7 @@ get_secret_keys() {
     fi
     BW_STATUS=$(bw status --raw)
     if [[ $BW_STATUS == *"unauthenticated"* ]]; then
-        if [ -z "$BW_CLIENTID" ] || [ -z "$BW_CLIENTSECRET" ]; then
+        if [ -z "${BW_CLIENTID:-}" ] || [ -z "${BW_CLIENTSECRET:-}" ]; then
             error "Please set the BW_CLIENTID and BW_CLIENTSECRET environment variable. or login to BitWarden"
         fi
         bw login --apikey --raw > /dev/null 2>&1
@@ -498,12 +498,12 @@ get_secret_keys() {
         fi
     fi
 
-    if [ -z "$BW_SESSION" ] && [[ $BW_STATUS == *"locked"* ]]; then
-        if [ -z "$BW_PASSWORD" ]; then
+    if [ -z "${BW_SESSION:-}" ] && [[ $BW_STATUS == *"locked"* ]]; then
+        if [ -z "${BW_PASSWORD:-}" ]; then
             get_bw_password
         fi
         export BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
-        if [ -z "$BW_SESSION" ]; then
+        if [ -z "${BW_SESSION:-}" ]; then
           error "Failed to log in to BitWarden. Please check your credentials."
           exit 1
         fi

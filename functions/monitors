@@ -104,7 +104,7 @@ zerotier_clients() {
         echo "ZeroTier: ${YELLOW}Invalid API response${NC}"
         [[ -f "$cache_file" ]] && cat "$cache_file"
         return 1
-    }
+    fi
 
     {
         echo "Client | IP Addresses | Last Seen"

@@ -824,7 +824,7 @@ setup_zsh() {
     fi
 
     if [[ ! -f "$HOME/.z4h.zsh" ]]; then
-        if [[ -t 0 ]]; then
+        if [[ -t 0 ]] || [[ -c /dev/tty ]]; then
             info "Installing Zsh for Humans (z4h)..."
             curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install |
                 bash -s -- --yes --skip-x11-checks

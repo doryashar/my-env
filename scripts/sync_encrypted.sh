@@ -4,6 +4,9 @@ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 ENV_DIR=$(dirname "$SCRIPT_DIR")
 source $ENV_DIR/functions/common_funcs
 
+mkdir -p ~/.ssh
+ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+
 # Load configuration (including BW_EMAIL)
 if [[ -f "$ENV_DIR/config/repo.conf" ]]; then
     source "$ENV_DIR/config/repo.conf"

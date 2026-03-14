@@ -858,7 +858,7 @@ main() {
       info "Initializing local repository..."
       mkdir -p "$LOCAL_REPO_PATH"
       temp_gz=$(mktemp) || exit 1
-      curl -H "Authorization: token $GITHUB_SSH_PRIVATE_KEY" \
+      curl -H "Authorization: token ${GITHUB_SSH_PRIVATE_KEY:-}" \
           -L https://api.github.com/repos/doryashar/encrypted/tarball \
           -o "$temp_gz" || exit 1
       tar xzf "$temp_gz" -C "$LOCAL_REPO_PATH" --strip-components=1 || exit 1

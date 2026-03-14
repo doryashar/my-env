@@ -843,11 +843,17 @@ setup_zsh() {
         info "Installing Zsh for Humans (z4h)..."
         
         if [[ -c /dev/tty ]]; then
-            curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install | \
-                bash -s -- --yes --skip-x11-checks < /dev/tty
+            local z4h_script
+            z4h_script=$(mktemp)
+            if curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install -o "$z4h_script" 2>/dev/null; then
+                bash "$z4h_script" --yes --skip-x11-checks < /dev/tty || warning "z4h installation failed"
+            else
+                warning "Failed to download z4h installer"
+            fi
+            rm -f "$z4h_script"
         elif [[ -t 0 ]]; then
             curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install | \
-                bash -s -- --yes --skip-x11-checks
+                bash -s -- --yes --skip-x11-checks || warning "z4h installation failed"
         else
             warning "No TTY detected, skipping z4h installation"
             warning "Run this manually later: curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install | bash -s -- --yes"

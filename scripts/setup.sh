@@ -227,7 +227,17 @@ oauth2_authenticate() {
 
     if ! command_exists bw; then
         if ! get_vault_cli; then
-            error "Failed to get vault CLI"
+            warning "Failed to get vault CLI"
+            return 1
+        fi
+    fi
+
+    if [[ -n "${BW_SESSION:-}" ]]; then
+        if bw get status &>/dev/null; then
+            debug "BW_SESSION already set and valid"
+            return 0
+        else
+            warning "BW_SESSION is set but appears invalid"
         fi
     fi
 
@@ -240,16 +250,30 @@ oauth2_authenticate() {
         if [[ -n "${BW_CLIENTID:-}" ]] && [[ -n "${BW_CLIENTSECRET:-}" ]]; then
             info "Logging in with OAuth2..."
             if ! bw login --apikey --raw > /dev/null 2>&1; then
-                error "OAuth2 authentication failed. Please set BW_CLIENTID and BW_CLIENTSECRET"
+                warning "OAuth2 authentication failed"
+                return 1
             fi
         else
             warning "BW_CLIENTID and BW_CLIENTSECRET not set"
-            info "Please login manually: bw login"
-            return 1
+            echo ""
+            echo "Would you like to login to Bitwarden manually?"
+            if prompt_yn "Login to Bitwarden? (y/n) "; then
+                if bw login; then
+                    info "Logged in to Bitwarden"
+                else
+                    warning "Bitwarden login failed"
+                    return 1
+                fi
+            else
+                info "Continuing without Bitwarden..."
+                return 1
+            fi
         fi
     fi
 
-    if [[ "$status" == *"locked"* ]] || [[ -z "${BW_SESSION:-}" ]]; then
+    status=$(bw status --raw 2>/dev/null || echo '{"status":"locked"}')
+    
+    if [[ "$status" == *"locked"* ]] && [[ -z "${BW_SESSION:-}" ]]; then
         info "Vault is locked. Unlocking..."
         local bw_password
         if [[ -t 0 ]]; then
@@ -260,7 +284,8 @@ oauth2_authenticate() {
         fi
         echo
         export BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") --raw 2>/dev/null) || {
-            error "Failed to unlock vault"
+            warning "Failed to unlock vault"
+            return 1
         }
         info "Vault unlocked successfully"
     else
@@ -890,7 +915,7 @@ main() {
         fi
 
         if command_exists bw; then
-            oauth2_authenticate || warning "Authentication failed, continuing..."
+            oauth2_authenticate || true
         fi
 
         if [[ ! -d "$ENV_DIR/.git" ]]; then

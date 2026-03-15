@@ -269,10 +269,16 @@ oauth2_authenticate() {
             echo ""
             echo "Would you like to login to Bitwarden manually?"
             if prompt_yn "Login to Bitwarden? (y/n) "; then
-                if bw login; then
-                    info "Logged in to Bitwarden"
+                if [[ -c /dev/tty ]]; then
+                    if bw login < /dev/tty; then
+                        info "Logged in to Bitwarden"
+                    else
+                        warning "Bitwarden login failed"
+                        export BW_AUTH_STATUS="failed"
+                        return 1
+                    fi
                 else
-                    warning "Bitwarden login failed"
+                    warning "No TTY available for interactive Bitwarden login"
                     export BW_AUTH_STATUS="failed"
                     return 1
                 fi
@@ -354,7 +360,12 @@ ensure_gh_auth() {
     
     if ! gh auth status &>/dev/null; then
         warning "GitHub CLI not authenticated. Please login:"
-        gh auth login
+        if [[ -c /dev/tty ]]; then
+            gh auth login < /dev/tty
+        else
+            warning "No TTY available for interactive GitHub login"
+            return 1
+        fi
         return $?
     fi
     

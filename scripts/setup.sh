@@ -268,7 +268,11 @@ oauth2_authenticate() {
 
         if [[ -n "${BW_CLIENTID:-}" ]] && [[ -n "${BW_CLIENTSECRET:-}" ]]; then
             info "Logging in with OAuth2..."
-            if ! bw login --apikey --raw > /dev/null 2>&1; then
+            BW_SESSION=$(bw login --apikey --raw 2>/dev/null)
+            if [[ -n "$BW_SESSION" ]]; then
+                export BW_SESSION
+                info "Logged in and vault unlocked via API"
+            else
                 warning "OAuth2 authentication failed"
                 export BW_AUTH_STATUS="failed"
                 return 1

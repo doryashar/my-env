@@ -194,8 +194,31 @@ get_vault_cli() {
     fi
     debug "Installing Bitwarden CLI version: $bw_version"
 
-    if ! curl -fsSL -o bw.zip "https://github.com/bitwarden/clients/releases/download/cli-v${bw_version}/bw-linux-${bw_version}.zip" 2>/dev/null; then
-        warning "Failed to download Bitwarden CLI v${bw_version}"
+    local arch_suffix=""
+    local machine
+    machine=$(uname -m)
+    case "$machine" in
+        x86_64|amd64)
+            arch_suffix=""
+            ;;
+        aarch64|arm64)
+            arch_suffix="-arm64"
+            ;;
+        armv7l|armhf|arm)
+            arch_suffix="-arm"
+            ;;
+        *)
+            warning "Unknown architecture: $machine, trying x86_64"
+            arch_suffix=""
+            ;;
+    esac
+    debug "Architecture: $machine, suffix: ${arch_suffix:-none}"
+
+    local download_url="https://github.com/bitwarden/clients/releases/download/cli-v${bw_version}/bw-linux${arch_suffix}-${bw_version}.zip"
+    debug "Download URL: $download_url"
+
+    if ! curl -fsSL -o bw.zip "$download_url" 2>/dev/null; then
+        warning "Failed to download Bitwarden CLI v${bw_version} for ${machine}"
         cd - > /dev/null
         rm -rf "$temp_dir"
         return 1

@@ -270,8 +270,11 @@ oauth2_authenticate() {
             echo "Would you like to login to Bitwarden manually?"
             if prompt_yn "Login to Bitwarden? (y/n) "; then
                 if [[ -c /dev/tty ]]; then
-                    if bw login < /dev/tty; then
-                        info "Logged in to Bitwarden"
+                    info "Starting interactive Bitwarden login..."
+                    BW_SESSION=$(bw login --raw < /dev/tty 2>/dev/null)
+                    if [[ -n "$BW_SESSION" ]]; then
+                        export BW_SESSION
+                        info "Logged in and vault unlocked"
                     else
                         warning "Bitwarden login failed"
                         export BW_AUTH_STATUS="failed"
@@ -290,26 +293,30 @@ oauth2_authenticate() {
         fi
     fi
 
-    status=$(bw status --raw 2>/dev/null || echo '{"status":"locked"}')
-    
-    if [[ "$status" == *"locked"* ]] && [[ -z "${BW_SESSION:-}" ]]; then
-        info "Vault is locked. Unlocking..."
-        local bw_password
-        if [[ -t 0 ]]; then
-            read -s -p "Enter your Bitwarden password: " bw_password
-        else
-            echo -n "Enter your Bitwarden password: "
-            read -s bw_password < /dev/tty
-        fi
-        echo
-        export BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") --raw 2>/dev/null) || {
-            warning "Failed to unlock vault"
-            export BW_AUTH_STATUS="failed"
-            return 1
-        }
-        info "Vault unlocked successfully"
+    if [[ -n "${BW_SESSION:-}" ]]; then
+        debug "BW_SESSION already set, skipping unlock"
     else
-        debug "Already authenticated and unlocked"
+        status=$(bw status --raw 2>/dev/null || echo '{"status":"locked"}')
+        
+        if [[ "$status" == *"locked"* ]]; then
+            info "Vault is locked. Unlocking..."
+            local bw_password
+            if [[ -t 0 ]]; then
+                read -s -p "Enter your Bitwarden password: " bw_password
+            else
+                echo -n "Enter your Bitwarden password: "
+                read -s bw_password < /dev/tty
+            fi
+            echo
+            export BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") --raw 2>/dev/null) || {
+                warning "Failed to unlock vault"
+                export BW_AUTH_STATUS="failed"
+                return 1
+            }
+            info "Vault unlocked successfully"
+        else
+            debug "Already authenticated and unlocked"
+        fi
     fi
 
     export BW_AUTH_STATUS="success"

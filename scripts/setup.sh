@@ -321,7 +321,7 @@ oauth2_authenticate() {
                     info "Starting interactive Bitwarden login..."
                     if bw login < /dev/tty; then
                         info "Logged in to Bitwarden, unlocking vault..."
-                        BW_SESSION=$(bw unlock --raw < /dev/tty 2>/dev/null)
+                        BW_SESSION=$(bw unlock --raw < /dev/tty)
                         if [[ -n "$BW_SESSION" ]]; then
                             export BW_SESSION
                             info "Vault unlocked successfully"

@@ -268,8 +268,11 @@ oauth2_authenticate() {
 
         if [[ -n "${BW_CLIENTID:-}" ]] && [[ -n "${BW_CLIENTSECRET:-}" ]]; then
             info "Logging in with API key..."
-            if ! bw login --apikey > /dev/null 2>&1; then
+            local bw_login_output
+            bw_login_output=$(bw login --apikey 2>&1)
+            if [[ $? -ne 0 ]]; then
                 warning "API key authentication failed"
+                debug "bw login --apikey output: $bw_login_output"
                 export BW_AUTH_STATUS="failed"
                 return 1
             fi

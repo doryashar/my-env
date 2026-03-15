@@ -267,16 +267,13 @@ oauth2_authenticate() {
         info "Not logged in to Bitwarden"
 
         if [[ -n "${BW_CLIENTID:-}" ]] && [[ -n "${BW_CLIENTSECRET:-}" ]]; then
-            info "Logging in with OAuth2..."
-            BW_SESSION=$(bw login --apikey --raw 2>/dev/null)
-            if [[ -n "$BW_SESSION" ]]; then
-                export BW_SESSION
-                info "Logged in and vault unlocked via API"
-            else
-                warning "OAuth2 authentication failed"
+            info "Logging in with API key..."
+            if ! bw login --apikey > /dev/null 2>&1; then
+                warning "API key authentication failed"
                 export BW_AUTH_STATUS="failed"
                 return 1
             fi
+            info "Logged in via API key"
         else
             warning "BW_CLIENTID and BW_CLIENTSECRET not set"
             echo ""
@@ -313,14 +310,18 @@ oauth2_authenticate() {
         
         if [[ "$status" == *"locked"* ]]; then
             info "Vault is locked. Unlocking..."
-            local bw_password
-            if [[ -t 0 ]]; then
-                read -s -p "Enter your Bitwarden password: " bw_password
-            else
-                echo -n "Enter your Bitwarden password: "
-                read -s bw_password < /dev/tty
+            local bw_password="${BW_PASSWORD:-}"
+            
+            if [[ -z "$bw_password" ]]; then
+                if [[ -t 0 ]]; then
+                    read -s -p "Enter your Bitwarden password: " bw_password
+                else
+                    echo -n "Enter your Bitwarden password: "
+                    read -s bw_password < /dev/tty
+                fi
+                echo
             fi
-            echo
+            
             export BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") --raw 2>/dev/null) || {
                 warning "Failed to unlock vault"
                 export BW_AUTH_STATUS="failed"

@@ -709,6 +709,7 @@ install_apt_packages() {
 
     local packages=(
         "build-essential"
+        "bsdmainutils"
         "vim"
         "neovim"
         "tmux"

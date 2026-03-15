@@ -284,12 +284,15 @@ oauth2_authenticate() {
             if prompt_yn "Login to Bitwarden? (y/n) "; then
                 if [[ -c /dev/tty ]]; then
                     info "Starting interactive Bitwarden login..."
-                    BW_SESSION=$(bw login --raw < /dev/tty 2>/dev/null)
+                    local bw_login_output
+                    bw_login_output=$(bw login --raw < /dev/tty 2>&1)
+                    BW_SESSION=$(echo "$bw_login_output" | grep -E '^[A-Za-z0-9+/=]+$' | head -1)
                     if [[ -n "$BW_SESSION" ]]; then
                         export BW_SESSION
                         info "Logged in and vault unlocked"
                     else
                         warning "Bitwarden login failed"
+                        debug "bw login output: $bw_login_output"
                         export BW_AUTH_STATUS="failed"
                         return 1
                     fi

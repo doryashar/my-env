@@ -241,7 +241,7 @@ oauth2_authenticate() {
     fi
 
     if [[ -n "${BW_SESSION:-}" ]]; then
-        if bw get status &>/dev/null; then
+        if bw sync --session "$BW_SESSION" &>/dev/null; then
             debug "BW_SESSION already set and valid"
             export BW_AUTH_STATUS="success"
             export BW_SESSION

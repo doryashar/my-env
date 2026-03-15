@@ -241,13 +241,22 @@ oauth2_authenticate() {
     fi
 
     if [[ -n "${BW_SESSION:-}" ]]; then
-        if bw sync --session "$BW_SESSION" &>/dev/null; then
-            debug "BW_SESSION already set and valid"
+        local status
+        status=$(bw status --raw 2>/dev/null || echo '{"status":"unauthenticated"}')
+        if [[ "$status" == *"unlocked"* ]]; then
+            debug "BW_SESSION already set and vault unlocked"
             export BW_AUTH_STATUS="success"
             export BW_SESSION
             return 0
-        else
-            warning "BW_SESSION is set but appears invalid"
+        elif [[ "$status" != *"unauthenticated"* ]]; then
+            if bw sync --session "$BW_SESSION" &>/dev/null; then
+                debug "BW_SESSION validated successfully"
+                export BW_AUTH_STATUS="success"
+                export BW_SESSION
+                return 0
+            else
+                warning "BW_SESSION is set but appears invalid"
+            fi
         fi
     fi
 

@@ -174,9 +174,21 @@ expand_path() {
 get_vault_cli() {
     info "Getting Vault CLI (Bitwarden)..."
 
-    if command_exists bw; then
-        debug "Bitwarden CLI already installed"
-        return 0
+    local bw_bin=""
+    if [[ -f "$HOME/.local/bin/bw" ]]; then
+        bw_bin="$HOME/.local/bin/bw"
+    elif [[ -f "/usr/local/bin/bw" ]]; then
+        bw_bin="/usr/local/bin/bw"
+    fi
+
+    if [[ -n "$bw_bin" ]]; then
+        if "$bw_bin" --version &>/dev/null; then
+            debug "Bitwarden CLI already installed and working"
+            return 0
+        else
+            warning "Existing Bitwarden CLI is broken (wrong architecture?), reinstalling..."
+            rm -f "$bw_bin"
+        fi
     fi
 
     info "Installing Bitwarden CLI..."

@@ -367,11 +367,13 @@ oauth2_authenticate() {
                 echo
             fi
             
-            export BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") --raw 2>/dev/null) || {
-                warning "Failed to unlock vault"
+            BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") --raw 2>/dev/null)
+            if [[ -z "$BW_SESSION" ]]; then
+                warning "Failed to unlock vault - incorrect password or vault error"
                 export BW_AUTH_STATUS="failed"
                 return 1
-            }
+            fi
+            export BW_SESSION
             info "Vault unlocked successfully"
         else
             debug "Already authenticated and unlocked"

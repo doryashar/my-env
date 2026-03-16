@@ -4,7 +4,7 @@ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 ENV_DIR=$(dirname "$SCRIPT_DIR")
 source $ENV_DIR/functions/common_funcs
 
-mkdir -p ~/.ssh
+ensure_ssh_dir
 ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 
 # Load configuration (including BW_EMAIL)
@@ -44,27 +44,54 @@ command_exists() {
 # Side Effects:
 #   - May invoke sudo to install packages
 ensure_age_installed() {
-  if ! command_exists age; then
-    warning "age encryption tool not found. Attempting to install..."
-    
-    if command_exists apt-get; then
-      sudo apt-get update && sudo apt-get install -y age
-    elif command_exists brew; then
-      brew install age
-    elif command_exists dnf; then
-      sudo dnf install -y age
-    elif command_exists yum; then
-      sudo yum install -y age
-    elif command_exists pacman; then
-      sudo pacman -S age
+  local age_bin=""
+  
+  if command_exists age; then
+    age_bin=$(command -v age)
+    if "$age_bin" --version &>/dev/null; then
+      debug "age encryption tool is installed and working: $age_bin"
+      return 0
     else
-      error "Could not automatically install age. Please install it manually."
-      error "Visit: https://github.com/FiloSottile/age#installation"
-      exit 1
+      warning "age binary exists but cannot be executed (wrong architecture?): $age_bin"
+      warning "Removing broken age binary..."
+      rm -f "$age_bin"
     fi
   fi
   
-  debug "age encryption tool is installed."
+  for bin_path in "$ENV_DIR/bin/age" "$HOME/.local/bin/age" "/usr/local/bin/age"; do
+    if [[ -f "$bin_path" ]]; then
+      if ! "$bin_path" --version &>/dev/null; then
+        warning "Removing broken age binary: $bin_path"
+        rm -f "$bin_path"
+      fi
+    fi
+  done
+  
+  warning "age encryption tool not found or broken. Attempting to install..."
+  
+  if command_exists apt-get; then
+    sudo apt-get update && sudo apt-get install -y age
+  elif command_exists brew; then
+    brew install age
+  elif command_exists dnf; then
+    sudo dnf install -y age
+  elif command_exists yum; then
+    sudo yum install -y age
+  elif command_exists pacman; then
+    sudo pacman -S age
+  else
+    error "Could not automatically install age. Please install it manually."
+    error "Visit: https://github.com/FiloSottile/age#installation"
+    exit 1
+  fi
+  
+  if command_exists age && age --version &>/dev/null; then
+    debug "age encryption tool installed successfully"
+    return 0
+  else
+    error "age installation completed but binary still not working"
+    return 1
+  fi
 }
 
 # Encrypt a file or directory using age
@@ -978,9 +1005,14 @@ main() {
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
     hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
     #TODO: the script should also set the file permissions
-    if [[ -d ~/.ssh ]]; then
+    if [[ -e ~/.ssh ]]; then
       if [[ -L ~/.ssh ]]; then
         rm ~/.ssh
+      elif [[ -f ~/.ssh ]]; then
+        warning "Existing ~/.ssh is a regular file"
+        backup_file=~/.ssh.file.backup.$(date +%Y%m%d_%H%M%S)
+        info "Backing up ~/.ssh to $backup_file"
+        mv ~/.ssh "$backup_file"
       else
         warning "Existing ~/.ssh is a directory, not a symlink"
         if prompt_yn "Replace it? [y/N] "; then

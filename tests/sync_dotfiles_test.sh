@@ -195,6 +195,117 @@ test_sync_file_function() {
     TESTS_RUN=$((TESTS_RUN + 1))
 }
 
+# Test: ensure_ssh_dir handles .ssh as a file
+test_ensure_ssh_dir_with_file() {
+    local test_home=$(mktemp -d)
+    local original_home="$HOME"
+    
+    # Create .ssh as a regular file
+    touch "$test_home/.ssh"
+    
+    # Source common_funcs and test ensure_ssh_dir
+    HOME="$test_home" bash -c '
+        source "'$HOME'/env/functions/common_funcs"
+        ensure_ssh_dir
+        if [[ -d "$HOME/.ssh" ]]; then
+            exit 0
+        else
+            exit 1
+        fi
+    ' 2>/dev/null
+    
+    local result=$?
+    if [[ $result -eq 0 ]] && [[ -d "$test_home/.ssh" ]]; then
+        echo -e "${GREEN}✓${NC} ensure_ssh_dir should convert .ssh file to directory"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} ensure_ssh_dir should convert .ssh file to directory"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+    
+    # Check backup was created
+    if ls "$test_home"/.ssh.file.backup.* 2>/dev/null | head -1 >/dev/null; then
+        echo -e "${GREEN}✓${NC} ensure_ssh_dir should backup .ssh file"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} ensure_ssh_dir should backup .ssh file"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+    
+    rm -rf "$test_home"
+    HOME="$original_home"
+}
+
+# Test: ensure_ssh_dir handles .ssh as a symlink
+test_ensure_ssh_dir_with_symlink() {
+    local test_home=$(mktemp -d)
+    local original_home="$HOME"
+    
+    # Create .ssh as a broken symlink
+    ln -s /nonexistent/path "$test_home/.ssh"
+    
+    HOME="$test_home" bash -c '
+        source "'$HOME'/env/functions/common_funcs"
+        ensure_ssh_dir
+        if [[ -d "$HOME/.ssh" ]]; then
+            exit 0
+        else
+            exit 1
+        fi
+    ' 2>/dev/null
+    
+    local result=$?
+    if [[ $result -eq 0 ]]; then
+        echo -e "${GREEN}✓${NC} ensure_ssh_dir should handle broken symlink"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} ensure_ssh_dir should handle broken symlink"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+    
+    rm -rf "$test_home"
+    HOME="$original_home"
+}
+
+# Test: remove_all_broken_links suppresses permission errors
+test_remove_broken_links_permission() {
+    if grep -q 'find.*2>/dev/null' "$HOME/env/scripts/sync_dotfiles.sh"; then
+        echo -e "${GREEN}✓${NC} remove_all_broken_links should suppress find errors"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} remove_all_broken_links should suppress find errors"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+# Test: sync_encrypted.sh checks age binary works
+test_age_binary_check() {
+    if grep -q 'age --version' "$HOME/env/scripts/sync_encrypted.sh"; then
+        echo -e "${GREEN}✓${NC} ensure_age_installed should verify age binary works"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} ensure_age_installed should verify age binary works"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+# Test: sync_encrypted.sh handles .ssh as file when creating symlink
+test_ssh_file_handling_in_sync() {
+    if grep -q '\[\[ -f ~/.ssh \]\]' "$HOME/env/scripts/sync_encrypted.sh"; then
+        echo -e "${GREEN}✓${NC} sync_encrypted.sh should handle .ssh as a file"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} sync_encrypted.sh should handle .ssh as a file"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
 # Save original HOME
 ORIGINAL_HOME="$HOME"
 
@@ -215,6 +326,13 @@ run_all_tests() {
     test_config_parsing
     test_symlink_creation
     test_wildcard_matching
+
+    # New tests for bug fixes
+    test_ensure_ssh_dir_with_file
+    test_ensure_ssh_dir_with_symlink
+    test_remove_broken_links_permission
+    test_age_binary_check
+    test_ssh_file_handling_in_sync
 
     echo ""
     echo "========================================"

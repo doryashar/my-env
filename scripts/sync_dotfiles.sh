@@ -753,14 +753,20 @@ sync_dotfiles() {
 # Side Effects:
 #   - Removes broken symbolic links in the specified directory
 remove_all_broken_links() {
-    # list_files=$(find $directory -xtype l)
     directory="$1"
-    find "$directory" -maxdepth 2 -type l | while read -r file; do
+    local count=0
+    while IFS= read -r file; do
         if [[ -L "$file" ]] && [[ ! -e "$file" ]]; then
             warning "Removing broken symlink: $file"
             rm "$file"
+            ((count++))
         fi
-    done
+    done < <(find "$directory" -maxdepth 2 -type l 2>/dev/null)
+    
+    if [[ $count -gt 0 ]]; then
+        info "Removed $count broken symlink(s)"
+        info "This usually means encrypted files were not synced. Run: ~/env/scripts/sync_encrypted.sh"
+    fi
 }
 # Main entry point for the script
 #

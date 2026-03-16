@@ -224,6 +224,20 @@ ensure_github_auth() {
     esac
 }
 
+ensure_ssh_dir() {
+    if [[ -L ~/.ssh ]]; then
+        warning "Removing existing ~/.ssh symlink..."
+        rm ~/.ssh
+    elif [[ -f ~/.ssh ]]; then
+        warning "~/.ssh exists as a file, backing up..."
+        mv ~/.ssh ~/.ssh.file.backup.$(date +%Y%m%d_%H%M%S)
+    elif [[ -d ~/.ssh ]]; then
+        debug "~/.ssh directory already exists"
+        return 0
+    fi
+    mkdir -p ~/.ssh
+}
+
 check_github_repo_exists() {
     local repo_url="$1"
     
@@ -271,7 +285,7 @@ check_github_repo_exists() {
         fi
     fi
     
-    mkdir -p ~/.ssh
+    ensure_ssh_dir
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
     debug "Checking repo via git ls-remote..."
     if git ls-remote "$repo_url" HEAD &>/dev/null; then

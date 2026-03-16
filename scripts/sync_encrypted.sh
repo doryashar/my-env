@@ -1046,37 +1046,44 @@ main() {
   # Check for remote changes
   cd "$LOCAL_REPO_PATH" || exit 1
   debug "Checking for remote changes..."
-  git fetch || exit 1
+  git fetch 2>/dev/null || true
   debug "Checking if there are any updates in local"
-  local_current=$(git rev-parse HEAD)
-  debug "Checking if there are any updates in remote"
-  remote_current=$(git rev-parse @{upstream})
   
-  remote_changed=0
+  # Handle empty repos (no commits yet)
+  if ! git rev-parse HEAD &>/dev/null; then
+    debug "Empty repository (no commits)"
+    if [[ -d "$DECRYPTED_DIR" ]] && [[ -n "$(ls -A "$DECRYPTED_DIR" 2>/dev/null)" ]]; then
+      info "Local files exist but repo is empty - will push local changes"
+      local_changed=1
+      remote_changed=0
+    else
+      info "Empty repo and no local files - nothing to sync"
+      exit 0
+    fi
+  else
+    local_current=$(git rev-parse HEAD)
+    debug "Checking if there are any updates in remote"
+    remote_current=$(git rev-parse @{upstream} 2>/dev/null || echo "$local_current")
     
-  # if [ ! -d "$DECRYPTED_DIR" ]; then
-  #   info "Decrypted directory not found. Assuming remote has changes."
-  #   remote_changed=1
-  # el
-  if [ "$local_current" != "$remote_current" ]; then
-    info "Remote has changes."
-    remote_changed=1
-  else
-    debug "Remote is up-to-date."
-  fi
-  
-  # Check if local decrypted files changed
-  debug "Checking for local changes..."
-  local_changed=0
+    remote_changed=0
+      
+    if [ "$local_current" != "$remote_current" ]; then
+      info "Remote has changes."
+      remote_changed=1
+    else
+      debug "Remote is up-to-date."
+    fi
+    
+    # Check if local decrypted files changed
+    debug "Checking for local changes..."
+    local_changed=0
 
-  # if [ ! -d "$DECRYPTED_DIR" ]; then
-  #   debug "Will not check for local changes, as decrypted dir does not exist"
-  # el
-  if has_changed "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"; then
-    debug "Local files unchanged."
-  else
-    info "Local files have changed."
-    local_changed=1
+    if has_changed "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"; then
+      debug "Local files unchanged."
+    else
+      info "Local files have changed."
+      local_changed=1
+    fi
   fi
 
   # # If CHECK_ONLY does not exist, set it to 0

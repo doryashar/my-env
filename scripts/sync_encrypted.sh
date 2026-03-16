@@ -1025,8 +1025,8 @@ main() {
       fi
     fi
     ln -s "$DECRYPTED_DIR"/ssh ~/.ssh
-    chmod 600 "$DECRYPTED_DIR"/ssh/*
-    chmod 600 "$DECRYPTED_DIR"/ssh/secrets
+    chmod 600 "$DECRYPTED_DIR"/ssh/* 2>/dev/null || true
+    chmod 600 "$DECRYPTED_DIR"/ssh/secrets 2>/dev/null || true
   fi
   
   

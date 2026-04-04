@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camera Control</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#111;color:#e0e0e0;display:flex;min-height:100vh}
+
+#video-section{flex:1;display:flex;flex-direction:column;min-width:0}
+#video-wrap{position:relative;background:#000;flex:1;min-height:60vh;display:flex;align-items:center;justify-content:center}
+#video-wrap video{width:100%;height:100%;object-fit:contain}
+.audio-btn{position:absolute;bottom:12px;right:12px;background:rgba(0,0,0,.6);border:1px solid #555;color:#e0e0e0;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:.8rem;z-index:10;backdrop-filter:blur(4px)}
+.audio-btn:hover{background:rgba(0,0,0,.8)}
+.audio-btn.muted{color:#888}
+#video-wrap .no-signal{color:#555;font-size:1.2rem}
+#video-wrap .snapshot-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .15s}
+#video-wrap .snapshot-flash.active{opacity:.5}
+
+#controls{display:flex;flex-direction:column;gap:8px;padding:12px;background:#1a1a1a;overflow-y:auto;max-height:100vh;width:320px;min-width:280px}
+.panel{background:#222;border-radius:8px;padding:12px}
+.panel h3{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:8px}
+
+.ptz-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.ptz-btn{background:#333;border:1px solid #444;color:#e0e0e0;border-radius:6px;padding:10px 0;cursor:pointer;font-size:.85rem;transition:background .1s;user-select:none;-webkit-user-select:none}
+.ptz-btn:hover{background:#444}
+.ptz-btn:active{background:#555}
+.ptz-btn.stop{background:#662222;border-color:#883333}
+.ptz-btn.stop:hover{background:#773333}
+.ptz-btn.home{grid-column:1/-1;background:#224444;border-color:#336666}
+.ptz-btn.home:hover{background:#335555}
+
+.speed-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.speed-row label{font-size:.75rem;color:#888}
+.speed-row input[type=range]{flex:1}
+.speed-val{font-size:.75rem;color:#aaa;min-width:2em;text-align:right}
+
+.preset-list{display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto}
+.preset-item{display:flex;align-items:center;gap:6px;padding:4px 6px;background:#333;border-radius:4px;font-size:.8rem}
+.preset-item button{flex:1;background:#444;border:1px solid #555;color:#e0e0e0;border-radius:3px;padding:3px 6px;cursor:pointer;font-size:.75rem}
+.preset-item button:hover{background:#555}
+.preset-item button.del{flex:0;background:#552222;border-color:#663333;max-width:24px;padding:3px}
+.preset-item button.del:hover{background:#663333}
+.preset-input{display:flex;gap:4px;margin-top:6px}
+.preset-input input{flex:1;background:#333;border:1px solid #444;color:#e0e0e0;border-radius:3px;padding:4px 6px;font-size:.8rem}
+.preset-input button{background:#336633;border:1px solid #448844;color:#e0e0e0;border-radius:3px;padding:4px 10px;cursor:pointer;font-size:.8rem}
+.preset-input button:hover{background:#447744}
+
+.slider-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.slider-row label{font-size:.75rem;color:#888;min-width:70px}
+.slider-row input[type=range]{flex:1;accent-color:#5af}
+.slider-row .val{font-size:.75rem;color:#aaa;min-width:2.5em;text-align:right}
+
+.action-row{display:flex;gap:6px;margin-top:4px}
+.action-btn{flex:1;background:#333;border:1px solid #444;color:#e0e0e0;border-radius:6px;padding:6px;cursor:pointer;font-size:.8rem}
+.action-btn:hover{background:#444}
+.action-btn.snapshot{background:#224444;border-color:#336666}
+.action-btn.snapshot:hover{background:#335555}
+
+#status-bar{padding:4px 8px;font-size:.7rem;color:#555;background:#1a1a1a;border-top:1px solid #222;display:flex;justify-content:space-between}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#e0e0e0;padding:8px 16px;border-radius:6px;font-size:.85rem;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
+.toast.show{opacity:1}
+
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+.connecting{animation:pulse 1.5s infinite}
+</style>
+</head>
+<body>
+
+<div id="video-section">
+  <div id="video-wrap">
+    <div class="snapshot-flash" id="flash"></div>
+    <video id="video" autoplay muted playsinline></video>
+    <button class="audio-btn muted" id="audio-btn" onclick="toggleAudio()">&#128264; Unmute</button>
+  </div>
+  <div id="status-bar">
+    <span id="status-text">Connecting...</span>
+    <span id="status-pos"></span>
+  </div>
+</div>
+
+<div id="controls">
+  <div class="panel">
+    <h3>PTZ Control</h3>
+    <div class="ptz-grid">
+      <div></div>
+      <button class="ptz-btn" onpointerdown="startMove('tilt-up')" onpointerup="stopMove()" onpointerleave="stopMove()" title="Tilt Up">&#9650;</button>
+      <div></div>
+      <button class="ptz-btn" onpointerdown="startMove('pan-left')" onpointerup="stopMove()" onpointerleave="stopMove()" title="Pan Left">&#9664;</button>
+      <button class="ptz-btn home" onclick="api('POST','/api/home')" title="Home">&#8962; Home</button>
+      <button class="ptz-btn" onpointerdown="startMove('pan-right')" onpointerup="stopMove()" onpointerleave="stopMove()" title="Pan Right">&#9654;</button>
+      <div></div>
+      <button class="ptz-btn" onpointerdown="startMove('tilt-down')" onpointerup="stopMove()" onpointerleave="stopMove()" title="Tilt Down">&#9660;</button>
+      <div></div>
+      <button class="ptz-btn" onpointerdown="startMove('zoom-out')" onpointerup="stopMove()" onpointerleave="stopMove()" title="Zoom Out">&#8722;</button>
+      <button class="ptz-btn stop" onclick="api('POST','/api/stop')" title="Stop">&#9632;</button>
+      <button class="ptz-btn" onpointerdown="startMove('zoom-in')" onpointerup="stopMove()" onpointerleave="stopMove()" title="Zoom In">&#43;</button>
+    </div>
+    <div class="speed-row">
+      <label>Speed</label>
+      <input type="range" id="speed" min="0.1" max="1" step="0.1" value="0.5">
+      <span class="speed-val" id="speed-val">0.5</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Presets</h3>
+    <div class="preset-list" id="preset-list"></div>
+    <div class="preset-input">
+      <input id="preset-name" placeholder="Preset name">
+      <button onclick="savePreset()">Save</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Image</h3>
+    <div class="slider-row">
+      <label>Brightness</label>
+      <input type="range" id="brightness" min="0" max="100" value="0">
+      <span class="val" id="brightness-val">0</span>
+    </div>
+    <div class="slider-row">
+      <label>Contrast</label>
+      <input type="range" id="contrast" min="0" max="100" value="0">
+      <span class="val" id="contrast-val">0</span>
+    </div>
+    <div class="slider-row">
+      <label>Saturation</label>
+      <input type="range" id="saturation" min="0" max="100" value="0">
+      <span class="val" id="saturation-val">0</span>
+    </div>
+    <div class="slider-row">
+      <label>Sharpness</label>
+      <input type="range" id="sharpness" min="0" max="15" value="0">
+      <span class="val" id="sharpness-val">0</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Actions</h3>
+    <div class="action-row">
+      <button class="action-btn snapshot" onclick="takeSnapshot()">&#128247; Snapshot</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const video = document.getElementById('video');
+const statusText = document.getElementById('status-text');
+const statusPos = document.getElementById('status-pos');
+const speedSlider = document.getElementById('speed');
+const speedVal = document.getElementById('speed-val');
+let moveTimer = null;
+let hls = null;
+let audioMuted = true;
+
+function toggleAudio() {
+  audioMuted = !audioMuted;
+  video.muted = audioMuted;
+  const btn = document.getElementById('audio-btn');
+  btn.className = 'audio-btn' + (audioMuted ? ' muted' : '');
+  btn.innerHTML = audioMuted ? '&#128264; Unmute' : '&#128266; Mute';
+}
+
+speedSlider.addEventListener('input', () => speedVal.textContent = speedSlider.value);
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(path, opts);
+    return r.json();
+  } catch (e) {
+    toast('Error: ' + e.message);
+    return { error: e.message };
+  }
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function startMove(direction) {
+  const speed = parseFloat(speedSlider.value);
+  await api('POST', '/api/move', { direction, speed, duration: 0 });
+  clearInterval(moveTimer);
+  moveTimer = setInterval(async () => {
+    await api('POST', '/api/move', { direction, speed, duration: 0 });
+  }, 800);
+}
+
+async function stopMove() {
+  clearInterval(moveTimer);
+  moveTimer = null;
+  await api('POST', '/api/stop');
+}
+
+async function loadPresets() {
+  const data = await api('GET', '/api/presets');
+  const list = document.getElementById('preset-list');
+  if (data.error) { list.innerHTML = '<span style="color:#666;font-size:.75rem">Could not load presets</span>'; return; }
+  if (!data.length) { list.innerHTML = '<span style="color:#555;font-size:.75rem">No presets saved</span>'; return; }
+  list.innerHTML = data.map(p =>
+    `<div class="preset-item">
+      <button onclick="gotoPreset('${p.token}')">${p.name}</button>
+      <button class="del" onclick="removePreset('${p.token}')">&#10005;</button>
+    </div>`
+  ).join('');
+}
+
+async function gotoPreset(token) { await api('POST', '/api/preset/goto', { token }); toast('Going to preset ' + token); }
+async function savePreset() {
+  const name = document.getElementById('preset-name').value || 'Preset_' + Date.now();
+  const r = await api('POST', '/api/preset/set', { name });
+  if (!r.error) { document.getElementById('preset-name').value = ''; toast('Preset saved: ' + name); loadPresets(); }
+}
+async function removePreset(token) {
+  await api('POST', '/api/preset/remove', { token });
+  toast('Preset removed');
+  loadPresets();
+}
+
+async function loadImaging() {
+  const data = await api('GET', '/api/imaging');
+  if (data.error) return;
+  for (const [key, val] of Object.entries(data)) {
+    const slider = document.getElementById(key);
+    const valEl = document.getElementById(key + '-val');
+    if (slider && valEl) { slider.value = val; valEl.textContent = val; }
+  }
+}
+
+let imagingTimer = {};
+function setupImagingSlider(name, endpoint) {
+  const slider = document.getElementById(name);
+  const valEl = document.getElementById(name + '-val');
+  slider.addEventListener('input', () => valEl.textContent = slider.value);
+  slider.addEventListener('change', () => {
+    const v = parseFloat(slider.value);
+    api('POST', endpoint, { value: v });
+  });
+  slider.addEventListener('pointerdown', () => {
+    imagingTimer[name] = setInterval(async () => {
+      const v = parseFloat(slider.value);
+      await api('POST', endpoint, { value: v });
+    }, 300);
+  });
+  slider.addEventListener('pointerup', () => clearInterval(imagingTimer[name]));
+  slider.addEventListener('pointerleave', () => clearInterval(imagingTimer[name]));
+}
+
+async function takeSnapshot() {
+  const flash = document.getElementById('flash');
+  flash.classList.add('active');
+  setTimeout(() => flash.classList.remove('active'), 150);
+  try {
+    const r = await fetch('/api/snapshot');
+    if (!r.ok) { toast('Snapshot failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'snapshot_' + Date.now() + '.jpg';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Snapshot saved');
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+async function loadStreamUrl() {
+  const data = await api('GET', '/api/stream-url');
+  if (data.error) return data;
+  return data;
+}
+
+let pc = null;
+
+async function initVideo() {
+  const urls = await loadStreamUrl();
+  if (!urls || urls.error) {
+    statusText.textContent = 'Error: cannot get stream URL';
+    return;
+  }
+
+  if (typeof RTCPeerConnection !== 'undefined') {
+    try {
+      await playWebRTC(urls.webrtc);
+      return;
+    } catch (e) {
+      console.warn('WebRTC failed, trying MSE:', e);
+    }
+  }
+
+  if (typeof MediaSource !== 'undefined') {
+    try {
+      await playMSE(urls.mse);
+      return;
+    } catch (e) {
+      console.warn('MSE failed, trying HLS:', e);
+    }
+  }
+
+  if (Hls.isSupported()) {
+    playHLS(urls.hls);
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = urls.hls;
+    video.addEventListener('loadedmetadata', () => {
+      video.play();
+      statusText.textContent = 'Connected (HLS native)';
+    });
+  } else {
+    video.src = urls.mjpeg;
+    statusText.textContent = 'Connected (MJPEG fallback)';
+  }
+}
+
+async function playWebRTC(url) {
+  if (pc) { pc.close(); pc = null; }
+  statusText.textContent = 'Connecting (WebRTC)...';
+
+  pc = new RTCPeerConnection({
+    bundlePolicy: 'max-bundle',
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  });
+
+  pc.addTransceiver('video', { direction: 'recvonly' });
+  pc.addTransceiver('audio', { direction: 'recvonly' });
+
+  const gotTrack = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('WebRTC no track')), 10000);
+    pc.addEventListener('track', (ev) => {
+      clearTimeout(timer);
+      video.srcObject = ev.streams[0];
+      video.play().catch(() => {});
+      statusText.textContent = 'Connected (WebRTC)';
+      if (ev.streams[0].getAudioTracks().length) {
+        document.getElementById('audio-btn').style.display = '';
+      }
+      resolve();
+    });
+  });
+
+  pc.addEventListener('connectionstatechange', () => {
+    const s = pc.connectionState;
+    if (s === 'failed' || s === 'disconnected') {
+      statusText.textContent = 'WebRTC lost, reconnecting...';
+      setTimeout(() => { pc.close(); pc = null; initVideo(); }, 2000);
+    }
+  });
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  await new Promise((resolve) => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    pc.addEventListener('icegatheringstatechange', () => {
+      if (pc.iceGatheringState === 'complete') resolve();
+    });
+  });
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sdp: pc.localDescription.sdp,
+      type: pc.localDescription.type
+    })
+  });
+  if (!resp.ok) throw new Error(`WebRTC HTTP ${resp.status}`);
+  const answer = await resp.json();
+  await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+  await gotTrack;
+}
+
+async function playMSE(url) {
+  const mediaSource = new MediaSource();
+  video.src = URL.createObjectURL(mediaSource);
+
+  await new Promise((resolve, reject) => {
+    mediaSource.addEventListener('sourceopen', resolve, { once: true });
+    setTimeout(() => reject(new Error('MSE timeout')), 5000);
+  });
+
+  const codecs = [
+    'video/mp4; codecs="avc1.42C01E"',
+    'video/mp4; codecs="avc1.4D401E"',
+    'video/mp4; codecs="avc1.640028"',
+  ];
+
+  let sb = null;
+  for (const mime of codecs) {
+    if (!MediaSource.isTypeSupported(mime)) continue;
+    try {
+      sb = mediaSource.addSourceBuffer(mime);
+      sb.mode = 'segments';
+      break;
+    } catch (e) {
+      if (mediaSource.sourceBuffers.length > 0)
+        mediaSource.removeSourceBuffer(mediaSource.sourceBuffers[0]);
+    }
+  }
+  if (!sb) throw new Error('No supported codec for MSE');
+
+  const queue = [];
+  let updating = false;
+  function flush() {
+    while (queue.length > 0 && !updating) {
+      try { updating = true; sb.appendBuffer(queue.shift()); return; }
+      catch (e) { updating = false; queue.shift(); }
+    }
+  }
+  sb.addEventListener('updateend', () => { updating = false; flush(); });
+  sb.addEventListener('error', (e) => console.error('SB:', e));
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`MSE HTTP ${response.status}`);
+  const reader = response.body.getReader();
+  statusText.textContent = 'Connected (MSE)';
+  video.play().catch(() => {});
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    queue.push(value);
+    flush();
+  }
+}
+
+function playHLS(url) {
+  if (hls) { hls.destroy(); hls = null; }
+  hls = new Hls({
+    enableWorker: true,
+    lowLatencyMode: false,
+    maxBufferLength: 2,
+    maxMaxBufferLength: 10,
+    maxBufferHole: 0.5,
+    liveSyncDurationCount: 3,
+    liveMaxLatencyDurationCount: 6,
+  });
+  hls.loadSource(url);
+  hls.attachMedia(video);
+  hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    video.play().catch(() => {});
+    statusText.textContent = 'Connected (HLS)';
+  });
+  hls.on(Hls.Events.ERROR, (_, data) => {
+    if (data.fatal) {
+      statusText.textContent = 'Stream error, retrying...';
+      setTimeout(() => { hls.destroy(); hls = null; initVideo(); }, 3000);
+    }
+  });
+}
+
+async function pollStatus() {
+  const data = await api('GET', '/api/status');
+  if (!data.error) {
+    const pt = data.pan_tilt;
+    statusPos.textContent = `Pan: ${pt.x.toFixed(2)} Tilt: ${pt.y.toFixed(2)} Zoom: ${data.zoom.toFixed(2)}`;
+  }
+}
+
+setupImagingSlider('brightness', '/api/brightness');
+setupImagingSlider('contrast', '/api/contrast');
+setupImagingSlider('saturation', '/api/saturation');
+setupImagingSlider('sharpness', '/api/sharpness');
+
+document.addEventListener('keydown', e => {
+  const map = { ArrowUp: 'tilt-up', ArrowDown: 'tilt-down', ArrowLeft: 'pan-left', ArrowRight: 'pan-right', '+': 'zoom-in', '=': 'zoom-in', '-': 'zoom-out', '_': 'zoom-out' };
+  if (map[e.key]) { e.preventDefault(); startMove(map[e.key]); }
+});
+document.addEventListener('keyup', e => {
+  const keys = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','+','=','-','_'];
+  if (keys.includes(e.key)) stopMove();
+});
+
+initVideo();
+loadPresets();
+loadImaging();
+setInterval(pollStatus, 2000);
+</script>
+</body>
+</html>

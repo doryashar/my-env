@@ -4,6 +4,7 @@
 ##################################
 alias cls='printf "\033c"'
 alias ll="ls --color -altr"
+alias tmux='tmux new-session -A -s dory'
 
 ##################################
 alias zj="zellij -l strider --config ~/zellij/zellij.cfg attach --create dor"

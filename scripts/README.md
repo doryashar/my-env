@@ -164,6 +164,11 @@ The token must be set **before** running the script. If you set it after the con
 - `test_git_operations.sh` - Tests git add/commit/status operations
 - `test_git_push.sh` - Tests git push authentication with token (requires `GITHUB_API_TOKEN` set)
 
+- `show_cam.sh` - View camera stream (defaults to mpv, `show_cam.sh vlc` for VLC, `show_cam.sh web` for browser UI)
+- `cam_ctrl.sh` - ONVIF camera control CLI (pan/tilt/zoom, presets, imaging, snapshots)
+- `cam_web.py` - HTTP API server for camera control (PTZ, presets, imaging, snapshots, HLS/MJPEG stream)
+- `cam_web.html` - Web UI with live video, PTZ controls, presets, imaging sliders, snapshot download
+
 ## Credits
 
 - Inspired by [cuti](https://github.com/nociza/cuti)'s approach to container credential management

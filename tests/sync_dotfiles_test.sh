@@ -294,13 +294,61 @@ test_age_binary_check() {
     TESTS_RUN=$((TESTS_RUN + 1))
 }
 
-# Test: sync_encrypted.sh handles .ssh as file when creating symlink
-test_ssh_file_handling_in_sync() {
-    if grep -q '\[\[ -f ~/.ssh \]\]' "$HOME/env/scripts/sync_encrypted.sh"; then
-        echo -e "${GREEN}✓${NC} sync_encrypted.sh should handle .ssh as a file"
+# Test: sync_encrypted.sh does NOT manage ~/.ssh symlink
+test_sync_encrypted_no_ssh_symlink() {
+    if ! grep -q 'ln -s.*ssh.*~/.ssh' "$HOME/env/scripts/sync_encrypted.sh"; then
+        echo -e "${GREEN}✓${NC} sync_encrypted.sh should NOT create ~/.ssh symlink"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}✗${NC} sync_encrypted.sh should handle .ssh as a file"
+        echo -e "${RED}✗${NC} sync_encrypted.sh should NOT create ~/.ssh symlink"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+# Test: sync_encrypted.sh does NOT call ensure_ssh_dir
+test_sync_encrypted_no_ensure_ssh_dir() {
+    if ! grep -q 'ensure_ssh_dir' "$HOME/env/scripts/sync_encrypted.sh"; then
+        echo -e "${GREEN}✓${NC} sync_encrypted.sh should NOT call ensure_ssh_dir"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} sync_encrypted.sh should NOT call ensure_ssh_dir"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+# Test: sync_encrypted.sh validates ssh dir after decrypt
+test_sync_encrypted_validates_ssh_dir() {
+    if grep -q 'Decrypted ssh directory is empty or missing' "$HOME/env/scripts/sync_encrypted.sh"; then
+        echo -e "${GREEN}✓${NC} sync_encrypted.sh should validate ssh dir after decrypt"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} sync_encrypted.sh should validate ssh dir after decrypt"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+# Test: sync_encrypted.sh ssh-keyscan only runs if ~/.ssh exists
+test_sync_encrypted_ssh_keyscan_conditional() {
+    if grep -q '\[\[ -d ~/.ssh \]\] && ssh-keyscan' "$HOME/env/scripts/sync_encrypted.sh"; then
+        echo -e "${GREEN}✓${NC} sync_encrypted.sh should only ssh-keyscan if ~/.ssh exists"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} sync_encrypted.sh should only ssh-keyscan if ~/.ssh exists"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
+# Test: dotfiles.conf has ssh mapping
+test_dotfiles_conf_has_ssh_mapping() {
+    if grep -q 'tmp/private/ssh => ~/.ssh' "$HOME/env/config/dotfiles.conf"; then
+        echo -e "${GREEN}✓${NC} dotfiles.conf should map tmp/private/ssh => ~/.ssh"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} dotfiles.conf should map tmp/private/ssh => ~/.ssh"
         TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
     TESTS_RUN=$((TESTS_RUN + 1))
@@ -332,7 +380,11 @@ run_all_tests() {
     test_ensure_ssh_dir_with_symlink
     test_remove_broken_links_permission
     test_age_binary_check
-    test_ssh_file_handling_in_sync
+    test_sync_encrypted_no_ssh_symlink
+    test_sync_encrypted_no_ensure_ssh_dir
+    test_sync_encrypted_validates_ssh_dir
+    test_sync_encrypted_ssh_keyscan_conditional
+    test_dotfiles_conf_has_ssh_mapping
 
     echo ""
     echo "========================================"

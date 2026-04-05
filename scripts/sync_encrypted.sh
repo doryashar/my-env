@@ -4,8 +4,7 @@ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 ENV_DIR=$(dirname "$SCRIPT_DIR")
 source $ENV_DIR/functions/common_funcs
 
-ensure_ssh_dir
-ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+[[ -d ~/.ssh ]] && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
 
 # Load configuration (including BW_EMAIL)
 if [[ -f "$ENV_DIR/config/repo.conf" ]]; then
@@ -1004,29 +1003,12 @@ main() {
     info "Initial Decrypting now from $LOCAL_REPO_PATH to $DECRYPTED_DIR"
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
     hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
-    #TODO: the script should also set the file permissions
-    if [[ -e ~/.ssh ]]; then
-      if [[ -L ~/.ssh ]]; then
-        rm ~/.ssh
-      elif [[ -f ~/.ssh ]]; then
-        warning "Existing ~/.ssh is a regular file"
-        backup_file=~/.ssh.file.backup.$(date +%Y%m%d_%H%M%S)
-        info "Backing up ~/.ssh to $backup_file"
-        mv ~/.ssh "$backup_file"
-      else
-        warning "Existing ~/.ssh is a directory, not a symlink"
-        if prompt_yn "Replace it? [y/N] "; then
-          backup_dir=~/.ssh.backup.$(date +%Y%m%d_%H%M%S)
-          info "Backing up ~/.ssh to $backup_dir"
-          mv ~/.ssh "$backup_dir"
-        else
-          error "Aborted. Please manually backup ~/.ssh and re-run."
-        fi
-      fi
-    fi
-    ln -s "$DECRYPTED_DIR"/ssh ~/.ssh
     chmod 600 "$DECRYPTED_DIR"/ssh/* 2>/dev/null || true
     chmod 600 "$DECRYPTED_DIR"/ssh/secrets 2>/dev/null || true
+    if [[ ! -d "$DECRYPTED_DIR/ssh" ]] || [[ -z "$(ls -A "$DECRYPTED_DIR/ssh" 2>/dev/null)" ]]; then
+      warning "Decrypted ssh directory is empty or missing: $DECRYPTED_DIR/ssh"
+      warning "Ensure sync_dotfiles.sh has run to create ~/.ssh symlink"
+    fi
   fi
   
   

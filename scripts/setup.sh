@@ -807,6 +807,25 @@ install_apt_packages() {
     fi
 }
 
+install_tpm() {
+    info "Setting up TPM (tmux plugin manager)..."
+
+    local tpm_dir="$HOME/.tmux/plugins/tpm"
+    if [[ -d "$tpm_dir" ]]; then
+        debug "TPM already installed at $tpm_dir"
+        return 0
+    fi
+
+    if ! command_exists git; then
+        warn "git not found, skipping TPM install"
+        return 1
+    fi
+
+    mkdir -p "$HOME/.tmux/plugins"
+    git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
+    success "TPM installed at $tpm_dir"
+}
+
 install_pip_packages() {
     info "Setting up PIP packages..."
 
@@ -976,6 +995,7 @@ setup_steps() {
     generate_config
 
     install_apt_packages
+    install_tpm
     install_pip_packages
 
     install_docker

@@ -96,3 +96,6 @@ setopt no_auto_menu  # require an extra TAB press to open the completion menu
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+# opencode
+export PATH=/home/ubuntu/.opencode/bin:$PATH

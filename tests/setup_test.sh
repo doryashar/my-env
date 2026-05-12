@@ -64,9 +64,9 @@ test_config_structure() {
 
 # Test: required scripts exist
 test_required_scripts_exist() {
-    assert_file_exists "$HOME/env/scripts/sync_dotfiles.sh" "sync_dotfiles.sh should exist"
-    assert_file_exists "$HOME/env/scripts/sync_encrypted.sh" "sync_encrypted.sh should exist"
-    assert_file_exists "$HOME/env/scripts/sync_env.sh" "sync_env.sh should exist"
+    assert_file_exists "$HOME/env/scripts/sync/sync_dotfiles.sh" "sync_dotfiles.sh should exist"
+    assert_file_exists "$HOME/env/scripts/sync/sync_encrypted.sh" "sync_encrypted.sh should exist"
+    assert_file_exists "$HOME/env/scripts/sync/sync_env.sh" "sync_env.sh should exist"
 }
 
 # Test: functions directory exists and has common_funcs

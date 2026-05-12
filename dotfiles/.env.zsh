@@ -71,7 +71,7 @@ if [[ $- == *i* ]]; then
     
     if [[ $last_check_age -ge $check_interval ]]; then
         env_debug "Running background update check (last check: $last_check_age days ago)"
-        ( "${ENV_DIR}/scripts/sync_env.sh" --check-only 2>/dev/null ) &
+        ( "${ENV_DIR}/scripts/sync/sync_env.sh" --check-only 2>/dev/null ) &
     else
         env_debug "Skipping update check (last check: $last_check_age days ago)"
     fi

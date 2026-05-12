@@ -73,9 +73,9 @@ test_core_directories() {
 
 # Test: core scripts exist
 test_core_scripts() {
-    assert_file_exists "$HOME/env/scripts/setup.sh" "setup.sh should exist"
-    assert_file_exists "$HOME/env/scripts/sync_dotfiles.sh" "sync_dotfiles.sh should exist"
-    assert_file_exists "$HOME/env/scripts/sync_env.sh" "sync_env.sh should exist"
+    assert_file_exists "$HOME/env/scripts/install/setup.sh" "setup.sh should exist"
+    assert_file_exists "$HOME/env/scripts/sync/sync_dotfiles.sh" "sync_dotfiles.sh should exist"
+    assert_file_exists "$HOME/env/scripts/sync/sync_env.sh" "sync_env.sh should exist"
 }
 
 # Test: required commands exist

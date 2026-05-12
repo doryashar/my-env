@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 ENV_DIR=$(dirname "$(dirname "$SCRIPT_DIR")")
-SYNC_SCRIPT="$ENV_DIR/scripts/sync_encrypted.sh"
+SYNC_SCRIPT="$ENV_DIR/scripts/sync/sync_encrypted.sh"
 
 echo "Testing sync_encrypted.sh changes..."
 echo ""

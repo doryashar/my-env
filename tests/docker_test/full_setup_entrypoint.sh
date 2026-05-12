@@ -229,11 +229,11 @@ echo "This function normally asks:"
 echo "  'Would you like to create a new private repository for encrypted files? (y/n)'"
 echo ""
 echo "In automated mode, we skip the actual prompt and just test the function exists..."
-if [[ -f "$ENV_DIR/scripts/sync_encrypted.sh" ]]; then
+if [[ -f "$ENV_DIR/scripts/sync/sync_encrypted.sh" ]]; then
     echo -e "${GREEN}✓${NC} sync_encrypted.sh script exists"
     echo ""
     echo "Function check:"
-    if grep -q "^sync_encrypted_files()" "$ENV_DIR/scripts/setup.sh"; then
+    if grep -q "^sync_encrypted_files()" "$ENV_DIR/scripts/install/setup.sh"; then
         echo -e "${GREEN}✓${NC} sync_encrypted_files() function is defined in setup.sh"
     else
         echo -e "${RED}✗${NC} sync_encrypted_files() function not found"

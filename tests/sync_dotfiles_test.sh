@@ -34,7 +34,7 @@ setup_test_env() {
 
     # Copy actual scripts to test environment
     cp "$HOME/env/functions/common_funcs" "$TEST_ENV_DIR/functions/"
-    cp "$HOME/env/scripts/sync_dotfiles.sh" "$TEST_ENV_DIR/scripts/"
+    cp "$HOME/env/scripts/sync/sync_dotfiles.sh" "$TEST_ENV_DIR/scripts/"
 
     # Create test config
     cat > "$TEST_ENV_DIR/config/dotfiles.conf" << EOF

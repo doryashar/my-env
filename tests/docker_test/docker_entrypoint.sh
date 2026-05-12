@@ -359,14 +359,14 @@ echo "========================================${NC}"
 echo ""
 
 # Test: sync_dotfiles.sh exists and is valid
-assert_file_exists "$ENV_DIR/scripts/sync_dotfiles.sh" "sync_dotfiles.sh should exist"
+assert_file_exists "$ENV_DIR/scripts/sync/sync_dotfiles.sh" "sync_dotfiles.sh should exist"
 run_test "sync_dotfiles.sh syntax" \
-    "bash -n '$ENV_DIR/scripts/sync_dotfiles.sh'"
+    "bash -n '$ENV_DIR/scripts/sync/sync_dotfiles.sh'"
 
 # Test: sync_env.sh exists and is valid
-assert_file_exists "$ENV_DIR/scripts/sync_env.sh" "sync_env.sh should exist"
+assert_file_exists "$ENV_DIR/scripts/sync/sync_env.sh" "sync_env.sh should exist"
 run_test "sync_env.sh syntax" \
-    "bash -n '$ENV_DIR/scripts/sync_env.sh'"
+    "bash -n '$ENV_DIR/scripts/sync/sync_env.sh'"
 
 # ============================================================================
 # PHASE 9: Interactive Shell Simulation

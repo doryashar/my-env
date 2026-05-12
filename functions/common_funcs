@@ -1,40 +1,12 @@
 #!/usr/bin/env bash
 # Common Functions
-# ANSI color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-NC='\033[0m' # No Color
 
-info() {
-    local message="$*"
-    echo -e "${GREEN}[INFO] $message${NC}"
-}
+# Source shared logging (colors + info/debug/warning/error/title/success)
+_COMMON_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+source "$_COMMON_DIR/logging.sh"
 
-debug() {
-    local message="$*"
-    if [[ -n "${ENV_DEBUG:-}" ]]; then
-        message=$(echo "$message" | sed -E 's/(AGE_SECRET|BW_PASSWORD|BW_CLIENTID|BW_CLIENTSECRET|GITHUB_SSH_PRIVATE_KEY|GLM_API_KEY|GITHUB_TOKEN|GH_TOKEN|API_KEY|TOKEN|BW_SESSION|UPTIME_KUMA_API|ZEROTIER_API_KEY)=[^ ]+/\1=***HIDDEN***/g')
-        echo -e "${PURPLE}[DEBUG] $message${NC}"
-    fi
-}
-
-warning() {
-    local message="$*"
-    echo -e "${YELLOW}[WARNING] $message${NC}"
-}
-
-title() {
-    local message="$*"
-    echo -e "${BLUE}$message${NC}"
-}
-
-error() {
-    local message="$*"
-    echo -e "${RED}[ERROR] $message${NC}" >&2
-    exit 1
+command_exists() {
+    command -v "$1" > /dev/null 2>&1
 }
 
 expand_path() {
@@ -72,7 +44,7 @@ prompt() {
     else
         echo -n "$question"
         read -r answer < /dev/tty
-        eval "$var_name=\$answer"
+        printf -v "$var_name" '%s' "$answer"
     fi
 }
 

@@ -77,6 +77,22 @@ assert_symlink_exists() {
     TESTS_RUN=$((TESTS_RUN + 1))
 }
 
+assert_equals() {
+    local expected="$1"
+    local actual="$2"
+    local message="${3:-Values should be equal}"
+    if [[ "$expected" == "$actual" ]]; then
+        echo -e "${GREEN}✓${NC} $message"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} $message"
+        echo "  Expected: $expected"
+        echo "  Actual:   $actual"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+}
+
 assert_not_equals() {
     local expected="$1"
     local actual="$2"
@@ -87,71 +103,6 @@ assert_not_equals() {
     else
         echo -e "${RED}✗${NC} $message"
         echo "  Both values are: $expected"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_command_exists() {
-    local cmd="$1"
-    local message="${2:-Command $cmd should exist}"
-    if command -v "$cmd" &>/dev/null; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_file_exists() {
-    local file="$1"
-    local message="${2:-File $file should exist}"
-    if [[ -f "$file" ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_file_not_exists() {
-    local file="$1"
-    local message="${2:-File $file should not exist}"
-    if [[ ! -f "$file" ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_dir_exists() {
-    local dir="$1"
-    local message="${2:-Directory $dir should exist}"
-    if [[ -d "$dir" ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_symlink_exists() {
-    local link="$1"
-    local message="${2:-Symlink $link should exist}"
-    if [[ -L "$link" ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
         TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
     TESTS_RUN=$((TESTS_RUN + 1))

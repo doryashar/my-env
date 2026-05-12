@@ -6,17 +6,8 @@
 # Tests the complete setup flow in a temporary environment
 #########################################################################
 
-# Test framework
-TESTS_RUN=0
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/test_helper.sh"
 
 # Setup test environment
 TEST_DIR=""
@@ -43,49 +34,6 @@ cleanup_test_env() {
     echo -e "${BLUE}Cleaning up test environment...${NC}"
     rm -rf "$TEST_DIR"
     echo -e "${GREEN}✓${NC} Cleanup complete"
-}
-
-# Test assertions
-assert_file_exists() {
-    local file="$1"
-    local message="${2:-File $file should exist}"
-
-    if [[ -f "$file" ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_dir_exists() {
-    local dir="$1"
-    local message="${2:-Directory $dir should exist}"
-
-    if [[ -d "$dir" ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_symlink_exists() {
-    local link="$1"
-    local message="${2:-Symlink $link should exist}"
-
-    if [[ -L "$link" ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 # Test: setup.sh script exists in test environment

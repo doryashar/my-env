@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Shared logging functions
+# Source this file to get: info, debug, warning, error, title, success
+
+# ANSI color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+NC='\033[0m'
+
+info() {
+    local message="$*"
+    echo -e "${GREEN}[INFO] $message${NC}"
+}
+
+debug() {
+    local message="$*"
+    if [[ -n "${ENV_DEBUG:-}" ]]; then
+        message=$(echo "$message" | sed -E 's/(AGE_SECRET|BW_PASSWORD|BW_CLIENTID|BW_CLIENTSECRET|GITHUB_SSH_PRIVATE_KEY|GLM_API_KEY|GITHUB_TOKEN|GH_TOKEN|API_KEY|TOKEN|BW_SESSION|UPTIME_KUMA_API|ZEROTIER_API_KEY)=[^ ]+/\1=***HIDDEN***/g')
+        echo -e "${PURPLE}[DEBUG] $message${NC}"
+    fi
+}
+
+warning() {
+    local message="$*"
+    echo -e "${YELLOW}[WARNING] $message${NC}"
+}
+
+title() {
+    local message="$*"
+    echo -e "${BLUE}$message${NC}"
+}
+
+error() {
+    local message="$*"
+    echo -e "${RED}[ERROR] $message${NC}" >&2
+    exit 1
+}
+
+success() {
+    local message="$*"
+    echo -e "${GREEN}[OK] $message${NC}"
+}

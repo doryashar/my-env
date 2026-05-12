@@ -9,18 +9,41 @@ PYTHON_HELPER="$HOME/.local/bin/monitor-switch-gnome.py"
 # Physical arrangement (left to right): HP, DEL, LEN
 # Monitors must be adjacent in GNOME (no gaps)
 
-# Profile 1: HP + DEL (DVI-I-2-2 + DVI-I-1-1)
-PROFILE1_MONITORS=("DVI-I-2-2" "DVI-I-1-1")
-PROFILE1_PRIMARY="DVI-I-2-2"  # HP is primary
+# Profile 1: HP + DEL
+PROFILE1_VENDORS=("HWP" "DEL")
 PROFILE1_NAME="HP + DEL"
 
-# Profile 2: LEN (DP-1)
-PROFILE2_MONITORS=("DP-1")
-PROFILE2_PRIMARY="DP-1"  # LEN is primary
+# Profile 2: LEN
+PROFILE2_VENDORS=("LEN")
 PROFILE2_NAME="LEN"
 
 # Monitor order (left to right) - determines positioning
-declare -a MONITOR_ORDER=("DVI-I-2-2" "DVI-I-1-1" "DP-1")  # HP, DEL, LEN
+declare -a MONITOR_VENDORS=("HWP" "DEL" "LEN")  # HP, DEL, LEN
+
+# Cached connector name lookups (populated at runtime)
+declare -A CONNECTOR_MAP  # vendor -> connector name
+declare -A WIDTH_MAP      # vendor -> width
+
+# Resolve all known vendor IDs to connector names + widths
+resolve_all_monitors() {
+    local output
+    output=$("$PYTHON_HELPER" resolve "${MONITOR_VENDORS[@]}")
+    while IFS=' ' read -r vid conn width; do
+        [ -z "$vid" ] && continue
+        CONNECTOR_MAP["$vid"]="$conn"
+        WIDTH_MAP["$vid"]="$width"
+    done <<< "$output"
+}
+
+resolve_connector() {
+    local vendor="$1"
+    echo "${CONNECTOR_MAP[$vendor]:-}"
+}
+
+resolve_width() {
+    local vendor="$1"
+    echo "${WIDTH_MAP[$vendor]:-1920}"
+}
 
 # Keybinding configuration
 KEYBINDING_NAME="Monitor Switch"
@@ -57,16 +80,45 @@ get_active_monitors() {
     "$PYTHON_HELPER" get-active
 }
 
+# Detect which monitors are available (connected to system)
+get_available_monitors() {
+    "$PYTHON_HELPER" get-available
+}
+
+# Filter a list of monitors to only those that are available
+get_available_from_profile() {
+    local profile_vendors=("$@")
+    local available=($(get_available_monitors))
+
+    for vid in "${profile_vendors[@]}"; do
+        local conn=$(resolve_connector "$vid")
+        for avail in "${available[@]}"; do
+            if [ "$conn" = "$avail" ]; then
+                echo "$conn"
+                break
+            fi
+        done
+    done
+}
+
 # Determine current profile based on active monitors
 get_current_profile() {
     local active_monitors=($(get_active_monitors))
 
-    # Convert to space-separated string for comparison
-    local active_str="${active_monitors[*]}"
-    local profile1_str="${PROFILE1_MONITORS[*]}"
-    local profile2_str="${PROFILE2_MONITORS[*]}"
+    local p1_connectors=()
+    for vid in "${PROFILE1_VENDORS[@]}"; do
+        p1_connectors+=("$(resolve_connector "$vid")")
+    done
 
-    # Sort both arrays for comparison
+    local p2_connectors=()
+    for vid in "${PROFILE2_VENDORS[@]}"; do
+        p2_connectors+=("$(resolve_connector "$vid")")
+    done
+
+    local active_str="${active_monitors[*]}"
+    local profile1_str="${p1_connectors[*]}"
+    local profile2_str="${p2_connectors[*]}"
+
     active_str=$(echo "$active_str" | tr ' ' '\n' | sort | tr '\n' ' ')
     profile1_str=$(echo "$profile1_str" | tr ' ' '\n' | sort | tr '\n' ' ')
     profile2_str=$(echo "$profile2_str" | tr ' ' '\n' | sort | tr '\n' ' ')
@@ -76,38 +128,29 @@ get_current_profile() {
     elif [ "$active_str" = "$profile2_str" ]; then
         echo "profile2"
     else
-        # Default to profile1 if current state doesn't match either profile
         echo "profile1"
     fi
 }
 
 # Build position arguments for monitors based on their physical order
-# Monitors will be positioned adjacent to each other (no gaps)
 build_position_args() {
     local enabled_monitors=("$@")
     local args=()
     local x_pos=0
 
-    # Standard widths for each monitor type
-    declare -A MONITOR_WIDTHS
-    MONITOR_WIDTHS["DVI-I-2-2"]=1920   # HP
-    MONITOR_WIDTHS["DVI-I-1-1"]=1920   # DEL
-    MONITOR_WIDTHS["DP-1"]=5120      # LEN
-
-    # Go through monitors in physical order, position only enabled ones
-    for monitor in "${MONITOR_ORDER[@]}"; do
-        # Check if this monitor is in the enabled list
+    for vid in "${MONITOR_VENDORS[@]}"; do
+        local conn=$(resolve_connector "$vid")
         local is_enabled=false
         for enabled in "${enabled_monitors[@]}"; do
-            if [ "$monitor" = "$enabled" ]; then
+            if [ "$conn" = "$enabled" ]; then
                 is_enabled=true
                 break
             fi
         done
 
         if [ "$is_enabled" = true ]; then
-            args+=("--pos" "$monitor" "$x_pos")
-            x_pos=$((x_pos + ${MONITOR_WIDTHS[$monitor]:-1920}))
+            args+=("--pos" "$conn" "$x_pos")
+            x_pos=$((x_pos + $(resolve_width "$vid")))
         fi
     done
 
@@ -119,13 +162,31 @@ toggle_profiles() {
     local current_profile=$(get_current_profile)
 
     if [ "$current_profile" = "profile1" ]; then
-        echo "Switching to Profile 2: $PROFILE2_NAME (primary: $PROFILE2_PRIMARY)"
-        local pos_args=($(build_position_args "${PROFILE2_MONITORS[@]}"))
-        "$PYTHON_HELPER" profile --primary "$PROFILE2_PRIMARY" "${pos_args[@]}" "${PROFILE2_MONITORS[@]}"
+        local primary=$(resolve_connector "${PROFILE2_VENDORS[0]}")
+        local monitors=($(get_available_from_profile "${PROFILE2_VENDORS[@]}"))
+        if [ ${#monitors[@]} -eq 0 ]; then
+            echo "Cannot switch to Profile 2: $PROFILE2_NAME"
+            echo "No monitors available"
+            return 1
+        fi
+        [[ " ${monitors[*]} " != *" $primary "* ]] && primary="${monitors[0]}"
+        local pos_args=($(build_position_args "${monitors[@]}"))
+        echo "Switching to Profile 2: $PROFILE2_NAME (primary: $primary)"
+        echo "Available monitors: ${monitors[*]}"
+        "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"
     else
-        echo "Switching to Profile 1: $PROFILE1_NAME (primary: $PROFILE1_PRIMARY)"
-        local pos_args=($(build_position_args "${PROFILE1_MONITORS[@]}"))
-        "$PYTHON_HELPER" profile --primary "$PROFILE1_PRIMARY" "${pos_args[@]}" "${PROFILE1_MONITORS[@]}"
+        local primary=$(resolve_connector "${PROFILE1_VENDORS[0]}")
+        local monitors=($(get_available_from_profile "${PROFILE1_VENDORS[@]}"))
+        if [ ${#monitors[@]} -eq 0 ]; then
+            echo "Cannot switch to Profile 1: $PROFILE1_NAME"
+            echo "No monitors available"
+            return 1
+        fi
+        [[ " ${monitors[*]} " != *" $primary "* ]] && primary="${monitors[0]}"
+        local pos_args=($(build_position_args "${monitors[@]}"))
+        echo "Switching to Profile 1: $PROFILE1_NAME (primary: $primary)"
+        echo "Available monitors: ${monitors[*]}"
+        "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"
     fi
 }
 
@@ -134,13 +195,31 @@ enable_profile() {
     local profile=$1
 
     if [ "$profile" = "1" ] || [ "$profile" = "profile1" ]; then
-        echo "Enabling Profile 1: $PROFILE1_NAME (primary: $PROFILE1_PRIMARY)"
-        local pos_args=($(build_position_args "${PROFILE1_MONITORS[@]}"))
-        "$PYTHON_HELPER" profile --primary "$PROFILE1_PRIMARY" "${pos_args[@]}" "${PROFILE1_MONITORS[@]}"
+        local primary=$(resolve_connector "${PROFILE1_VENDORS[0]}")
+        local monitors=($(get_available_from_profile "${PROFILE1_VENDORS[@]}"))
+        if [ ${#monitors[@]} -eq 0 ]; then
+            echo "Cannot enable Profile 1: $PROFILE1_NAME"
+            echo "No monitors available"
+            return 1
+        fi
+        [[ " ${monitors[*]} " != *" $primary "* ]] && primary="${monitors[0]}"
+        local pos_args=($(build_position_args "${monitors[@]}"))
+        echo "Enabling Profile 1: $PROFILE1_NAME (primary: $primary)"
+        echo "Available monitors: ${monitors[*]}"
+        "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"
     elif [ "$profile" = "2" ] || [ "$profile" = "profile2" ]; then
-        echo "Enabling Profile 2: $PROFILE2_NAME (primary: $PROFILE2_PRIMARY)"
-        local pos_args=($(build_position_args "${PROFILE2_MONITORS[@]}"))
-        "$PYTHON_HELPER" profile --primary "$PROFILE2_PRIMARY" "${pos_args[@]}" "${PROFILE2_MONITORS[@]}"
+        local primary=$(resolve_connector "${PROFILE2_VENDORS[0]}")
+        local monitors=($(get_available_from_profile "${PROFILE2_VENDORS[@]}"))
+        if [ ${#monitors[@]} -eq 0 ]; then
+            echo "Cannot enable Profile 2: $PROFILE2_NAME"
+            echo "No monitors available"
+            return 1
+        fi
+        [[ " ${monitors[*]} " != *" $primary "* ]] && primary="${monitors[0]}"
+        local pos_args=($(build_position_args "${monitors[@]}"))
+        echo "Enabling Profile 2: $PROFILE2_NAME (primary: $primary)"
+        echo "Available monitors: ${monitors[*]}"
+        "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"
     else
         echo "Unknown profile: $profile"
         echo "Valid profiles: 1 (or profile1), 2 (or profile2)"
@@ -161,9 +240,16 @@ list_monitors() {
     echo ""
     echo "Current profile: $(get_current_profile)"
     echo ""
+    echo "Resolved monitors:"
+    for vid in "${MONITOR_VENDORS[@]}"; do
+        local conn=$(resolve_connector "$vid")
+        local w=$(resolve_width "$vid")
+        echo "  $vid -> $conn (${w}px)"
+    done
+    echo ""
     echo "Profiles:"
-    echo "  Profile 1: $PROFILE1_NAME (${PROFILE1_MONITORS[*]}) - primary: $PROFILE1_PRIMARY"
-    echo "  Profile 2: $PROFILE2_NAME (${PROFILE2_MONITORS[*]}) - primary: $PROFILE2_PRIMARY"
+    echo "  Profile 1: $PROFILE1_NAME ($(printf '%s ' "${PROFILE1_VENDORS[@]}")) - primary: ${PROFILE1_VENDORS[0]}"
+    echo "  Profile 2: $PROFILE2_NAME ($(printf '%s ' "${PROFILE2_VENDORS[@]}")) - primary: ${PROFILE2_VENDORS[0]}"
 }
 
 # Show usage
@@ -180,8 +266,8 @@ Usage:
   monitor-switch help         Show this help message
 
 Profiles:
-  Profile 1: $PROFILE1_NAME (${PROFILE1_MONITORS[*]}) - primary: $PROFILE1_PRIMARY
-  Profile 2: $PROFILE2_NAME (${PROFILE2_MONITORS[*]}) - primary: $PROFILE2_PRIMARY
+  Profile 1: $PROFILE1_NAME ($(printf '%s ' "${PROFILE1_VENDORS[@]}")) - primary: ${PROFILE1_VENDORS[0]}
+  Profile 2: $PROFILE2_NAME ($(printf '%s ' "${PROFILE2_VENDORS[@]}")) - primary: ${PROFILE2_VENDORS[0]}
 
 Examples:
   monitor-switch                     # Toggle between profiles
@@ -193,10 +279,13 @@ Examples:
 Note:
   This script uses GNOME's display management API on Wayland.
   Profiles define which monitors are enabled side by side.
+  Monitors are identified by vendor ID and resolved to connector names at runtime.
 EOF
 }
 
 # Main logic
+resolve_all_monitors
+
 # Ensure keybinding is set up (silent for most operations)
 if [[ "$1" != "list" && "$1" != "help" && "$1" != "--help" && "$1" != "-h" ]]; then
     ensure_keybinding

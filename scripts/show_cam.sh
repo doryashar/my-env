@@ -4,7 +4,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GO2RTC_BIN="/tmp/go2rtc"
 GO2RTC_CONFIG="/tmp/go2rtc_showcam.yaml"
-CAMERA_RTSP="rtsp://admin:1111@192.168.1.140:554/streamtype=0"
+CAMERA_USER="${CAMERA_USER:-admin}"
+CAMERA_PASS="${CAMERA_PASS:-}"
+CAMERA_HOST="${CAMERA_HOST:-192.168.1.140}"
+CAMERA_RTSP="rtsp://${CAMERA_USER}:${CAMERA_PASS}@${CAMERA_HOST}:554/streamtype=0"
 GO2RTC_PORT=19084
 GO2RTC_RTSP_PORT=18584
 PIPE="/tmp/showcam_pipe"
@@ -24,7 +27,7 @@ fi
 cat > "$GO2RTC_CONFIG" <<EOF
 streams:
   camera:
-    - rtsp://admin:1111@192.168.1.140:554/streamtype=0#transport=tcp
+    - rtsp://${CAMERA_USER}:${CAMERA_PASS}@${CAMERA_HOST}:554/streamtype=0#transport=tcp
 api:
   listen: ":$GO2RTC_PORT"
 webrtc:

@@ -119,7 +119,7 @@ echo "Downloading image from: $image_url"
 if curl -s -L -o "$OUTPUT_FILE" "$image_url"; then
     echo "Image saved successfully to: $OUTPUT_FILE"
     
-    if [[ $(command -v file >/dev/null 2>&1) ]]; then
+    if command -v file >/dev/null 2>&1; then
         file_type=$(file -b --mime-type "$OUTPUT_FILE")
         file_size=$(stat -c%s "$OUTPUT_FILE" 2>/dev/null || stat -f%z "$OUTPUT_FILE" 2>/dev/null || echo "unknown")
         echo "File type: $file_type"

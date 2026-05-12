@@ -12,7 +12,7 @@ fi
 
 echo "✓ GITHUB_API_TOKEN is set"
 
-cd ~/projects/sato-be/sato/sato-be || cd /home/yashar/env/scripts
+cd ~/projects/sato-be/sato/sato-be || cd "$HOME/env/scripts"
 
 # Clean up old test
 git worktree remove .worktrees/push-test --force 2>/dev/null || true

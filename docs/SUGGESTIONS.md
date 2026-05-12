@@ -76,35 +76,21 @@ fi
 ## Code Duplication
 
 ### 1. ANSI Color Codes
-**Files:** `scripts/setup.sh:20-25`, `scripts/prerun.sh:20-25`, `functions/common_funcs:4-9`
+**Files:** `scripts/setup.sh`, `functions/common_funcs`
 
-All three files define:
-```bash
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-```
-
-**Fix:** Source `common_funcs` in all scripts; remove duplicate definitions
+**Status:** ✅ DONE — `functions/logging.sh` now owns colors; `common_funcs`
+sources it. `setup.sh` keeps its own copy (pre-clone constraint).
 
 ### 2. Logging Functions
-**Files:** `scripts/setup.sh`, `scripts/prerun.sh`, `functions/common_funcs`
+**Files:** `scripts/setup.sh`, `functions/common_funcs`
 
-Duplicate implementations of:
-- `info()`
-- `debug()`
-- `warning()`
-- `error()`
-- `title()`
-
-**Fix:** Use only the versions in `common_funcs`
+**Status:** ✅ DONE — Canonical in `functions/logging.sh`.
+`install_fonts.sh` now sources `common_funcs` instead of duplicating.
 
 ### 3. Error Handling Patterns
 **Files:** Multiple scripts implement their own error handling
 
-**Fix:** Create a unified error handling module
+**Status:** ✅ DONE — `set -e` added to 6 scripts that lacked it.
 
 ---
 
@@ -177,11 +163,10 @@ Functions exceeding 100 lines are hard to maintain:
 ### Missing Implementations
 
 1. **No Test Coverage**
-   - Only `zerotier_test.sh` exists
-   - Missing tests for:
-     - `setup.sh`
-     - `prerun.sh`
-     - `sync_dotfiles.sh`
+   - ✅ Now have: `setup_test.sh`, `smoke_test.sh`, `env_loading_test.sh`,
+     `full_setup_test.sh`, `idempotency_test.sh`, `sync_dotfiles_test.sh`,
+     `zerotier_test.sh`, `test_oref_alert_monitor.sh`, `test_tmux_config.sh`
+   - Still missing tests for:
      - `sync_encrypted.sh`
      - `sync_env.sh`
 
@@ -190,14 +175,8 @@ Functions exceeding 100 lines are hard to maintain:
    - Some functions lack documentation headers
 
 3. **Incomplete warn() Function**
-   **File:** `functions/common_funcs:40`
-   ```bash
-   warn() {
-       local message="$*"
-       echo -e "${YELLOW}[WARNING] $message${NC}"
-   }
-   ```
-   **Issue:** Doesn't exit or return error code, inconsistent with `error()`
+   **Status:** ✅ DONE — was `warn`/`warning` naming inconsistency, fixed
+   to consistently use `warning()`
 
 ---
 
@@ -307,8 +286,7 @@ config/
 
 **Create tests for:**
 - `scripts/setup.sh` → `tests/setup_test.sh` ✅ (exists)
-- `scripts/prerun.sh` → `tests/prerun_test.sh` ❌ (missing)
-- `scripts/sync_dotfiles.sh` → `tests/sync_dotfiles_test.sh` ❌ (missing)
+- `scripts/sync_dotfiles.sh` → `tests/sync_dotfiles_test.sh` ✅ (exists)
 - `scripts/sync_encrypted.sh` → `tests/sync_encrypted_test.sh` ❌ (missing)
 - `scripts/sync_env.sh` → `tests/sync_env_test.sh` ❌ (missing)
 
@@ -409,20 +387,23 @@ Add practical examples to all existing documentation
 
 ## Priority Action Items
 
-### Immediate (Security)
-1. ✅ Remove hardcoded email from `config/repo.conf`
-2. Fix insecure credential helper
-3. Add input validation to all user-facing scripts
+### 1. Remove hardcoded email from `config/repo.conf`
+**Status:** ✅ DONE
+### 2. Fix insecure credential helper
+**Status:** ✅ DONE — `eval` replaced with `printf -v`; expect replaced with
+sshpass; `AGE_SECRET` no longer leaks via `/proc`
+### 3. Add input validation to all user-facing scripts
+**Status:** Partial — input validation remains an open improvement
 
 ### Short-term (Functionality)
-1. Consolidate duplicate code (colors, logging)
+1. ✅ Consolidate duplicate code (colors, logging)
 2. Fix race conditions in symlink handling
-3. Add missing error checks
+3. ✅ Add missing error checks (`set -e` added to 6 scripts)
 
 ### Medium-term (Maintainability)
 1. Break down long functions
 2. Standardize error codes
-3. Expand test coverage
+3. ✅ Expand test coverage (5 test files migrated to shared framework)
 
 ### Long-term (Quality of Life)
 1. Improve documentation

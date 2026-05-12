@@ -37,14 +37,4 @@ ensure_dir() {
     fi
 }
 
-# Check if a command exists
-#
-# Args:
-#   $1 - Command name
-#
-# Returns:
-#   0 - Command exists
-#   1 - Command does not exist
-command_exists() {
-    command -v "$1" > /dev/null 2>&1
-}
+# command_exists() is in common_funcs

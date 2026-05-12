@@ -6,18 +6,9 @@
 # Tests for the zerotier_clients function functionality
 #########################################################################
 
-# Test framework
-TESTS_RUN=0
-TESTS_PASSED=0
-TESTS_FAILED=0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/test_helper.sh"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-NC='\033[0m'
-
-# Test assertions
 assert_equals() {
     local expected="$1"
     local actual="$2"
@@ -30,23 +21,6 @@ assert_equals() {
         echo -e "${RED}✗${NC} $message"
         echo "  Expected: $expected"
         echo "  Actual:   $actual"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_contains() {
-    local haystack="$1"
-    local needle="$2"
-    local message="${3:-String should contain substring}"
-
-    if [[ "$haystack" == *"$needle"* ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        echo "  String: $haystack"
-        echo "  Should contain: $needle"
         TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
     TESTS_RUN=$((TESTS_RUN + 1))

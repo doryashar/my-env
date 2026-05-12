@@ -68,17 +68,10 @@ if [ -z "$sftp_pass" ]; then
 fi
 
 # Function to use expect for SFTP transfer
-use_expect() {
-    expect << EOF
-spawn sftp -P $sftp_port $sftp_user@$sftp_host
-expect "password:"
-send "$sftp_pass\r"
-expect "sftp>"
-send "$(cat $sftp_commands)\r"
-expect "sftp>"
-send "bye\r"
-expect eof
-EOF
+use_sshpass() {
+    SSHPASS="$sftp_pass" sshpass -e \
+      sftp -P "$sftp_port" -b "$sftp_commands" \
+      "$sftp_user@$sftp_host"
 }
 
 # Function to use key-based authentication for SFTP transfer
@@ -88,8 +81,8 @@ use_key_auth() {
 
 # Connect to SFTP and send the files
 echo "Connecting to SFTP and sending file(s)..."
-if command -v expect &> /dev/null && [ -n "$sftp_pass" ]; then
-    use_expect
+if command -v sshpass &>/dev/null && [[ -n "$sftp_pass" ]]; then
+    use_sshpass
 elif [ -n "$sftp_key" ]; then
     use_key_auth
 else

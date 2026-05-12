@@ -1,9 +1,12 @@
 
 ## Build, Lint, and Test Commands
 
-- **Build:** There is no formal build process. The main script is `setup.sh`.
+- **Build:** There is no formal build process. The main script is
+  `scripts/setup.sh`.
 - **Lint:** There is no linter configured.
-- **Test:** There is no testing framework. To test changes, run the modified scripts in a controlled environment.
+- **Test:** Run `bash tests/run_all_tests.sh` from the repo root.
+  Individual tests can be run with `bash tests/<test_name>.sh`.
+  Tests use a shared framework in `tests/test_helper.sh`.
 
 ## Code Style Guidelines
 
@@ -16,6 +19,14 @@
   - Functions: `lower_case_with_underscores()`
 - **Error Handling:**
   - Use `set -e` at the beginning of scripts to exit on error.
-  - Check for the existence of commands and directories before using them.
+  - Check for the existence of commands and directories before using
+    them.
 - **Comments:**
-  - Use comments to explain the purpose of complex commands or functions.
+  - Use comments to explain the purpose of complex commands or
+    functions.
+- **Shared Functions:**
+  - Logging functions live in `functions/logging.sh`.
+  - Common utilities (command_exists, prompts, GitHub auth) are in
+    `functions/common_funcs`.
+  - `scripts/setup.sh` is self-contained (runs via curl pre-clone) and
+    maintains its own copies of these functions.

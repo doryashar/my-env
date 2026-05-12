@@ -125,7 +125,8 @@ custom/bin/* <= $HOME/bin/*
 # Add more mappings as needed
 EOF
 
-    info "Default configuration created. Please edit $config_path to customize your setup."
+    info "Default configuration created. Please edit" \
+      "$config_path to customize your setup."
     exit 0
 }
 
@@ -191,7 +192,8 @@ load_config() {
             
             # Store in backward sync array
             BACKWARD_SYNC+=("$source <= $target")
-            FILE_OPTIONS["$source <= $target"]="link=$DEFAULT_LINK_TYPE conflict=$DEFAULT_CONFLICT_STRATEGY"
+            FILE_OPTIONS["$source <= $target"]="link=$DEFAULT_LINK_TYPE "\
+"conflict=$DEFAULT_CONFLICT_STRATEGY"
             continue
         fi
 
@@ -202,7 +204,8 @@ load_config() {
             local target_and_options="${BASH_REMATCH[2]}"
             
             # Extract target and options
-            if [[ "$target_and_options" =~ (.+)\ +link=([a-z]+)\ +conflict=([a-z]+) ]]; then
+            if [[ "$target_and_options" =~ \
+              (.+)\ +link=([a-z]+)\ +conflict=([a-z]+) ]]; then
                 local target="${BASH_REMATCH[1]}"
                 local link_type="${BASH_REMATCH[2]}"
                 local conflict_strategy="${BASH_REMATCH[3]}"
@@ -225,15 +228,19 @@ load_config() {
             target=$(echo "$target" | xargs)
 
             # Check if it's a regex pattern (contains wildcards or capture groups)
-            if [[ "$source" == *"("*")"* || "$source" == *"*"* || "$target" == *"\$"* ]]; then
+            if [[ "$source" == *"("*")"* || \
+              "$source" == *"*"* || \
+              "$target" == *"\$"* ]]; then
                 # Store in regex arrays
                 SOURCE_REGEX+=("$source")
                 TARGET_REGEX+=("$target")
-                FILE_OPTIONS["regex:$source"]="link=$link_type conflict=$conflict_strategy"
+                FILE_OPTIONS["regex:$source"]="link=$link_type "\
+"conflict=$conflict_strategy"
             else
                 # Store in direct mapping arrays
                 SOURCE_TO_TARGET["$source"]="$target"
-                FILE_OPTIONS["$source"]="link=$link_type conflict=$conflict_strategy"
+                FILE_OPTIONS["$source"]="link=$link_type "\
+"conflict=$conflict_strategy"
             fi
             # debug "Stored mapping: $source => $SOURCE_TO_TARGET["$source"], link=$link_type, conflict=$conflict_strategy"
         fi
@@ -272,7 +279,9 @@ process_regex_mappings() {
         local files=()
         while IFS= read -r -d $'\0' file; do
             files+=("$file")
-        done < <(find "$ENV_DIR" -maxdepth $(($(printf '%s' "$source_pattern" | tr -cd '/' | wc -c) + 1)) -path $ENV_DIR/"$source_pattern" -print0 2>/dev/null)
+        done < <(find "$ENV_DIR" -maxdepth $(($(printf '%s' \
+          "$source_pattern" | tr -cd '/' | wc -c) + 1)) \
+          -path $ENV_DIR/"$source_pattern" -print0 2>/dev/null)
         
         if [[ ${#files[@]} -eq 0 ]]; then
             warning "No files matched pattern: $source_pattern"
@@ -288,7 +297,8 @@ process_regex_mappings() {
             local target="$target_pattern"
             
             # Extract capture groups from source pattern and file path
-            if [[ "$source_pattern" == *"("*")"* && "$target_pattern" == *"\$"* ]]; then
+            if [[ "$source_pattern" == *"("*")"* && \
+              "$target_pattern" == *"\$"* ]]; then
                 # Convert regex pattern to extended regex for bash
                 local bash_regex="^${source_pattern//\(/\\(}$"
                 bash_regex="${bash_regex//\)/\\)}"
@@ -388,7 +398,8 @@ handle_conflict() {
             mv "$target" "${target}.backup.$(date +%Y%m%d%H%M%S)"
             # cp -rf "$source" "$target"
             ln -s "$source" "$target" 
-            info "Renamed local to ${target}.backup.* and used repository version${NC}"
+            info "Renamed local to ${target}.backup.*" \
+              "and used repository version${NC}"
             ;;
         "ignore")
             info "Ignored conflict for: $target${NC}"
@@ -424,7 +435,9 @@ sync_file() {
     
     # Extract options
     local link_type=$(echo "$options" | grep -o "link=[a-z]*" | cut -d= -f2)
-    local conflict_strategy=$(echo "$options" | grep -o "conflict=[a-z]*" | cut -d= -f2)
+    local conflict_strategy=$(echo "$options" | \
+      grep -o "conflict=[a-z]*" | \
+      cut -d= -f2)
     
     [[ -z "$link_type" ]] && link_type="$DEFAULT_LINK_TYPE"
     [[ -z "$conflict_strategy" ]] && conflict_strategy="$DEFAULT_CONFLICT_STRATEGY"
@@ -461,7 +474,8 @@ sync_file() {
                 debug "Target is a symlink: $target"
             fi
             if [[ "$(readlink "$target")" == "$source" ]]; then
-                debug "Symlink already points to source: $(readlink "$target") == $source"
+                debug "Symlink already points to source:" \
+                  "$(readlink "$target") == $source"
             fi
         fi
         
@@ -532,7 +546,8 @@ process_backward_sync() {
             local files=()
             while IFS= read -r -d $'\0' file; do
                 files+=("$file")
-            done < <(find "${glob_pattern/#\~/$HOME}" -type f -print0 2>/dev/null)
+            done < <(find "${glob_pattern/#\~/$HOME}" \
+              -type f -print0 2>/dev/null)
             
             if [[ ${#files[@]} -eq 0 ]]; then
                 warning "No files matched backward pattern: $target${NC}"
@@ -562,7 +577,8 @@ process_backward_sync() {
                 elif [[ "$source_file" != /* ]]; then
                     source_file="$source_file"
                 else
-                    error "Source must be relative to repo or an absolute path: $source_file"
+                    error "Source must be relative to repo" \
+                      "or an absolute path: $source_file"
                     continue
                 fi
                 
@@ -614,7 +630,9 @@ backward_sync_file() {
     
     # Extract options
     local link_type=$(echo "$options" | grep -o "link=[a-z]*" | cut -d= -f2)
-    local conflict_strategy=$(echo "$options" | grep -o "conflict=[a-z]*" | cut -d= -f2)
+    local conflict_strategy=$(echo "$options" | \
+      grep -o "conflict=[a-z]*" | \
+      cut -d= -f2)
     
     [[ -z "$link_type" ]] && link_type="$DEFAULT_LINK_TYPE"
     [[ -z "$conflict_strategy" ]] && conflict_strategy="$DEFAULT_CONFLICT_STRATEGY"
@@ -697,14 +715,16 @@ create_link() {
     
     # if the broken link file exists, remove it
     if [[ -h "$target" ]]; then
-        warning "Removing existing file (probably broken simlink): $target, $(ls -al "$target")"
+        warning "Removing existing file (probably broken simlink):" \
+          "$target, $(ls -al "$target")"
         rm -rf "$target"
     fi
 
     if [[ "$link_type" == "hard" ]]; then
         ln "$source" "$target" && info "Created hard link: $target -> $source"
     else
-        ln -s "$source" "$target" && info "Created symbolic link: $target -> $source"
+        ln -s "$source" "$target" && \
+          info "Created symbolic link: $target -> $source"
     fi
     
     return $?
@@ -765,7 +785,8 @@ remove_all_broken_links() {
     
     if [[ $count -gt 0 ]]; then
         info "Removed $count broken symlink(s)"
-        info "This usually means encrypted files were not synced. Run: ~/env/scripts/sync_encrypted.sh"
+        info "This usually means encrypted files were not synced." \
+          "Run: ~/env/scripts/sync_encrypted.sh"
     fi
 }
 # Main entry point for the script
@@ -798,5 +819,5 @@ main() {
 }
 
 if [[ "$SELF_PATH" == "$ZERO_PATH" ]]; then
-    main $@
+    main "$@"
 fi

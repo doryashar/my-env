@@ -4,7 +4,7 @@ set -euo pipefail
 echo "=== Testing Git Remotes in Worktree and Container ==="
 
 # Go to a real git repository
-cd ~/projects/sato-be/sato/sato-be || cd /home/yashar/env/scripts
+cd ~/projects/sato-be/sato/sato-be || cd "$HOME/env/scripts"
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 echo ">>> Repository root: $REPO_ROOT"

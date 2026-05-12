@@ -39,7 +39,8 @@ if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
     SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
     
     # Check if we're running from inside the repo by looking for key files
-    if [[ -f "$SCRIPT_DIR/../config/repo.conf" ]] && [[ -f "$SCRIPT_DIR/../functions/common_funcs" ]]; then
+    if [[ -f "$SCRIPT_DIR/../config/repo.conf" ]] && \
+      [[ -f "$SCRIPT_DIR/../functions/common_funcs" ]]; then
         # We're in the repo, set ENV_DIR and continue
         ENV_DIR="$(dirname "$SCRIPT_DIR")"
     else
@@ -97,7 +98,9 @@ info() {
 debug() {
     if [[ -n "${ENV_DEBUG:-}" ]]; then
         local message="$*"
-        message=$(echo "$message" | sed -E 's/(AGE_SECRET|BW_PASSWORD|BW_CLIENTID|BW_CLIENTSECRET|GITHUB_SSH_PRIVATE_KEY|GITHUB_TOKEN|GH_TOKEN|API_KEY|TOKEN|BW_SESSION)=[^ ]+/\1=***HIDDEN***/g')
+        message=$(echo "$message" | sed -E 's/(AGE_SECRET|BW_PASSWORD|'\
+'BW_CLIENTSECRET|GITHUB_SSH_PRIVATE_KEY|GITHUB_TOKEN|GH_TOKEN|API_KEY|'\
+'TOKEN|BW_SESSION)=[^ ]+/\1=***HIDDEN***/g')
         echo -e "${PURPLE}[DEBUG] $message${NC}"
     fi
 }
@@ -128,7 +131,7 @@ prompt() {
     else
         echo -n "$question"
         read -r answer < /dev/tty
-        eval "$var_name=\$answer"
+        printf -v "$var_name" '%s' "$answer"
     fi
 }
 
@@ -186,7 +189,8 @@ get_vault_cli() {
             debug "Bitwarden CLI already installed and working"
             return 0
         else
-            warning "Existing Bitwarden CLI is broken (wrong architecture?), reinstalling..."
+            warning "Existing Bitwarden CLI is broken " \
+              "(wrong architecture?), reinstalling..."
             rm -f "$bw_bin"
         fi
     fi
@@ -226,7 +230,10 @@ get_vault_cli() {
     esac
     debug "Architecture: $machine, suffix: ${arch_suffix:-none}"
 
-    local download_url="https://github.com/bitwarden/clients/releases/download/cli-v${bw_version}/bw-linux${arch_suffix}-${bw_version}.zip"
+    local download_url
+    download_url="https://github.com/bitwarden/clients/releases"
+    download_url+="/download/cli-v${bw_version}"
+    download_url+="/bw-linux${arch_suffix}-${bw_version}.zip"
     debug "Download URL: $download_url"
 
     if ! curl -fsSL -o bw.zip "$download_url" 2>/dev/null; then
@@ -367,7 +374,8 @@ oauth2_authenticate() {
                 echo
             fi
             
-            BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") --raw 2>/dev/null)
+            BW_SESSION=$(bw unlock --passwordfile <(echo "$bw_password") \
+              --raw 2>/dev/null)
             if [[ -z "$BW_SESSION" ]]; then
                 warning "Failed to unlock vault - incorrect password or vault error"
                 export BW_AUTH_STATUS="failed"
@@ -469,8 +477,12 @@ clone_public_repo() {
     if [[ -n "$github_token" ]] && [[ "$public_url" == *"github.com"* ]]; then
         debug "Cloning with HTTPS token..."
         local https_url
-        https_url=$(echo "$public_url" | sed 's|git@github.com:|https://github.com/|' | sed 's|\.git$||')
-        git clone "https://${github_token}@${https_url#https://}" "$ENV_DIR" 2>/dev/null || {
+        https_url=$(echo "$public_url" | \
+          sed 's|git@github.com:|https://github.com/|' | \
+          sed 's|\.git$||')
+        GH_TOKEN="$github_token" git -c \
+          "credential.helper=!f() { echo password=\$GH_TOKEN; }; f" \
+          clone "$https_url" "$ENV_DIR" 2>/dev/null || {
             warning "HTTPS clone failed, trying SSH..."
             git clone "$public_url" "$ENV_DIR" 2>/dev/null || error "Failed to clone repository"
         }
@@ -662,7 +674,8 @@ sync_encrypted_files() {
     info "Checking if private repository exists..."
     if check_remote_repo_exists "$private_url"; then
         debug "Private repository exists, syncing..."
-        bash "$ENV_DIR/scripts/sync_encrypted.sh" || warning "Encrypted sync failed (non-fatal)"
+        bash "$ENV_DIR/scripts/sync_encrypted.sh" || \
+          warning "Encrypted sync failed (non-fatal)"
     else
         warning "Private repository does not exist: $private_url"
         echo ""
@@ -735,7 +748,8 @@ install_docker() {
     fi
 
     if [[ -f "$ENV_DIR/scripts/install_docker.sh" ]]; then
-        bash "$ENV_DIR/scripts/install_docker.sh" || warning "Docker installation failed (non-fatal)"
+        bash "$ENV_DIR/scripts/install_docker.sh" || \
+          warning "Docker installation failed (non-fatal)"
     else
         warning "install_docker.sh not found, skipping Docker installation"
     fi
@@ -751,12 +765,16 @@ setup_docker_compose() {
 
     if [[ -f "$ENV_DIR/docker/rclone-mount/docker-compose.yml" ]]; then
         info "Setting up rclone mount service..."
-        (cd "$ENV_DIR/docker/rclone-mount" && docker compose up -d 2>/dev/null) || warning "Failed to start rclone mount"
+        (cd "$ENV_DIR/docker/rclone-mount" && \
+          docker compose up -d 2>/dev/null) || \
+          warning "Failed to start rclone mount"
     fi
 
     if [[ -f "$ENV_DIR/docker/zerotier/docker-compose.yml" ]]; then
         info "Setting up ZeroTier service..."
-        (cd "$ENV_DIR/docker/zerotier" && docker compose up -d 2>/dev/null) || warning "Failed to start ZeroTier"
+        (cd "$ENV_DIR/docker/zerotier" && \
+          docker compose up -d 2>/dev/null) || \
+          warning "Failed to start ZeroTier"
     fi
 }
 
@@ -817,13 +835,13 @@ install_tpm() {
     fi
 
     if ! command_exists git; then
-        warn "git not found, skipping TPM install"
+        warning "git not found, skipping TPM install"
         return 1
     fi
 
     mkdir -p "$HOME/.tmux/plugins"
     git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
-    success "TPM installed at $tpm_dir"
+    info "TPM installed at $tpm_dir"
 }
 
 install_pip_packages() {
@@ -913,7 +931,9 @@ clone_github_projects() {
         local repo_name="${project##*/}"
         if [[ ! -d "$projects_dir/$repo_name" ]]; then
             info "Cloning $project..."
-            git clone "git@github.com:$project.git" "$projects_dir/$repo_name" 2>/dev/null || warning "Failed to clone $project"
+            git clone "git@github.com:$project.git" \
+              "$projects_dir/$repo_name" 2>/dev/null || \
+              warning "Failed to clone $project"
         else
             debug "$repo_name already exists"
         fi
@@ -924,7 +944,9 @@ install_dotfiles() {
     info "Setting up Dotfiles..."
 
     if [[ -f "$ENV_DIR/scripts/sync_dotfiles.sh" ]]; then
-        bash "$ENV_DIR/scripts/sync_dotfiles.sh" "$ENV_DIR/config/dotfiles.conf" || warning "Dotfiles sync failed (non-fatal)"
+        bash "$ENV_DIR/scripts/sync_dotfiles.sh" \
+          "$ENV_DIR/config/dotfiles.conf" || \
+          warning "Dotfiles sync failed (non-fatal)"
     else
         warning "sync_dotfiles.sh not found"
     fi

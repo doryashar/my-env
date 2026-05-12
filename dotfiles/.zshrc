@@ -109,6 +109,7 @@ setopt no_auto_menu  # require an extra TAB press to open the completion menu
 # source "/home/yashar/snap/code/185/.local/share/bash-completion/completions/appman"
 
 
+ssht() { ssh -t "$@" "tmux -f ~/.tmux.remote.conf attach || tmux -f ~/.tmux.remote.conf new"; }
 alias glm="ANTHROPIC_AUTH_TOKEN=\"\${GLM_API_KEY}\" ANTHROPIC_BASE_URL=\"https://api.z.ai/api/anthropic\" API_TIMEOUT_MS=\"3000000\" ANTHROPIC_DEFAULT_HAIKU_MODEL=\"glm-4.5-air\" ANTHROPIC_DEFAULT_SONNET_MODEL=\"glm-4.7\" ANTHROPIC_DEFAULT_OPUS_MODEL=\"glm-4.7\" claude --dangerously-skip-permissions"
 
 export NVM_DIR="$HOME/.nvm"

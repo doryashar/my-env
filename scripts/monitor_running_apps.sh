@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 MONITOR_INTERVAL=5  # Check every 5 seconds
 LOCKDIR="/tmp"

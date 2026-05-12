@@ -2,7 +2,7 @@
 set -euo pipefail
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 ENV_DIR=$(dirname "$SCRIPT_DIR")
-source $ENV_DIR/functions/common_funcs
+source "$ENV_DIR/functions/common_funcs"
 
 [[ -d ~/.ssh ]] && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
 
@@ -20,16 +20,24 @@ TEMP_DIR="$ENV_DIR/tmp/private_encrypted-sync-temp"
 # IDENTITY_FILE="$ENV_DIR/tmp/private/age-key"
 RECIPIENTS_FILE="$ENV_DIR/tmp/private/age-recipients"
 
-# Check if a command exists in PATH
-#
-# Args:
-#   $1 - Command name to check
-#
-# Returns:
-#   0 - Command exists
-#   1 - Command does not exist
-command_exists() {
-  command -v "$1" > /dev/null 2>&1
+_AGE_IDENTITY_FILE=""
+_cleanup_age_identity() {
+  if [[ -n "$_AGE_IDENTITY_FILE" ]]; then
+    rm -f "$_AGE_IDENTITY_FILE"
+    _AGE_IDENTITY_FILE=""
+  fi
+}
+trap _cleanup_age_identity EXIT
+
+get_age_identity_file() {
+  if [[ -n "$_AGE_IDENTITY_FILE" ]]; then
+    echo "$_AGE_IDENTITY_FILE"
+    return
+  fi
+  _AGE_IDENTITY_FILE=$(mktemp)
+  chmod 600 "$_AGE_IDENTITY_FILE"
+  echo "$AGE_SECRET" > "$_AGE_IDENTITY_FILE"
+  echo "$_AGE_IDENTITY_FILE"
 }
 
 # Ensure age encryption tool is installed
@@ -110,7 +118,7 @@ encrypt_file() {
   local source="$1"
   local dest="$2"
   
-  if [ -d "$source" ]; then
+  if [[ -d "$source" ]]; then
     # Directory encryption - tar first, then encrypt
     tar -cf - -C "$(dirname "$source")" "$(basename "$source")" | age -R "$RECIPIENTS_FILE" > "$dest"
   else
@@ -143,7 +151,7 @@ decrypt_file() {
   mkdir -p "$(dirname "$dest")"
 
   # Decrypt the file
-  age -d -i <(echo "$AGE_SECRET") -o "$temp_file" "$source" #Instead of using -i $IDENTITY_FILE
+  age -d -i "$(get_age_identity_file)" -o "$temp_file" "$source" #Instead of using -i $IDENTITY_FILE
 
   # Check if it's a tar archive (directory)
   if tar -tf "$temp_file" &> /dev/null; then
@@ -250,7 +258,7 @@ has_changed() {
   
   hashit "$dir" "$temp_hash_file"
   
-  if [ ! -f "$hash_file" ]; then
+  if [[ ! -f "$hash_file" ]]; then
     info "No previous hash file found. Assuming change."
     return 1  # Indicates change (no previous hash)
   fi
@@ -311,31 +319,31 @@ merge_changes() {
     mkdir -p "$(dirname "$merged_file")"
     
     # Case 1: File exists only in remote
-    if [ ! -f "$local_file" ] && [ -f "$remote_file" ]; then
+    if [[ ! -f "$local_file" ]] && [[ -f "$remote_file" ]]; then
       cp "$remote_file" "$merged_file"
       info "Added remote-only file: $rel_path"
       continue
     fi
     
     # Case 2: File exists only in local
-    if [ -f "$local_file" ] && [ ! -f "$remote_file" ]; then
+    if [[ -f "$local_file" ]] && [[ ! -f "$remote_file" ]]; then
       cp "$local_file" "$merged_file"
       info "Kept local-only file: $rel_path"
       continue
     fi
     
     # Case 3: File exists in both places
-    if [ -f "$local_file" ] && [ -f "$remote_file" ]; then
+    if [[ -f "$local_file" ]] && [[ -f "$remote_file" ]]; then
       if cmp -s "$local_file" "$remote_file"; then
         # Files are identical
         cp "$local_file" "$merged_file"
         info "Files identical: $rel_path"
       else
         # Files differ - need merge
-        if [ -f "$base_file" ]; then
+        if [[ -f "$base_file" ]]; then
           # We have a base version for three-way merge
           git merge-file -p "$local_file" "$base_file" "$remote_file" > "$merged_file"
-          if [ $? -eq 0 ]; then
+          if [[ $? -eq 0 ]]; then
             info "Successfully merged: $rel_path"
           else
             info "Merge conflict in: $rel_path"
@@ -345,7 +353,7 @@ merge_changes() {
         else
           # No base version, attempt merge but likely will have conflicts
           git merge-file -p "$local_file" /dev/null "$remote_file" > "$merged_file"
-          if [ $? -eq 0 ]; then
+          if [[ $? -eq 0 ]]; then
             info "Successfully merged: $rel_path"
           else
             info "Merge conflict in: $rel_path (no base version)"
@@ -358,13 +366,13 @@ merge_changes() {
   done
   
   # Handle conflicts with interactive merge tool if available
-  if [ "$conflicts_detected" -eq 1 ]; then
+  if [[ $conflicts_detected -eq 1 ]]; then
     info "Conflicts detected in the following files:"
     for file in $conflict_files; do
       info "  - $file"
     done
     
-    if [ -n "$MERGE_TOOL" ]; then
+    if [[ -n "$MERGE_TOOL" ]]; then
       info "Using $MERGE_TOOL for interactive conflict resolution."
       info "Please resolve conflicts in each file when the merge tool opens."
       
@@ -374,7 +382,7 @@ merge_changes() {
         merged_file="$merged_dir/$file"
         base_file="$base_dir/$file"
         
-        if [ -f "$base_file" ]; then
+        if [[ -f "$base_file" ]]; then
           # Three-way merge
           "$MERGE_TOOL" "$local_file" "$base_file" "$remote_file" "$merged_file"
         else
@@ -382,7 +390,7 @@ merge_changes() {
           "$MERGE_TOOL" "$local_file" "$remote_file" "$merged_file"
         fi
         
-        if [ $? -ne 0 ]; then
+        if [[ $? -ne 0 ]]; then
           info "Warning: Merge tool exited with an error for $file"
         fi
       done
@@ -410,7 +418,7 @@ merge_changes() {
     fi
   done
   
-  if [ "$validation_errors" -eq 1 ]; then
+  if [[ $validation_errors -eq 1 ]]; then
     info "Please resolve all conflicts before continuing."
     info "Press Enter to retry validation, or Ctrl+C to abort."
     read -r
@@ -425,7 +433,7 @@ merge_changes() {
     merged_file="$merged_dir/$rel_path"
     base_file="$base_dir/$rel_path"
     
-    if [ -f "$merged_file" ]; then
+    if [[ -f "$merged_file" ]]; then
       mkdir -p "$(dirname "$base_file")"
       cp "$merged_file" "$base_file"
     fi
@@ -461,7 +469,7 @@ validate_merged_files() {
     fi
   done
   
-  if [ "$validation_errors" -eq 1 ]; then
+  if [[ $validation_errors -eq 1 ]]; then
     info "Please resolve all conflicts before continuing."
     info "Press Enter to retry validation, or Ctrl+C to abort."
     read -r
@@ -488,7 +496,7 @@ get_bw_password() {
         echo -n "Enter your BitWarden password: "
         read -s BW_PASSWORD < /dev/tty
     fi
-    if [ -z "$BW_PASSWORD" ]; then
+    if [[ -z "$BW_PASSWORD" ]]; then
         error "Bitwarden master password is required"
         exit 1
     fi
@@ -590,7 +598,7 @@ get_secret_keys() {
             
             BW_STATUS=$(bw status --raw)
             if [[ $BW_STATUS == *"unauthenticated"* ]]; then
-                if [ -n "${BW_CLIENTID:-}" ] && [ -n "${BW_CLIENTSECRET:-}" ]; then
+                if [[ -n "${BW_CLIENTID:-}" ]] && [[ -n "${BW_CLIENTSECRET:-}" ]]; then
                     info "Logging in to Bitwarden with OAuth2..."
                     bw login --apikey --raw > /dev/null 2>&1 || {
                         warning "OAuth2 login failed"
@@ -614,12 +622,12 @@ get_secret_keys() {
             fi
 
             BW_STATUS=$(bw status --raw)
-            if [ -z "${BW_SESSION:-}" ] && [[ $BW_STATUS == *"locked"* ]]; then
-                if [ -z "${BW_PASSWORD:-}" ]; then
+            if [[ -z "${BW_SESSION:-}" ]] && [[ $BW_STATUS == *"locked"* ]]; then
+                if [[ -z "${BW_PASSWORD:-}" ]]; then
                     get_bw_password
                 fi
                 export BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
-                if [ -z "${BW_SESSION:-}" ]; then
+                if [[ -z "${BW_SESSION:-}" ]]; then
                     warning "Failed to unlock Bitwarden vault"
                     return 1
                 fi
@@ -693,7 +701,7 @@ clone_private_repo() {
     
     owner_repo=$(echo "$repo_url" | sed -E 's|.*github.com[:/]([^/]+/[^/]+).*|\1|; s|\.git$||')
     
-    if [ -d "$target_dir/.git" ]; then
+    if [[ -d "$target_dir/.git" ]]; then
         debug "Repository already cloned at $target_dir"
         return 0
     fi
@@ -775,7 +783,7 @@ show_changed_files_and_confirm() {
     local changed_files=()
     local file_index=1
 
-    if [ "$change_type" = "remote" ]; then
+    if [[ "$change_type" == "remote" ]]; then
         title "Remote Changes Detected"
         echo ""
         info "The following files have changed remotely:"
@@ -783,14 +791,14 @@ show_changed_files_and_confirm() {
 
         cd "$LOCAL_REPO_PATH" || exit 1
         while IFS= read -r file; do
-            [ -z "$file" ] && continue
+            [[ -z "$file" ]] && continue
             base_name="${file%.age}"
             changed_files+=("$base_name")
             echo "  [$file_index] $base_name"
             ((file_index++))
         done < <(git diff --name-only HEAD @{upstream} 2>/dev/null)
 
-    elif [ "$change_type" = "local" ]; then
+    elif [[ "$change_type" == "local" ]]; then
         title "Local Changes Detected"
         echo ""
         info "The following files have changed locally:"
@@ -800,14 +808,14 @@ show_changed_files_and_confirm() {
         hashit "$DECRYPTED_DIR" "$temp_hash_file"
 
         while IFS= read -r local_file; do
-            [ -z "$local_file" ] && continue
+            [[ -z "$local_file" ]] && continue
             changed_files+=("$local_file")
             echo "  [$file_index] $local_file"
             ((file_index++))
         done < <(diff "$LOCAL_HASH_FILE" "$temp_hash_file" 2>/dev/null | grep "^>" | awk '{for (i=3; i<=NF; i++) printf $i " "; print ""}' | sed 's/ $//')
     fi
 
-    if [ ${#changed_files[@]} -eq 0 ]; then
+    if [[ ${#changed_files[@]} -eq 0 ]]; then
         echo "  No specific file changes detected."
         return 0
     fi
@@ -833,7 +841,7 @@ show_changed_files_and_confirm() {
             ;;
         [aA])
             echo ""
-            if [ "$change_type" = "remote" ]; then
+            if [[ "$change_type" == "remote" ]]; then
                 for file in "${changed_files[@]}"; do
                     show_file_diff "$file" "remote"
                 done
@@ -881,13 +889,13 @@ show_file_diff() {
     title "Diff for: $file"
     echo ""
 
-    if [ "$change_type" = "remote" ]; then
+    if [[ "$change_type" == "remote" ]]; then
         local temp_file="$TEMP_DIR/remote_decrypted_temp_$$.txt"
 
-        git show HEAD:"$encrypted_file" 2>/dev/null | age -d -i <(echo "$AGE_SECRET") -o "$TEMP_DIR/current_decrypted" 2>/dev/null || true
-        git show @{upstream}:"$encrypted_file" 2>/dev/null | age -d -i <(echo "$AGE_SECRET") -o "$TEMP_DIR/remote_decrypted" 2>/dev/null || true
+        git show HEAD:"$encrypted_file" 2>/dev/null | age -d -i "$(get_age_identity_file)" -o "$TEMP_DIR/current_decrypted" 2>/dev/null || true
+        git show @{upstream}:"$encrypted_file" 2>/dev/null | age -d -i "$(get_age_identity_file)" -o "$TEMP_DIR/remote_decrypted" 2>/dev/null || true
 
-        if [ -f "$TEMP_DIR/current_decrypted" ] && [ -f "$TEMP_DIR/remote_decrypted" ]; then
+        if [[ -f "$TEMP_DIR/current_decrypted" ]] && [[ -f "$TEMP_DIR/remote_decrypted" ]]; then
             if command_exists diff; then
                 diff -u "$TEMP_DIR/current_decrypted" "$TEMP_DIR/remote_decrypted" || true
             else
@@ -905,7 +913,7 @@ show_file_diff() {
         hashit "$DECRYPTED_DIR" "$temp_hash_file"
         
         echo "Changes detected in local file."
-        if [ -f "$DECRYPTED_DIR/$file" ]; then
+        if [[ -f "$DECRYPTED_DIR/$file" ]]; then
             echo "Current content:"
             cat "$DECRYPTED_DIR/$file"
         fi
@@ -990,10 +998,10 @@ main() {
   #   GIT_SSH="$TEMP_SSH_FILE" 
   # fi
 
-  if [ ! -d "$DECRYPTED_DIR" ]; then
+  if [[ ! -d "$DECRYPTED_DIR" ]]; then
     # Initial decrypt after clone
 
-    if [ ! -d "$LOCAL_REPO_PATH/.git" ]; then
+    if [[ ! -d "$LOCAL_REPO_PATH/.git" ]]; then
         if ! clone_private_repo "$LOCAL_REPO_PATH" "$REMOTE_REPO"; then
             error "Failed to clone private repository"
             exit 1
@@ -1012,7 +1020,7 @@ main() {
   fi
   
   
-  if [ ! -d "$LOCAL_REPO_PATH"/.git ]; then 
+  if [[ ! -d "$LOCAL_REPO_PATH/.git" ]]; then
     info "Re-initializing git in encrypted dir..."
     rm -rf "$LOCAL_REPO_PATH"
     if ! clone_private_repo "$LOCAL_REPO_PATH" "$REMOTE_REPO"; then
@@ -1023,7 +1031,7 @@ main() {
     exit 0
   fi
 #   local_changed=$(git status --porcelain | wc -l)
-#   local_changed=$([ -n "$(git status --porcelain)" ] && info 1 || info 0)
+#   local_changed=$([[ -n "$(git status --porcelain)" ]] && info 1 || info 0)
 
   # Check for remote changes
   cd "$LOCAL_REPO_PATH" || exit 1
@@ -1049,7 +1057,7 @@ main() {
     
     remote_changed=0
       
-    if [ "$local_current" != "$remote_current" ]; then
+    if [[ "$local_current" != "$remote_current" ]]; then
       info "Remote has changes."
       remote_changed=1
     else
@@ -1070,12 +1078,12 @@ main() {
 
   # # If CHECK_ONLY does not exist, set it to 0
   # CHECK_ONLY=${CHECK_ONLY:-1}
-  # if [ "$CHECK_ONLY" -eq 1 ]; then
+  # if [[ $CHECK_ONLY -eq 1 ]]; then
   #   exit 0
   # fi
 
   # Case 1: No changes anywhere
-  if [ "$remote_changed" -eq 0 ] && [ "$local_changed" -eq 0 ]; then
+  if [[ $remote_changed -eq 0 ]] && [ "$local_changed" -eq 0 ]; then
     debug "No changes detected. Nothing to do."
     exit 0
   fi
@@ -1086,7 +1094,7 @@ main() {
 
 
   # Case 2: Only remote changed
-  if [ "$remote_changed" -eq 1 ] && [ "$local_changed" -eq 0 ]; then
+  if [[ $remote_changed -eq 1 ]] && [ "$local_changed" -eq 0 ]; then
     show_changed_files_and_confirm "remote"
 
     info "Pulling remote changes..."
@@ -1099,7 +1107,7 @@ main() {
   fi
   
   # Case 3: Only local changed
-  if [ "$remote_changed" -eq 0 ] && [ "$local_changed" -eq 1 ]; then
+  if [[ $remote_changed -eq 0 ]] && [ "$local_changed" -eq 1 ]; then
     show_changed_files_and_confirm "local"
 
     info "Encrypting and pushing local changes..."
@@ -1117,7 +1125,7 @@ main() {
     git add .
     git commit -m "Update encrypted files: $(date)"
     git push
-    if [ $? -ne 0 ]; then
+    if [[ $? -ne 0 ]]; then
       error "Failed to push changes."
       exit 1
     fi
@@ -1127,7 +1135,7 @@ main() {
   fi
   
   # Case 4: Both changed
-  if [ "$remote_changed" -eq 1 ] && [ "$local_changed" -eq 1 ]; then
+  if [[ $remote_changed -eq 1 ]] && [ "$local_changed" -eq 1 ]; then
     title "Both Remote and Local Changes Detected"
     echo ""
 
@@ -1139,7 +1147,7 @@ main() {
     local temp_hash_file="$TEMP_DIR/temp_hashes_local"
     hashit "$DECRYPTED_DIR" "$temp_hash_file"
     while IFS= read -r local_file; do
-        [ -z "$local_file" ] && continue
+        [[ -z "$local_file" ]] && continue
         changed_files+=("$local_file")
         echo "  [$file_index] $local_file"
         ((file_index++))
@@ -1152,14 +1160,14 @@ main() {
     cd "$LOCAL_REPO_PATH" || exit 1
     local remote_index=1
     while IFS= read -r file; do
-        [ -z "$file" ] && continue
+        [[ -z "$file" ]] && continue
         base_name="${file%.age}"
         changed_files+=("$base_name (remote)")
         echo "  [$remote_index] $base_name"
         ((remote_index++))
     done < <(git diff --name-only HEAD @{upstream} 2>/dev/null)
 
-    if [ ${#changed_files[@]} -eq 0 ]; then
+    if [[ ${#changed_files[@]} -eq 0 ]]; then
         echo "  No specific file changes detected."
     fi
 

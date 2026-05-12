@@ -3,7 +3,7 @@ set -euo pipefail
 
 echo "=== Testing Git Operations in Container ==="
 
-cd ~/projects/sato-be/sato/sato-be || cd /home/yashar/env/scripts
+cd ~/projects/sato-be/sato/sato-be || cd "$HOME/env/scripts"
 
 # Clean up old test
 git worktree remove .worktrees/git-ops-test --force 2>/dev/null || true

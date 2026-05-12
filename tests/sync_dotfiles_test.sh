@@ -6,51 +6,14 @@
 # Tests for the sync_dotfiles.sh script functionality
 #########################################################################
 
-# Test framework
-TESTS_RUN=0
-TESTS_PASSED=0
-TESTS_FAILED=0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/test_helper.sh"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-NC='\033[0m'
-
-# Test assertions
 assert_success() {
     local result=$1
     local message="${2:-Command should succeed}"
 
     if [[ $result -eq 0 ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_file_exists() {
-    local file="$1"
-    local message="${2:-File $file should exist}"
-
-    if [[ -f "$file" ]]; then
-        echo -e "${GREEN}✓${NC} $message"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
-}
-
-assert_symlink_exists() {
-    local link="$1"
-    local message="${2:-Symlink $link should exist}"
-
-    if [[ -L "$link" ]]; then
         echo -e "${GREEN}✓${NC} $message"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else

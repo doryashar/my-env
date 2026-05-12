@@ -29,7 +29,7 @@ echo ">>> Starting container with new_claude.sh"
 tmux new-session -d -s "$SESSION_NAME" -x 120 -y 50
 
 cd ~/projects/sato-be/sato/sato-be
-tmux send-keys -t "$SESSION_NAME" "cd ~/projects/sato-be/sato/sato-be && /home/yashar/env/scripts/new_claude.sh --container remotetest" C-m
+tmux send-keys -t "$SESSION_NAME" "cd ~/projects/sato-be/sato/sato-be && \"$HOME/env/scripts/new_claude.sh\" --container remotetest" C-m
 
 echo ">>> Waiting 8 seconds for Claude to start..."
 sleep 8

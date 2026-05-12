@@ -65,6 +65,8 @@ INFRA_FILES=(
     "scripts/install/install_fonts.sh"
     "functions/common_funcs"
     "functions/helpers"
+    "functions/logging.sh"
+    "env_funcs"
 )
 
 info "Fetching updates from upstream..."

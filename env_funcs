@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Environment Functions
+# Personal utility functions sourced by .env.zsh
+
+notify() {
+  local msg="$*"
+  if command -v zenity >/dev/null 2>&1; then
+    zenity --info --title "Notification" \
+      --text "$msg" --timeout 25
+  elif command -v kdialog >/dev/null 2>&1; then
+    kdialog --title "Notification" \
+      --passivepopup "$msg" 25
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send --urgency=low -i terminal "$msg"
+  else
+    echo "Notification: $msg" >&2
+  fi
+}
+
+calc() {
+  bc <<< "scale=6;$*"
+}
+
+md() {
+  [[ $# == 1 ]] && mkdir -p -- "$1" && cd -- "$1"
+}
+
+ssht() {
+  ssh -t "$@" \
+    "tmux -f ~/.tmux.remote.conf attach || \
+     tmux -f ~/.tmux.remote.conf new"
+}

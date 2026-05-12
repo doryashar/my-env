@@ -56,6 +56,11 @@ if [[ -f "${ENV_DIR}/aliases" ]]; then
     source "${ENV_DIR}/aliases"
 fi
 
+# Load environment functions
+if [[ -f "${ENV_DIR}/env_funcs" ]]; then
+    source "${ENV_DIR}/env_funcs"
+fi
+
 # Initialize zoxide
 if command -v zoxide &>/dev/null; then
     eval "$(zoxide init zsh)"

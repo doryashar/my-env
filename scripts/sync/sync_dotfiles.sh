@@ -716,7 +716,7 @@ create_link() {
     # if the broken link file exists, remove it
     if [[ -h "$target" ]]; then
         warning "Removing existing file (probably broken simlink):" \
-          "$target, $(ls -al "$target")"
+          "$target -> $(readlink "$target")"
         rm -rf "$target"
     fi
 
@@ -777,7 +777,7 @@ remove_all_broken_links() {
     local count=0
     while IFS= read -r file; do
         if [[ -L "$file" ]] && [[ ! -e "$file" ]]; then
-            warning "Removing broken symlink: $file"
+            warning "Removing broken symlink: $file -> $(readlink "$file")"
             rm "$file"
             ((count++))
         fi

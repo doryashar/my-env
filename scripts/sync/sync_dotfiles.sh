@@ -16,9 +16,9 @@ set -euo pipefail
 # - Support for both hard and soft links
 # - Regular expression support for file matching
 #########################################################################
-SELF_PATH="$(realpath "${BASH_SOURCE[0]}")"
-ZERO_PATH="$(realpath "$0")"
-ENV_DIR=${ENV_DIR:-$(dirname $(dirname "$SELF_PATH"))}
+SELF_PATH="${BASH_SOURCE[0]}"
+ZERO_PATH="$0"
+ENV_DIR=${ENV_DIR:-$(cd "$(dirname "$SELF_PATH")/../.." && pwd)}
 ENV_DIR=${ENV_DIR%/}
 
 # Default configuration 

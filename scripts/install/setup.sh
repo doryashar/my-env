@@ -35,8 +35,8 @@ DEFAULT_REPO_URL="https://github.com/doryashar/my-env.git"
 
 # Check if running from a file (not piped)
 if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
-    SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "")"
-    SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+    SCRIPT_PATH="${BASH_SOURCE[0]}"
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
     
     # Check if we're running from inside the repo by looking for key files
     if [[ -f "$SCRIPT_DIR/../config/repo.conf" ]] && \
@@ -83,7 +83,7 @@ fi
 set -euo pipefail
 
 # Script directory (we know we're in repo now)
-SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_DIR="$(dirname "$SCRIPT_DIR")"
 
 #########################################################################

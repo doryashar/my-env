@@ -12,7 +12,7 @@ DEVCONTAINER_IMAGE="anthropic-claude-devcontainer"
 CLAUDE_CONFIG_DIR="${HOME}/.claude"
 
 # Source shared virtualenv functions
-SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 ENV_DIR=$(dirname "$SCRIPT_DIR")
 source "$ENV_DIR/functions/virtualenv.sh"
 

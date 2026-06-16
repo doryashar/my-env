@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MONITOR_SCRIPT="$SCRIPT_DIR/../scripts/oref_alert_monitor.sh"
+MONITOR_SCRIPT="$SCRIPT_DIR/../scripts/tools/oref_alert_monitor.sh"
 ALERT_DIR="$SCRIPT_DIR/fixtures"
 mkdir -p "$ALERT_DIR"
 

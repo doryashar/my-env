@@ -19,7 +19,7 @@ cleanup() {
     echo ""
     echo ">>> Cleaning up"
     tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
-    cd /home/yashar/env/scripts
+    cd /home/yashar/env/scripts/tools
     git worktree remove .worktrees/ghtest --force 2>/dev/null || true
     git branch -D ghtest 2>/dev/null || true
     rm -rf .worktrees/ghtest 2>/dev/null || true
@@ -28,9 +28,9 @@ trap cleanup EXIT INT
 
 tmux new-session -d -s "$SESSION_NAME" -x 120 -y 50
 
-cd /home/yashar/env/scripts
+cd /home/yashar/env/scripts/tools
 echo ">>> Starting container with GITHUB_API_TOKEN"
-tmux send-keys -t "$SESSION_NAME" "cd /home/yashar/env/scripts && ./new_claude.sh --container ghtest" C-m
+tmux send-keys -t "$SESSION_NAME" "cd /home/yashar/env/scripts/tools && ./new_claude.sh --container ghtest" C-m
 
 echo ">>> Waiting 8 seconds for Claude to start..."
 sleep 8

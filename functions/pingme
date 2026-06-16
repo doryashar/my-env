@@ -4,16 +4,31 @@ pingme() {
     message="Task completed!"
   fi
 
-  # 1. Capture the HTTP response body in a variable
-  # 2. Capture the HTTP status code separately
-  local response
-  response=$(curl --silent --show-error \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"$message\", \"disable_notification\": true}" \
-    "https://api.telegram.org/$TELEGRAM_BOT_TOKEN/sendMessage")
+  if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+    echo "❌ Error: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set." >&2
+    return 1
+  fi
 
-  # Check if curl succeeded and if the JSON response contains "ok":true
+  # Build JSON payload safely with jq (prevents injection via $message).
+  local json_data
+  json_data=$(jq -nc \
+    --arg chat_id "$TELEGRAM_CHAT_ID" \
+    --arg text  "$message" \
+    '{chat_id:$chat_id, text:$text, disable_notification:true}')
+
+  # Pass URL + headers via curl --config - (stdin) so the bot token never
+  # appears in argv (where it would be visible via `ps`).
+  local response
+  response=$(curl --config - <<EOF
+silent
+show-error
+request = POST
+url = "https://api.telegram.org/$TELEGRAM_BOT_TOKEN/sendMessage"
+header = "Content-Type: application/json"
+data = "$json_data"
+EOF
+)
+
   if [[ $? -ne 0 ]] || [[ "$response" != *"\"ok\":true"* ]]; then
     echo "❌ Error: Failed to send Telegram message."
     echo "Response from server: $response"

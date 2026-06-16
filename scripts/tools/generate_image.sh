@@ -94,14 +94,25 @@ echo "Size: $SIZE"
 echo "Output: $OUTPUT_FILE"
 echo ""
 
-response=$(curl -s -X POST "$API_URL" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $API_KEY" \
-    -d "{
-        \"model\": \"$MODEL\",
-        \"prompt\": \"$PROMPT\",
-        \"size\": \"$SIZE\"
-    }")
+# Build JSON payload safely with jq (prevents injection via $PROMPT).
+json_data=$(jq -nc \
+    --arg model "$MODEL" \
+    --arg prompt "$PROMPT" \
+    --arg size  "$SIZE" \
+    '{model:$model, prompt:$prompt, size:$size}')
+
+# Pass URL + Authorization header via curl --config - (stdin) so the API key
+# never appears in argv (where it would be visible via `ps`).
+response=$(curl --config - <<EOF
+silent
+show-error
+request = POST
+url = "$API_URL"
+header = "Content-Type: application/json"
+header = "Authorization: Bearer $API_KEY"
+data = "$json_data"
+EOF
+)
 
 if echo "$response" | jq -e '.error' >/dev/null; then
     error_msg=$(echo "$response" | jq -r '.error.message // .error')

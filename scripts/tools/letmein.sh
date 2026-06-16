@@ -1,4 +1,11 @@
 #!/bin/bash
+#
+# WARNING — TLS trust model:
+#   This script uses socat OPENSSL with verify=0 (certificate verification
+#   disabled) and an ephemeral self-signed cert. This is MITM-able by anyone
+#   on the network. Only run this on a fully-trusted LAN, or replace the
+#   ephemeral cert with a pinned CA (pass cafile= to socat).
+#
 set -e
 
 CREATE_CERT=1

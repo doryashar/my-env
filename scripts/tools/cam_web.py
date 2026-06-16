@@ -18,6 +18,7 @@ except ImportError:
     sys.exit(1)
 
 DEFAULT_PORT = 9090
+DEFAULT_HOST = "127.0.0.1"  # bind localhost by default; set CAM_WEB_HOST=0.0.0.0 to expose (DANGEROUS)
 GO2RTC_HOST = "localhost:19084"
 GO2RTC_HLS = f"http://{GO2RTC_HOST}/api/stream.m3u8?src=camera"
 GO2RTC_MJPEG = f"http://{GO2RTC_HOST}/api/stream.mjpeg?src=camera"
@@ -29,6 +30,26 @@ SNAPSHOT_CACHE_DIR = os.path.join(tempfile.gettempdir(), "cam_snapshots")
 class CamAPIHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
+
+    def _unauthorized(self):
+        body = json.dumps({"error": "Unauthorized"}).encode()
+        self.send_response(401)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self._send_body(body)
+
+    def _check_auth(self):
+        """If CAM_WEB_TOKEN is set, require ?token=... or X-Cam-Token header to match."""
+        expected = os.environ.get("CAM_WEB_TOKEN")
+        if not expected:
+            return True  # auth disabled (localhost-only default)
+        parsed = urlparse(self.path)
+        token = parse_qs(parsed.query).get("token", [None])[0]
+        if token is None:
+            token = self.headers.get("X-Cam-Token")
+        return token == expected
 
     def _send_body(self, data):
         try:
@@ -170,6 +191,9 @@ class CamAPIHandler(BaseHTTPRequestHandler):
             return ("json", {"error": str(e)}, 500)
 
     def do_GET(self):
+        if not self._check_auth():
+            self._unauthorized()
+            return
         parsed = urlparse(self.path)
         kind, data, status = self._handle_get(parsed.path)
         if kind == "html":
@@ -190,6 +214,9 @@ class CamAPIHandler(BaseHTTPRequestHandler):
             self._json_response(data, status)
 
     def do_POST(self):
+        if not self._check_auth():
+            self._unauthorized()
+            return
         parsed = urlparse(self.path)
         body = self._read_json()
         kind, data, status = self._handle_post(parsed.path, body)
@@ -200,11 +227,22 @@ def main():
     parser = argparse.ArgumentParser(description="Camera web control panel")
     parser.add_argument("-p", "--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(
+        "--host",
+        default=os.environ.get("CAM_WEB_HOST", DEFAULT_HOST),
+        help=f"Bind address (default: {DEFAULT_HOST}; use 0.0.0.0 to expose — DANGEROUS)",
+    )
+    parser.add_argument(
         "--open", action="store_true", help="Open browser automatically"
     )
     args = parser.parse_args()
-    server = HTTPServer(("0.0.0.0", args.port), CamAPIHandler)
-    print(f"Camera web UI: http://localhost:{args.port}")
+    if args.host == "0.0.0.0" and not os.environ.get("CAM_WEB_TOKEN"):
+        print(
+            "WARNING: binding 0.0.0.0 without CAM_WEB_TOKEN set — "
+            "anyone on the LAN can control the camera.",
+            file=sys.stderr,
+        )
+    server = HTTPServer((args.host, args.port), CamAPIHandler)
+    print(f"Camera web UI: http://{args.host}:{args.port}")
     if args.open:
         webbrowser.open(f"http://localhost:{args.port}")
     try:

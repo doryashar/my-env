@@ -22,15 +22,25 @@ except ImportError:
     sys.exit(1)
 
 
-CAM_IP = "192.168.1.140"
-CAM_PORT = 8899
-CAM_USER = "admin"
-CAM_PASS = "1111"
+CAM_IP = os.environ.get("CAM_IP", "192.168.1.140")
+CAM_PORT = int(os.environ.get("CAM_PORT", "8899"))
+CAM_USER = os.environ.get("CAM_USER", "")
+CAM_PASS = os.environ.get("CAM_PASS", "")
 PROFILE_TOKEN = "000"
 VIDEO_SOURCE_TOKEN = "000"
 
 
+def _require_creds():
+    if not CAM_USER or not CAM_PASS:
+        print(
+            "Error: CAM_USER and CAM_PASS environment variables must be set.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
 def get_camera():
+    _require_creds()
     cam = ONVIFCamera(CAM_IP, CAM_PORT, CAM_USER, CAM_PASS)
     cam.update_xaddrs()
     return cam
@@ -279,6 +289,7 @@ def cmd_sharpness(cam, value):
 
 
 def cmd_snapshot(cam, output=None):
+    _require_creds()
     media = cam.create_media_service()
     try:
         request = media.create_type("GetSnapshotUri")

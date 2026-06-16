@@ -15,8 +15,8 @@ set -euo pipefail
 #   UPSTREAM_URL - URL of upstream repository (default: doryashar/my-env)
 #########################################################################
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ENV_DIR="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
 
 # Colors
 RED='\033[0;31m'

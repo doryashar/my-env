@@ -15,8 +15,8 @@ set -euo pipefail
 # - Configurable conflict resolution
 #########################################################################
 
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ENV_DIR=$(dirname "$SCRIPT_DIR")
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ENV_DIR="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
 REPO_CONFIG_FILE="$ENV_DIR/config/repo.conf"
 DOTFILES_CONFIG_FILE="$ENV_DIR/config/dotfiles.conf"
 

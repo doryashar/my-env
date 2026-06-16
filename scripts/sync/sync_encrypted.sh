@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ENV_DIR=$(dirname "$SCRIPT_DIR")
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ENV_DIR="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
 source "$ENV_DIR/functions/common_funcs"
 
 [[ -d ~/.ssh ]] && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true

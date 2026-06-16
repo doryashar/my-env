@@ -27,7 +27,9 @@ _cleanup_age_identity() {
     _AGE_IDENTITY_FILE=""
   fi
 }
-trap _cleanup_age_identity EXIT
+# age-identity cleanup is invoked from cleanup() at EXIT (see below).
+# Only one EXIT trap is allowed per shell; cleanup() chains both.
+# (Do NOT add a second `trap … EXIT` here — it would replace cleanup.)
 
 get_age_identity_file() {
   if [[ -n "$_AGE_IDENTITY_FILE" ]]; then
@@ -1240,11 +1242,12 @@ main() {
 #   - Removes TEMP_DIR
 cleanup() {
   debug "Cleaning up temporary files..."
+  _cleanup_age_identity
   rm -rf "$TEMP_DIR"
   debug "Done cleanup."
 }
 
-# Set cleanup on exit
+# Set cleanup on exit (single trap — chains age-identity cleanup + tempdir cleanup)
 trap cleanup EXIT
 
 # Run main function

@@ -39,10 +39,11 @@ if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
     SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
     
     # Check if we're running from inside the repo by looking for key files
-    if [[ -f "$SCRIPT_DIR/../config/repo.conf" ]] && \
-      [[ -f "$SCRIPT_DIR/../functions/common_funcs" ]]; then
+    # Script lives at scripts/install/ — needs ../../ to reach repo root
+    if [[ -f "$SCRIPT_DIR/../../config/repo.conf" ]] && \
+      [[ -f "$SCRIPT_DIR/../../functions/common_funcs" ]]; then
         # We're in the repo, set ENV_DIR and continue
-        ENV_DIR="$(dirname "$SCRIPT_DIR")"
+        ENV_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
     else
         # Running from a file but not in repo - need to clone
         NEEDS_CLONE=1
@@ -82,9 +83,9 @@ fi
 # Enable strict mode after we've handled the cloning logic
 set -euo pipefail
 
-# Script directory (we know we're in repo now)
+# Script directory (we know we're in repo now) — script lives at scripts/install/
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_DIR="$(dirname "$SCRIPT_DIR")"
+ENV_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 #########################################################################
 # Additional Logging Functions
@@ -883,9 +884,6 @@ setup_cron_jobs() {
         cat > "$cron_file" << 'EOF'
 # Auto-sync dotfiles daily at 9 AM
 0 9 * * * $HOME/env/scripts/sync/sync_env.sh --sync > /tmp/env_sync.log 2>&1
-
-# Run backups daily at 2 AM
-0 2 * * * $HOME/env/scripts/backup.sh > /tmp/backup.log 2>&1
 EOF
         info "Created default crontab at $cron_file"
         info "Edit it and run: crontab $cron_file"

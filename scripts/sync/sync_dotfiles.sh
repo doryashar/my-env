@@ -818,6 +818,6 @@ main() {
 
 }
 
-if [[ "$SELF_PATH" == "$ZERO_PATH" ]]; then
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi

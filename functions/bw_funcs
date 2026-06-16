@@ -11,8 +11,8 @@
 # Side Effects:
 #   - Creates new Bitwarden item (type: secure note)
 add_secret() {
-    name="$1"
-    secret="$2"
+    local name="$1"
+    local secret="$2"
     # bw create item password "$secret" --name "$name"
     echo -e "${GREEN}Adding secrets to Bitwarden.${NC}"
         
@@ -39,8 +39,10 @@ add_secret() {
 #   0 - Success
 #   Non-zero on failure
 get_secret() {
-    name="$1"
-    bw get item "$name" | jq -r '.login.password'
+    local name="$1"
+    # add_secret stores as type 2 (secure note) with the secret in .notes.
+    # Try .login.password first (legacy type-1 items), fall back to .notes.
+    bw get item "$name" | jq -r 'if .type == 2 then .notes else .login.password end'
 }
 
 # Delete a secret from Bitwarden
@@ -55,6 +57,6 @@ get_secret() {
 # Side Effects:
 #   - Permanently removes the item from Bitwarden
 delete_secret() {
-    name="$1"
+    local name="$1"
     bw delete item "$name"
 }

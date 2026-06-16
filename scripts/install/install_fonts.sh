@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-ENV_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")" && pwd)"
+ENV_DIR="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
 source "$ENV_DIR/functions/common_funcs"
 
 command -v fc-cache >/dev/null 2>&1 || error "fc-cache is required but not installed"

@@ -22,7 +22,7 @@ except ImportError:
     sys.exit(1)
 
 
-CAM_IP = os.environ.get("CAM_IP", "192.168.1.140")
+CAM_IP = os.environ.get("CAM_IP", os.environ.get("CAM_HOST", "192.168.1.140"))
 CAM_PORT = int(os.environ.get("CAM_PORT", "8899"))
 CAM_USER = os.environ.get("CAM_USER", "")
 CAM_PASS = os.environ.get("CAM_PASS", "")

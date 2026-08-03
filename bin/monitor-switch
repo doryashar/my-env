@@ -20,6 +20,14 @@ PROFILE2_NAME="LEN"
 # Monitor order (left to right) - determines positioning
 declare -a MONITOR_VENDORS=("HWP" "DEL" "LEN")  # HP, DEL, LEN
 
+# Declared native resolutions (WxH). Used as a fallback identity when a
+# monitor's EDID vendor reads as "unknown" (e.g. after a DP -> HDMI swap).
+declare -A MONITOR_RESOLUTIONS=(
+    ["HWP"]="1920x1200"
+    ["DEL"]="1920x1200"
+    ["LEN"]="5120x1440"
+)
+
 # Cached connector name lookups (populated at runtime)
 declare -A CONNECTOR_MAP  # vendor -> connector name
 declare -A WIDTH_MAP      # vendor -> width
@@ -27,7 +35,11 @@ declare -A WIDTH_MAP      # vendor -> width
 # Resolve all known vendor IDs to connector names + widths
 resolve_all_monitors() {
     local output
-    output=$("$PYTHON_HELPER" resolve "${MONITOR_VENDORS[@]}")
+    local args=()
+    for vid in "${MONITOR_VENDORS[@]}"; do
+        args+=("${vid}=${MONITOR_RESOLUTIONS[$vid]:-}")
+    done
+    output=$("$PYTHON_HELPER" resolve "${args[@]}")
     while IFS=' ' read -r vid conn width; do
         [ -z "$vid" ] && continue
         CONNECTOR_MAP["$vid"]="$conn"

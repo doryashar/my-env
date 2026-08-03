@@ -201,27 +201,16 @@ class MonitorSwitcher:
         connectors = [monitor[0][0] for monitor in monitors]
         print(" ".join(connectors))
 
-    def resolve_monitors(self, vendor_ids):
-        """Resolve vendor identifiers to connector names with widths.
+    def resolve_monitors(self, vendor_specs):
+        """Resolve vendor specs to connector names with widths.
 
-        For each vendor_id, finds the monitor whose vendor starts with that string.
-        Prints 'vendor_id connector width' per line for each match, or nothing if not found.
+        vendor_specs: list of (vid, expected_resolution_or_None). Prints
+        'vid connector width' per resolved vendor. EDID vendor match is
+        primary; expected_resolution is a fallback when EDID is unknown.
         """
         serial, monitors, logical_monitors, properties = self.get_current_state()
-        for vid in vendor_ids:
-            for monitor in monitors:
-                connector = monitor[0][0]
-                vendor = monitor[0][1]
-                modes = monitor[1]
-                if vendor.upper().startswith(vid.upper()):
-                    width = 1920
-                    if modes:
-                        try:
-                            width = int(modes[0][1])
-                        except (IndexError, ValueError):
-                            pass
-                    print(f"{vid} {connector} {width}")
-                    break
+        for vid, connector, width in resolve_vendors(monitors, vendor_specs):
+            print(f"{vid} {connector} {width}")
 
     def enable_single_monitor(self, target_connector):
         """Enable only the specified monitor and disable others"""
@@ -374,8 +363,7 @@ def main():
             print(f"Failed to enable {connector}")
             sys.exit(1)
     elif command == "resolve" and len(sys.argv) >= 3:
-        vendor_ids = sys.argv[2:]
-        switcher.resolve_monitors(vendor_ids)
+        switcher.resolve_monitors(parse_resolve_args(sys.argv[2:]))
     elif command == "profile" and len(sys.argv) >= 3:
         # Parse arguments for primary flag and positions
         primary_connector = None

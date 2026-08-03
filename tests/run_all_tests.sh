@@ -50,6 +50,7 @@ echo "  p0_fixes                P0 bug fix regression tests"
 echo "  security_fixes          P0 security fix regression tests"
 echo "  runner_wiring           Test runner wiring + stale-path fixes"
 echo "  dead_scripts_removed    Verify abandoned scripts stay deleted"
+echo "  monitor_switch          Test monitor-switch resolver (pytest)"
 echo "  docker                  Docker container comprehensive tests (120 tests)"
 echo "  all                     Run all tests (default)"
     echo ""
@@ -94,7 +95,7 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
-        setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|security_fixes|runner_wiring|dead_scripts_removed|docker|all)
+        setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|docker|all)
             if [[ ${#SPECIFIC_TESTS[@]} -eq 0 || " ${SPECIFIC_TESTS[*]} " =~ " $1 " ]]; then
                 SPECIFIC_TESTS+=("$1")
             fi
@@ -177,6 +178,7 @@ run_p0_fixes=0
 run_security_fixes=0
 run_runner_wiring=0
 run_dead_scripts_removed=0
+run_monitor_switch=0
 run_docker=0
 
 # Determine which suites to run
@@ -196,6 +198,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_security_fixes=1
             run_runner_wiring=1
             run_dead_scripts_removed=1
+            run_monitor_switch=1
             run_docker=1
             break
             ;;
@@ -212,6 +215,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         security_fixes)       run_security_fixes=1 ;;
         runner_wiring)        run_runner_wiring=1 ;;
         dead_scripts_removed) run_dead_scripts_removed=1 ;;
+        monitor_switch)        run_monitor_switch=1 ;;
         docker)               run_docker=1 ;;
     esac
 done
@@ -293,6 +297,11 @@ fi
 if [[ $run_dead_scripts_removed -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "Dead Scripts Removed" "$SCRIPT_DIR/dead_scripts_removed_test.sh" "$suite_counter"
+fi
+
+if [[ $run_monitor_switch -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Monitor Switch" "$SCRIPT_DIR/test_monitor_switch.sh" "$suite_counter"
 fi
 
 if [[ $run_docker -eq 1 ]]; then

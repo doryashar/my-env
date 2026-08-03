@@ -155,3 +155,42 @@ fi
 ```
 
 **Rule:** All scripts that may be run via curl must use `/dev/tty` for interactive prompts. Use `prompt()` and `prompt_yn()` from `common_funcs`.
+
+---
+
+## Session: 2026-08-03 - Monitor Switch / EDID Diagnosis
+
+### Pattern: Assuming platform/shortcut semantics without verifying
+**Problem:** User reported "Win+Shift+M switches displays, broke after a DP→HDMI
+cable swap." I assumed **Windows** and the **default** `Win+Shift+M` (restore
+minimized windows) shortcut, and wrote a Windows troubleshooting answer. The
+user corrected me: it's **Linux/GNOME**, and the shortcut is a **custom
+keybinding** running a script (`bin/monitor-switch` → `monitor-switch-gnome.py`).
+
+**Solution:** Before diagnosing, verify the actual environment and read the
+referenced artifact. A `.desktop` file or custom keybinding changes the problem
+entirely (from OS shortcut docs to "read the script").
+
+**Rule:** Never infer the OS or assume a shortcut is a default from its
+description alone. When a shortcut "does X," ask what implements it (a script? a
+`.desktop` entry? a tool?), then read that artifact before answering. One read
+of the actual code beats a generic platform answer.
+
+---
+
+### Pattern: EDID/DDC failure signature (video OK, identity unknown)
+**Problem:** After a DisplayPort → HDMI cable swap, a monitor showed video at its
+native resolution (5120x1440) but GNOME/Mutter reported `Vendor: unknown,
+Product: unknown, Serial: unknown`. A monitor-switch script that matched by EDID
+vendor prefix therefore failed to identify it.
+
+**Solution:** "Video works at native res but vendor/product/serial = unknown" is
+the signature of an **EDID read failure over the DDC channel** — almost always a
+marginal cable or an adapter/dock stripping EDID. Confirm with
+`/sys/class/drm/*HDMI*/edid` being 0 bytes. Fix the link (new cable / drop the
+adapter), AND make matching logic resilient to missing EDID (fall back to native
+resolution, which the kernel still exposes even without EDID).
+
+**Rule:** Identify monitors by data that survives a cable swap. EDID vendor is
+fragile (DDC can fail while TMDS video succeeds); the preferred-mode resolution
+is more robust. When EDID vendor is `unknown`, fall back to resolution matching.

@@ -151,3 +151,44 @@ All 44 items verified against current repo state.
 8. **Phase 8** (items 25-30) — error handling
 9. **Phase 9** (items 31-35) — style/cleanup
 10. **Phase 10** (items 38-39) — documentation
+
+---
+
+## Monitor Switch EDID Fallback (2026-08-03)
+
+Spec: `docs/2026-08-03-monitor-switch-edid-fallback-design.md`
+Plan: `docs/2026-08-03-monitor-switch-edid-fallback-plan.md`
+
+Root cause: `monitor-switch-gnome.py` matched monitors by EDID vendor prefix;
+after a DP→HDMI swap the Lenovo's EDID read as `unknown` (DDC failure), so
+`LEN` resolved to an empty connector and `toggle` did nothing.
+
+- [x] 45. Relocate helper into repo (`scripts/tools/monitor_switch_gnome.py`)
+       + symlink `~/.local/bin/monitor-switch-gnome.py` (commit `1a55dad`)
+- [x] 46. TDD `resolve_vendors()` — EDID primary + resolution-hint fallback
+       (commit `cc07acb`)
+- [x] 47. TDD `parse_resolve_args()` for `vid=WxH` tokens (commit `de39b67`)
+- [x] 48. Wire `resolve_vendors` into the `resolve` command (commit `82341a8`)
+- [x] 49. Declare `MONITOR_RESOLUTIONS` in `bin/monitor-switch`, pass
+       `vid=WxH` to resolver (commit `32e731d`)
+- [x] 50. Wire pytest suite into `tests/run_all_tests.sh` as `monitor_switch`
+       (commit `2695b38`)
+- [x] 51. Docs: design + plan committed (commit `c5886e8`)
+
+### Review Notes (2026-08-03)
+
+- Verified live: `monitor-switch list` now shows `LEN -> HDMI-2 (5120px)`
+  (was `LEN -> (1920px)` with empty connector); `resolve HWP=.. DEL=.. LEN=..`
+  prints `LEN HDMI-2 5120`.
+- Unit tests: 8 passed (`tests/test_monitor_switch_gnome.py`), no DBus needed.
+- Runner regression: `runner_wiring`, `tmux_config`, `dead_scripts_removed`,
+  `monitor_switch` suites all PASS.
+- **Not executed live:** `monitor-switch toggle` (would switch active displays
+  off mid-session) and the heavy/disruptive suites (`setup`, `full_setup`,
+  `sync_dotfiles`, `docker`). Toggle is proven indirectly via resolution output.
+- **Known limitation:** if two monitors share a resolution and both lose EDID,
+  the hint is ambiguous (first match wins). Accepted (YAGNI).
+- **Pre-existing note:** `run_all_tests.sh` arg parser only runs the first
+  named suite when multiple are passed (dedup condition blocks distinct names).
+  Not introduced by this change; flagged for a future fix.
+- `master` is ahead of `origin/master`; push is at owner's discretion.

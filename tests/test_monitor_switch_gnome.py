@@ -56,3 +56,24 @@ def test_resolution_hint_cannot_steal_edid_claimed_monitor():
 def test_width_defaults_when_no_modes():
     monitors = [(("DP-1", "HWP", "p", "s"), [], {})]
     assert resolve_vendors(monitors, [("HWP", None)]) == [("HWP", "DP-1", 1920)]
+
+
+from monitor_switch_gnome import parse_resolve_args  # noqa: E402
+
+
+def test_parse_resolve_args_with_resolution():
+    assert parse_resolve_args(["HWP=1920x1200", "LEN=5120x1440"]) == [
+        ("HWP", "1920x1200"),
+        ("LEN", "5120x1440"),
+    ]
+
+
+def test_parse_resolve_args_bare_vid():
+    assert parse_resolve_args(["HWP", "DEL"]) == [
+        ("HWP", None),
+        ("DEL", None),
+    ]
+
+
+def test_parse_resolve_args_empty_resolution_means_none():
+    assert parse_resolve_args(["HWP="]) == [("HWP", None)]

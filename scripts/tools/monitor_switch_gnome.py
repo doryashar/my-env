@@ -89,6 +89,23 @@ def resolve_vendors(monitors, vendor_specs):
     return results
 
 
+def parse_resolve_args(tokens):
+    """Parse resolve CLI tokens into (vid, expected_resolution_or_None).
+
+    Accepts both 'VID' (EDID-only) and 'VID=WxH' (with resolution hint).
+    An empty resolution ('VID=') is treated as None (EDID-only).
+    """
+    specs = []
+    for token in tokens:
+        if "=" in token:
+            vid, res = token.split("=", 1)
+            res = res.strip()
+            specs.append((vid, res or None))
+        else:
+            specs.append((token, None))
+    return specs
+
+
 class MonitorSwitcher:
     def __init__(self):
         self.bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)

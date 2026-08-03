@@ -10,6 +10,85 @@ gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib
 
 
+def _monitor_resolution(monitor):
+    """Return (width, height) from a monitor's representative mode, else None."""
+    modes = monitor[1]
+    if not modes:
+        return None
+    mode = modes[0]
+    try:
+        return (int(mode[1]), int(mode[2]))
+    except (IndexError, ValueError, TypeError):
+        return None
+
+
+def _match_by_edid(monitors, vid, claimed):
+    """First unclaimed monitor whose EDID vendor startswith vid.
+
+    Returns (connector, width) or (None, None).
+    """
+    vid_u = vid.upper()
+    for monitor in monitors:
+        connector = monitor[0][0]
+        if connector in claimed:
+            continue
+        vendor = monitor[0][1] or ""
+        if vendor.upper().startswith(vid_u):
+            res = _monitor_resolution(monitor)
+            return connector, (res[0] if res else 1920)
+    return None, None
+
+
+def _match_by_resolution(monitors, expected_res, claimed):
+    """First unclaimed monitor whose mode resolution equals expected_res.
+
+    expected_res is "WxH" (e.g. "5120x1440"). Returns (connector, width)
+    or (None, None).
+    """
+    try:
+        ew_s, eh_s = str(expected_res).lower().split("x", 1)
+        expected = (int(ew_s), int(eh_s))
+    except (ValueError, AttributeError):
+        return None, None
+    for monitor in monitors:
+        connector = monitor[0][0]
+        if connector in claimed:
+            continue
+        res = _monitor_resolution(monitor)
+        if res is not None and res == expected:
+            return connector, res[0]
+    return None, None
+
+
+def resolve_vendors(monitors, vendor_specs):
+    """Resolve vendor IDs to (vid, connector, width).
+
+    EDID vendor match is primary; expected_resolution is a fallback used only
+    when no EDID match is found (e.g. EDID reads as "unknown"). Each monitor
+    is claimed at most once.
+
+    Args:
+        monitors: parsed monitor list from GetCurrentState.unpack().
+        vendor_specs: list of (vid, expected_resolution_or_None), where
+            expected_resolution is "WxH" or None.
+
+    Returns:
+        list of (vid, connector, width) in declaration order.
+    """
+    claimed = set()
+    results = []
+    for vid, expected_res in vendor_specs:
+        connector, width = _match_by_edid(monitors, vid, claimed)
+        if connector is None and expected_res:
+            connector, width = _match_by_resolution(
+                monitors, expected_res, claimed
+            )
+        if connector is not None:
+            claimed.add(connector)
+            results.append((vid, connector, width))
+    return results
+
+
 class MonitorSwitcher:
     def __init__(self):
         self.bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)

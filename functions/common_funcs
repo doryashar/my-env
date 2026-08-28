@@ -258,10 +258,23 @@ check_github_repo_exists() {
         fi
     fi
     
-    ensure_ssh_dir
-    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+    # Do NOT call ensure_ssh_dir here: this is a read-only check and
+    # ~/.ssh may legitimately be a symlink (dotfiles-managed setups).
+    # Scope the keyscan to a temp file used by this one command instead
+    # of appending to ~/.ssh/known_hosts on every call.
+    local known_hosts
+    known_hosts=$(mktemp) || return 1
+    if [[ -f ~/.ssh/known_hosts ]]; then
+        cat ~/.ssh/known_hosts >> "$known_hosts" 2>/dev/null || true
+    fi
+    ssh-keyscan github.com >> "$known_hosts" 2>/dev/null || true
     debug "Checking repo via git ls-remote..."
-    if git ls-remote "$repo_url" HEAD &>/dev/null; then
+    local ls_remote_rc=0
+    GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=$known_hosts \
+-o StrictHostKeyChecking=accept-new" \
+        git ls-remote "$repo_url" HEAD &>/dev/null || ls_remote_rc=$?
+    rm -f "$known_hosts"
+    if [[ $ls_remote_rc -eq 0 ]]; then
         debug "Repo exists (git ls-remote)"
         return 0
     else

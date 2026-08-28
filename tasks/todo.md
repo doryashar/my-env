@@ -237,6 +237,26 @@ Full review: `docs/code_review_2026-08-28.md`. Scope: critical items +
 - [x] 61. sync_dotfiles.sh `((count++))` with count=0 kills daily sync
        on first broken symlink — `count=$((count + 1))`
 
+### P2 pass — follow-ups (2026-08-28)
+
+Details: `docs/code_review_2026-08-28.md` (P2 section).
+Regression suite: `tests/p2_followups_test.sh` (wired as `p2_followups`).
+
+- [x] 62. update_infrastructure.sh: scope all git ops with
+       `-C "$ENV_DIR"` (could fetch/overwrite the wrong repo);
+       accept `--dry-run` in any argument position
+- [x] 63. ENV_DIR clobber: preserve the script-derived ENV_DIR when
+       sourcing config/repo.conf in sync_env.sh, sync_encrypted.sh,
+       update_infrastructure.sh (save/restore) and setup.sh
+       (subshell read of PRIVATE_URL)
+- [x] 64. common_funcs check_github_repo_exists: no destructive
+       ensure_ssh_dir (rm'd symlinked ~/.ssh); keyscan into a temp
+       UserKnownHostsFile scoped to the one git ls-remote call
+- [x] 65. full_setup_test.sh: fix sandbox setup (aliases/env_vars are
+       files not dirs; dotfile-preserving copies; run_all_tests.sh
+       expectation; REPO_ROOT instead of $HOME/env) — suite 22/22,
+       local runner now 16/16 green
+
 ### Review Notes (2026-08-28)
 
 - Full findings + fix details: `docs/code_review_2026-08-28.md`.

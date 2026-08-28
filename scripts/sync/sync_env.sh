@@ -25,7 +25,12 @@ source "$ENV_DIR/functions/common_funcs"
 ENV_DIR=$(expand_path "$ENV_DIR")
 DEBUG="${ENV_DEBUG:-}"
 
+# repo.conf sets ENV_DIR for interactive shells; preserve the value
+# derived from this script's location (installations not at ~/env).
+_DERIVED_ENV_DIR="$ENV_DIR"
 source "$REPO_CONFIG_FILE" 2>/dev/null || true
+ENV_DIR="$_DERIVED_ENV_DIR"
+unset _DERIVED_ENV_DIR
 
 # Default conflict strategy if not set in config
 DEFAULT_CONFLICT_STRATEGY="${DEFAULT_CONFLICT_STRATEGY:-ask}"

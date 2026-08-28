@@ -47,13 +47,22 @@ prompt_yn() {
 # Default upstream URL
 DEFAULT_UPSTREAM_URL="git@github.com:doryashar/my-env.git"
 
-# Load config if available
+# Load config if available. repo.conf sets ENV_DIR for interactive
+# shells; preserve the value derived from this script's location.
 if [[ -f "$ENV_DIR/config/repo.conf" ]]; then
+    _DERIVED_ENV_DIR="$ENV_DIR"
     source "$ENV_DIR/config/repo.conf"
+    ENV_DIR="$_DERIVED_ENV_DIR"
+    unset _DERIVED_ENV_DIR
 fi
 
 UPSTREAM_URL="${UPSTREAM_URL:-$DEFAULT_UPSTREAM_URL}"
-DRY_RUN="${1:-}"
+DRY_RUN=""
+for arg in "$@"; do
+    if [[ "$arg" == "--dry-run" ]]; then
+        DRY_RUN="--dry-run"
+    fi
+done
 
 # Infrastructure files to update (never touch user configs)
 INFRA_FILES=(
@@ -76,18 +85,20 @@ info "Upstream: $UPSTREAM_URL"
 UPSTREAM_REF="upstream-temp-$$"
 
 cleanup() {
-    git update-ref -d "$UPSTREAM_REF" 2>/dev/null || true
+    git -C "$ENV_DIR" update-ref -d "$UPSTREAM_REF" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-# Fetch upstream without affecting local branches
-if ! git fetch "$UPSTREAM_URL" master:refs/"$UPSTREAM_REF" 2>&1; then
+# Fetch upstream without affecting local branches.
+# NB: always run git with -C "$ENV_DIR" — a bare `git` here would act on
+# whatever repo owns the current working directory instead.
+if ! git -C "$ENV_DIR" fetch "$UPSTREAM_URL" master:refs/"$UPSTREAM_REF" 2>&1; then
     error "Failed to fetch from upstream. Check UPSTREAM_URL in config/repo.conf"
 fi
 
 # Check if there are any changes
-LOCAL_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
-UPSTREAM_COMMIT=$(git rev-parse "$UPSTREAM_REF" 2>/dev/null || echo "")
+LOCAL_COMMIT=$(git -C "$ENV_DIR" rev-parse HEAD 2>/dev/null || echo "")
+UPSTREAM_COMMIT=$(git -C "$ENV_DIR" rev-parse "$UPSTREAM_REF" 2>/dev/null || echo "")
 
 if [[ "$LOCAL_COMMIT" == "$UPSTREAM_COMMIT" ]]; then
     info "Already up to date with upstream"
@@ -101,7 +112,7 @@ echo "-----------------------------"
 
 CHANGES_FOUND=0
 for file in "${INFRA_FILES[@]}"; do
-    if git diff --quiet "$LOCAL_COMMIT" "$UPSTREAM_REF" -- "$file" 2>/dev/null; then
+    if git -C "$ENV_DIR" diff --quiet "$LOCAL_COMMIT" "$UPSTREAM_REF" -- "$file" 2>/dev/null; then
         continue
     fi
     CHANGES_FOUND=1
@@ -134,16 +145,16 @@ UPDATED_COUNT=0
 
 for file in "${INFRA_FILES[@]}"; do
     # Check if file exists in upstream
-    if ! git cat-file -e "$UPSTREAM_REF:$file" 2>/dev/null; then
+    if ! git -C "$ENV_DIR" cat-file -e "$UPSTREAM_REF:$file" 2>/dev/null; then
         continue
     fi
-    
+
     # Create directory if needed
     dir="$(dirname "$ENV_DIR/$file")"
     mkdir -p "$dir"
-    
+
     # Extract file from upstream
-    if git show "$UPSTREAM_REF:$file" > "$ENV_DIR/$file" 2>/dev/null; then
+    if git -C "$ENV_DIR" show "$UPSTREAM_REF:$file" > "$ENV_DIR/$file" 2>/dev/null; then
         ((UPDATED_COUNT++)) || UPDATED_COUNT=$((UPDATED_COUNT + 1))
         echo "  Updated: $file"
     fi

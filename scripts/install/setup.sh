@@ -634,8 +634,10 @@ sync_encrypted_files() {
 
     local private_url=""
     if [[ -f "$ENV_DIR/config/repo.conf" ]]; then
-        source "$ENV_DIR/config/repo.conf"
-        private_url="$PRIVATE_URL"
+        # Source in a subshell: repo.conf sets ENV_DIR for interactive
+        # shells and must not clobber the value derived at startup.
+        private_url="$(bash -c 'source "$1" && echo "${PRIVATE_URL:-}"' \
+            _ "$ENV_DIR/config/repo.conf")"
     fi
 
     if [[ -z "$private_url" ]]; then

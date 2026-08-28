@@ -40,32 +40,39 @@ oref monitor (null-data and pingme-failure), extract-and-execute of the
 show_cam config block asserting mode 0600, and a set -e subshell proving
 `remove_all_broken_links` completes with multiple broken links.
 
-## Follow-ups (documented, not fixed here)
+## P2 pass (2026-08-28, follow-ups)
+
+Regression suite: `tests/p2_followups_test.sh` (wired as `p2_followups`,
+9 assertions — extraction/replay tests for the ENV_DIR clobber, sandboxed
+behavioral tests for the `~/.ssh` fix).
+
+| # | File | Bug | Fix |
+|---|------|-----|-----|
+| F1 | `scripts/sync/update_infrastructure.sh` | All 7 git invocations ran in the CWD — run from a non-repo it errors; from another repo it fetches/overwrites the **wrong repo**. Also `--dry-run` only worked as `$1`. | `git -C "$ENV_DIR"` everywhere; `--dry-run` accepted in any position. |
+| F2 | `sync_env.sh:28`, `sync_encrypted.sh:11`, `update_infrastructure.sh:52`, `setup.sh:637` | Sourcing `config/repo.conf` re-set `ENV_DIR` to the hardcoded `~/env`, silently retargeting any clone living elsewhere. | Save/restore `ENV_DIR` around the source (setup.sh reads `PRIVATE_URL` in a subshell). |
+| F3 | `functions/common_funcs` `check_github_repo_exists` | Read-only check called `ensure_ssh_dir` — `rm`s a symlinked `~/.ssh` — and appended duplicate keyscan entries to `~/.ssh/known_hosts` on every call. | Keyscan into a temp `UserKnownHostsFile` scoped to the single `git ls-remote` via `GIT_SSH_COMMAND`; no `~/.ssh` mutation. |
+| F4 | `tests/full_setup_test.sh` | Sandbox pre-created `aliases`/`env_vars` as directories (copies landed inside them); `dotfiles/*` glob skipped `.env.zsh`/`.zshrc`; expected stale `tests/setup_test.sh`; hardcoded `$HOME/env` source. | Correct mkdir list, `/.`-form copies, `run_all_tests.sh` expectation, `REPO_ROOT` from `SCRIPT_DIR`. Suite 22/22 (was 18/22, failing at HEAD). |
+
+Note: `debug()` redaction of `TELEGRAM_BOT_TOKEN` was already covered by
+the generic `TOKEN=` alternative in `logging.sh:21` — kept as a contract
+test. After this pass the local runner is 16/16 green (docker excluded).
+
+## Follow-ups (remaining)
 
 1. Docker suites (`tests/docker/suites/`): ~30 `assert_success 0`
    assertions pass a literal zero; `01_setup.sh` S04 asserts a destroyed
    `$?`; `05_prerun.sh` sources the deleted `scripts/prerun.sh`;
    `full_setup_entrypoint.sh` counts failures as passes.
-2. `ENV_DIR` clobber: `sync_env.sh:28`, `sync_encrypted.sh:11`,
-   `update_infrastructure.sh:52`, `setup.sh:637` source
-   `config/repo.conf` which overwrites the derived `ENV_DIR` with the
-   hardcoded `~/env`.
-3. `sync_dotfiles.sh`: capture-group mappings (M1) and quoted-glob
+2. `sync_dotfiles.sh`: capture-group mappings (M1) and quoted-glob
    backward sync (M2) match nothing — advertised features are dead.
-4. `functions/common_funcs:200-212`: `check_github_repo_exists`
-   rm's/renames `~/.ssh` as a side effect of a read-only check.
-5. `update_infrastructure.sh`: git commands run without `-C "$ENV_DIR"`.
-6. Orphan test files not wired into the runner: `test_github_token.sh`,
+3. Orphan test files not wired into the runner: `test_github_token.sh`,
    `test_git_operations.sh`, `test_git_push.sh`, `test_git_remote*.sh`
    (3 variants), `tests/sync_encrypted/test_diff_preview.sh`,
    `docker_test/docker_entrypoint.sh`.
-7. `full_setup_test.sh` pre-existing failures (sandbox copies `aliases`
-   into a directory named `aliases`; expects stale `scripts/setup_test.sh`).
-8. Medium/low items from the review agents' reports (see session logs):
+4. Medium/low items from the review agents' reports (see session logs):
    `install_fonts.sh` subshell counters, `setup.sh:881` crontab
    replacement, `bw get status` invalid subcommand, monitors http://
    API key, `virtualenv.sh` /workspace coupling, `cam_web.py` CORS `*` +
    single-threaded server + `sys.exit` in handlers, XSS in preset
-   rendering, `generate_image.sh` curl-config same-as-pingme pattern
-   (uses `json`/`data`? — re-check before reuse), `\!:1` csh-style
-   aliases (convert to functions), `$$PROJECT_HOME` typo in `veride_`.
+   rendering, `\!:1` csh-style aliases (convert to functions),
+   `$$PROJECT_HOME` typo in `veride_`.

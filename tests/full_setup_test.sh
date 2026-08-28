@@ -7,6 +7,7 @@
 #########################################################################
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/test_helper.sh"
 
 # Setup test environment
@@ -17,15 +18,19 @@ setup_test_env() {
     echo -e "${BLUE}Setting up test environment...${NC}"
     TEST_DIR=$(mktemp -d)
     TEST_ENV_DIR="$TEST_DIR/env"
-    mkdir -p "$TEST_ENV_DIR"/{scripts,config,functions,dotfiles,bin,aliases,docker,env_vars,tests,tmp}
+    # NB: aliases and env_vars are FILES in the repo root — do not
+    # pre-create them as directories or the copies below land inside them
+    mkdir -p "$TEST_ENV_DIR"/{scripts,config,functions,dotfiles,bin,tests,tmp}
 
-    # Copy essential files
-    cp -r "$HOME/env/scripts"/* "$TEST_ENV_DIR/scripts/" 2>/dev/null || true
-    cp -r "$HOME/env/functions"/* "$TEST_ENV_DIR/functions/" 2>/dev/null || true
-    cp -r "$HOME/env/dotfiles"/* "$TEST_ENV_DIR/dotfiles/" 2>/dev/null || true
-    cp -r "$HOME/env/config"/* "$TEST_ENV_DIR/config/" 2>/dev/null || true
-    cp "$HOME/env/aliases" "$TEST_ENV_DIR/aliases" 2>/dev/null || true
-    cp "$HOME/env/env_vars" "$TEST_ENV_DIR/env_vars" 2>/dev/null || true
+    # Copy essential files. "/." copies dotfiles too (a bare * glob
+    # would skip .env.zsh/.zshrc)
+    cp -r "$REPO_ROOT/scripts"/. "$TEST_ENV_DIR/scripts/" 2>/dev/null || true
+    cp -r "$REPO_ROOT/functions"/. "$TEST_ENV_DIR/functions/" 2>/dev/null || true
+    cp -r "$REPO_ROOT/dotfiles"/. "$TEST_ENV_DIR/dotfiles/" 2>/dev/null || true
+    cp -r "$REPO_ROOT/config"/. "$TEST_ENV_DIR/config/" 2>/dev/null || true
+    cp -r "$REPO_ROOT/tests"/. "$TEST_ENV_DIR/tests/" 2>/dev/null || true
+    cp "$REPO_ROOT/aliases" "$TEST_ENV_DIR/aliases" 2>/dev/null || true
+    cp "$REPO_ROOT/env_vars" "$TEST_ENV_DIR/env_vars" 2>/dev/null || true
 
     echo -e "${GREEN}✓${NC} Test environment created at: $TEST_DIR"
 }
@@ -135,7 +140,8 @@ test_directory_structure() {
 # Test: test infrastructure exists
 test_test_infrastructure() {
     assert_dir_exists "$TEST_ENV_DIR/tests" "tests directory should exist"
-    assert_file_exists "$TEST_ENV_DIR/tests/setup_test.sh" "setup_test.sh should exist"
+    assert_file_exists "$TEST_ENV_DIR/tests/run_all_tests.sh" \
+        "run_all_tests.sh should exist"
 }
 
 # Dry run test: simulate setup.sh execution

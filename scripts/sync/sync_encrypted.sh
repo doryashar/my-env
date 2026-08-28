@@ -6,9 +6,14 @@ source "$ENV_DIR/functions/common_funcs"
 
 [[ -d ~/.ssh ]] && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
 
-# Load configuration (including BW_EMAIL)
+# Load configuration (including BW_EMAIL).
+# repo.conf sets ENV_DIR for interactive shells; preserve the value
+# derived from this script's location.
 if [[ -f "$ENV_DIR/config/repo.conf" ]]; then
+    _DERIVED_ENV_DIR="$ENV_DIR"
     source "$ENV_DIR/config/repo.conf"
+    ENV_DIR="$_DERIVED_ENV_DIR"
+    unset _DERIVED_ENV_DIR
 fi
 
 # Configuration variables

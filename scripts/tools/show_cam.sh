@@ -1,5 +1,7 @@
 #!/bin/bash
 set -e
+# The go2rtc config written below embeds RTSP credentials; keep it private.
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GO2RTC_BIN="/tmp/go2rtc"
@@ -27,6 +29,7 @@ stop_all() {
     pkill -f 'localhost:19084/api/stream' 2>/dev/null || true
     pkill -f 'showcam_pipe' 2>/dev/null || true
     rm -f "$PIPE" 2>/dev/null || true
+    rm -f "$GO2RTC_CONFIG" 2>/dev/null || true
     sleep 0.3
     if pgrep -f '/tmp/go2rtc|cam_web.py' >/dev/null 2>&1; then
         echo "Warning: some processes may still be running." >&2
@@ -74,6 +77,22 @@ fi
 
 resolve_cam_host || exit 1
 
+# Bind WebRTC to the host's LAN IP (the interface facing the camera) so go2rtc
+# advertises a single local host candidate instead of one per interface
+# (Tailslier/ZeroTier/docker/IPv6). The candidate explosion makes Chrome's ICE
+# thrash and drop the connection. Fall back to ":8443" if detection fails.
+LAN_IP="$(python3 - "$CAM_HOST" <<'PY' 2>/dev/null
+import socket, sys
+try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect((sys.argv[1], 554))
+    print(s.getsockname()[0]); s.close()
+except Exception:
+    pass
+PY
+)"
+WEBRTC_LISTEN="${LAN_IP:+${LAN_IP}:}8443"
+
 cat > "$GO2RTC_CONFIG" <<EOF
 streams:
   camera:
@@ -83,8 +102,9 @@ api:
 rtsp:
   listen: ":$GO2RTC_RTSP_PORT"
 webrtc:
-  listen: ":8443"
+  listen: "$WEBRTC_LISTEN"
 EOF
+chmod 600 "$GO2RTC_CONFIG"
 
 cleanup() {
     if [[ -n "$WEB_PID" ]]; then
@@ -100,6 +120,7 @@ cleanup() {
         wait "$GO2RTC_PID" 2>/dev/null || true
     fi
     rm -f "$PIPE"
+    rm -f "$GO2RTC_CONFIG"
 }
 trap cleanup EXIT
 

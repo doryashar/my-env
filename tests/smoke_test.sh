@@ -12,7 +12,7 @@ source "$SCRIPT_DIR/test_helper.sh"
 
 # Test: ENV_DIR is set correctly
 test_env_dir_set() {
-    if [[ -n "$ENV_DIR" ]]; then
+    if [[ -n "${ENV_DIR:-}" ]]; then
         assert_equals "$HOME/env" "$ENV_DIR" "ENV_DIR should point to $HOME/env"
     else
         # Source .env.zsh to set ENV_DIR
@@ -155,7 +155,10 @@ test_aliases_loadable() {
         return
     fi
 
-    if source "$aliases_file" </dev/null 2>/dev/null; then
+    # NB: load via zsh — the aliases file uses zsh-specific syntax
+    # (e.g. the $aliases associative array); sourcing it under bash
+    # with set -u kills the whole suite ("ls: unbound variable").
+    if zsh -c 'source "$1" </dev/null' _ "$aliases_file" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} aliases file should be loadable"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
@@ -176,7 +179,8 @@ test_env_vars_loadable() {
         return
     fi
 
-    if source "$env_vars" 2>/dev/null; then
+    # Load via zsh for parity with the real consumption path (.env.zsh)
+    if zsh -c 'source "$1" </dev/null' _ "$env_vars" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} env_vars should be loadable"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else

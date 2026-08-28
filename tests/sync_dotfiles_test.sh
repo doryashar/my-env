@@ -34,6 +34,7 @@ setup_test_env() {
 
     # Copy actual scripts to test environment
     cp "$HOME/env/functions/common_funcs" "$TEST_ENV_DIR/functions/"
+    cp "$HOME/env/functions/logging.sh" "$TEST_ENV_DIR/functions/"
     cp "$HOME/env/scripts/sync/sync_dotfiles.sh" "$TEST_ENV_DIR/scripts/"
 
     # Create test config
@@ -60,29 +61,30 @@ EOF
 
 # Cleanup test environment
 cleanup_test_env() {
-    rm -rf "$TEST_DIR"
-    unset ENV_DIR
-    export HOME="$ORIGINAL_HOME"
+    [[ -n "${TEST_DIR:-}" ]] && rm -rf "$TEST_DIR"
+    unset ENV_DIR 2>/dev/null || true
+    [[ -n "${ORIGINAL_HOME:-}" ]] && export HOME="$ORIGINAL_HOME"
 }
+
+# Restore the real HOME even if the suite aborts mid-test
+trap cleanup_test_env EXIT
 
 # Test: config file is parsed correctly
 test_config_parsing() {
     setup_test_env
 
-    # Source the sync script to test config loading
+    # Source the sync script to test config loading.
+    # NB: single quotes — the child must evaluate DEFAULT_LINK_TYPE itself;
+    # double quotes would expand it (empty) in the parent and always fail.
     cd "$TEST_ENV_DIR/scripts"
-    bash -c "
-        source ../../functions/common_funcs
+    local rc=0
+    bash -c '
+        source ../functions/common_funcs
         source sync_dotfiles.sh
-        load_config '$TEST_ENV_DIR/config/dotfiles.conf'
-
-        # Check that variables are set
-        if [[ '$DEFAULT_LINK_TYPE' == 'soft' ]]; then
-            exit 0
-        else
-            exit 1
-        fi
-    " && assert_success $? "Config should be parsed with DEFAULT_LINK_TYPE=soft"
+        load_config "$1"
+        [[ "$DEFAULT_LINK_TYPE" == "soft" ]]
+    ' _ "$TEST_ENV_DIR/config/dotfiles.conf" || rc=$?
+    assert_success $rc "Config should be parsed with DEFAULT_LINK_TYPE=soft"
 
     cleanup_test_env
 }
@@ -188,7 +190,9 @@ test_ensure_ssh_dir_with_file() {
     TESTS_RUN=$((TESTS_RUN + 1))
     
     # Check backup was created
-    if ls "$test_home"/.ssh.file.backup.* 2>/dev/null | head -1 >/dev/null; then
+    # NB: compgen, not `ls | head` — the pipeline's status is head's,
+    # which is 0 even when ls finds nothing (assertion can never fail)
+    if compgen -G "$test_home/.ssh.file.backup.*" > /dev/null; then
         echo -e "${GREEN}✓${NC} ensure_ssh_dir should backup .ssh file"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else

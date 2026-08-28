@@ -46,7 +46,8 @@ echo "  sync_dotfiles           Test sync_dotfiles.sh functionality"
 echo "  tmux_config             Test tmux configuration validity"
 echo "  zerotier                Test zerotier_clients function"
 echo "  oref_alert_monitor      Test oref_alert_monitor.sh"
-echo "  p0_fixes                P0 bug fix regression tests"
+ echo "  p0_fixes                P0 bug fix regression tests"
+ echo "  p1_fixes                P1 code-review fix regression tests"
 echo "  security_fixes          P0 security fix regression tests"
 echo "  runner_wiring           Test runner wiring + stale-path fixes"
 echo "  dead_scripts_removed    Verify abandoned scripts stay deleted"
@@ -95,7 +96,7 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
-        setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|docker|all)
+        setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|docker|all)
             if [[ ${#SPECIFIC_TESTS[@]} -eq 0 || " ${SPECIFIC_TESTS[*]} " =~ " $1 " ]]; then
                 SPECIFIC_TESTS+=("$1")
             fi
@@ -175,6 +176,7 @@ run_tmux_config=0
 run_zerotier=0
 run_oref_alert_monitor=0
 run_p0_fixes=0
+run_p1_fixes=0
 run_security_fixes=0
 run_runner_wiring=0
 run_dead_scripts_removed=0
@@ -195,6 +197,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_zerotier=1
             run_oref_alert_monitor=1
             run_p0_fixes=1
+            run_p1_fixes=1
             run_security_fixes=1
             run_runner_wiring=1
             run_dead_scripts_removed=1
@@ -212,6 +215,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         zerotier)             run_zerotier=1 ;;
         oref_alert_monitor)   run_oref_alert_monitor=1 ;;
         p0_fixes)             run_p0_fixes=1 ;;
+        p1_fixes)             run_p1_fixes=1 ;;
         security_fixes)       run_security_fixes=1 ;;
         runner_wiring)        run_runner_wiring=1 ;;
         dead_scripts_removed) run_dead_scripts_removed=1 ;;
@@ -282,6 +286,11 @@ fi
 if [[ $run_p0_fixes -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "P0 Fixes" "$SCRIPT_DIR/p0_fixes_test.sh" "$suite_counter"
+fi
+
+if [[ $run_p1_fixes -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "P1 Fixes" "$SCRIPT_DIR/p1_fixes_test.sh" "$suite_counter"
 fi
 
 if [[ $run_security_fixes -eq 1 ]]; then

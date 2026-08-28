@@ -14,24 +14,36 @@ pingme() {
   json_data=$(jq -nc \
     --arg chat_id "$TELEGRAM_CHAT_ID" \
     --arg text  "$message" \
-    '{chat_id:$chat_id, text:$text, disable_notification:true}')
+    '{chat_id:$chat_id, text:$text, disable_notification:true}') || return 1
+
+  # Deliver the payload from a private temp file. Embedding JSON in the
+  # curl config is unsafe: curl's config parser treats \" as an escape
+  # and truncates the body at the first quoted character. NB: the @file
+  # value MUST stay unquoted — a quoted "@/path" sends an empty body.
+  local payload_file
+  payload_file=$(mktemp) || return 1
+  chmod 600 "$payload_file"
+  printf '%s' "$json_data" > "$payload_file"
 
   # Pass URL + headers via curl --config - (stdin) so the bot token never
   # appears in argv (where it would be visible via `ps`).
-  local response
+  # TELEGRAM_API_URL is overridable so tests can use a local endpoint.
+  local api_base="${TELEGRAM_API_URL:-https://api.telegram.org}"
+  local response rc=0
   response=$(curl --config - <<EOF
 silent
 show-error
 request = POST
-url = "https://api.telegram.org/$TELEGRAM_BOT_TOKEN/sendMessage"
+url = "$api_base/$TELEGRAM_BOT_TOKEN/sendMessage"
 header = "Content-Type: application/json"
-data = "$json_data"
+data = @$payload_file
 EOF
-)
+  ) || rc=$?
+  rm -f "$payload_file"
 
-  if [[ $? -ne 0 ]] || [[ "$response" != *"\"ok\":true"* ]]; then
-    echo "❌ Error: Failed to send Telegram message."
-    echo "Response from server: $response"
+  if [[ $rc -ne 0 ]] || [[ "$response" != *"\"ok\":true"* ]]; then
+    echo "❌ Error: Failed to send Telegram message." >&2
+    echo "Response from server: $response" >&2
     return 1
   fi
 }

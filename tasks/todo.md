@@ -192,3 +192,70 @@ after a DP→HDMI swap the Lenovo's EDID read as `unknown` (DDC failure), so
   named suite when multiple are passed (dedup condition blocks distinct names).
   Not introduced by this change; flagged for a future fix.
 - `master` is ahead of `origin/master`; push is at owner's discretion.
+
+---
+
+## P1 Fixes — Code Review 2026-08-28
+
+Full review: `docs/code_review_2026-08-28.md`. Scope: critical items +
+`set -e` sweep. TDD — each fix has a failing test first in
+`tests/p1_fixes_test.sh`.
+
+### Critical fixes
+
+- [x] 52. pingme: curl `--config` corrupts JSON containing `"` —
+       deliver payload via 0600 tempfile (`data = @file`, **unquoted** —
+       a quoted `@"$file"` sends an empty body), add
+       `TELEGRAM_API_URL` override for testability, don't kill `set -e`
+       callers on curl failure
+- [x] 53. aliases: `snxx` bakes `$XSIGHT_PASSWORD` in at definition
+       time — single-quote it
+- [x] 54. oref_alert_monitor: daemon dies on pingme failure (line 67)
+       and on `data: null` payloads (jq join on null) — guard both.
+       Also found+fixed: `source ../functions/pingme` pointed at the
+       nonexistent `scripts/functions/` — monitor couldn't start at
+       all from `scripts/tools/` (stale path from the reorg)
+- [x] 55. show_cam.sh: go2rtc config with RTSP creds written 0644 to
+       /tmp and never removed — `umask 077`, `chmod 600`, cleanup
+- [x] 56. letmein.sh: listener binds 0.0.0.0 by default (unauthenticated
+       shell) — default to 127.0.0.1
+- [x] 57. Broken test assertions that can never fail:
+       test_git_push.sh (`$?` captures echo; exit 0 on failure),
+       sync_dotfiles_test.sh (`test_config_parsing` parent expansion +
+       `&&`-short-circuit + wrong source path; `ls | head` backup
+       check), smoke_test.sh (`ENV_DIR` unbound under `set -u`;
+       zsh-specific `aliases` sourced under bash kills suite)
+
+### set -e sweep (sync_encrypted.sh / sync_dotfiles.sh)
+
+- [x] 58. merge-file conflict detection dead (`if [[ $? -eq 0 ]]` after
+       errexit-killed command) — move into `if cmd; then`
+- [x] 59. `git push` / `git pull` error handlers dead — `|| { error; }`
+       (also `git commit ... || warning` for empty commits)
+- [x] 60. Case 4: `git stash`/`git stash pop` around a guaranteed-clean
+       tree — pop fails, whole merge flow unreachable — remove pair
+- [x] 61. sync_dotfiles.sh `((count++))` with count=0 kills daily sync
+       on first broken symlink — `count=$((count + 1))`
+
+### Review Notes (2026-08-28)
+
+- Full findings + fix details: `docs/code_review_2026-08-28.md`.
+- Regression suite: `tests/p1_fixes_test.sh` (wired as `p1_fixes`,
+  24 assertions, 9 behavioral). All tests watched RED before fixes.
+- New environment quirk documented: curl config `data = @"$file"`
+  (quoted) silently sends an empty body — only unquoted `@file` works.
+- `smoke_test.sh` and `full_setup_test.sh` were already failing at
+  HEAD before these changes (verified in a clean `git worktree`).
+  Smoke fixed in this pass (zsh-based aliases/env_vars loading);
+  full_setup failures are pre-existing follow-up #7.
+- Local runner: 14/15 suites PASS; `full_setup` fails pre-existing.
+  Docker suite skipped locally (pre-existing `assert_success 0` /
+  dead `05_prerun.sh` issues — follow-up #1).
+
+### Follow-ups (documented, not in this pass)
+
+- Docker suites: ~30 `assert_success 0` literal-zero assertions
+- ENV_DIR clobbered by `source config/repo.conf` (4 scripts)
+- sync_dotfiles capture-group + backward-wildcard features dead (M1/M2)
+- `functions/common_funcs:200` destructive `~/.ssh` side effect
+- Test orphan suites not wired into runner (7 files)

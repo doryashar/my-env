@@ -343,9 +343,11 @@ merge_changes() {
       else
         # Files differ - need merge
         if [[ -f "$base_file" ]]; then
-          # We have a base version for three-way merge
-          git merge-file -p "$local_file" "$base_file" "$remote_file" > "$merged_file"
-          if [[ $? -eq 0 ]]; then
+          # We have a base version for three-way merge.
+          # NB: must run inside `if` — a plain `git merge-file` that
+          # exits 1 (conflict) would kill the script under set -e
+          # before the deferred $? check could run.
+          if git merge-file -p "$local_file" "$base_file" "$remote_file" > "$merged_file"; then
             info "Successfully merged: $rel_path"
           else
             info "Merge conflict in: $rel_path"
@@ -354,8 +356,7 @@ merge_changes() {
           fi
         else
           # No base version, attempt merge but likely will have conflicts
-          git merge-file -p "$local_file" /dev/null "$remote_file" > "$merged_file"
-          if [[ $? -eq 0 ]]; then
+          if git merge-file -p "$local_file" /dev/null "$remote_file" > "$merged_file"; then
             info "Successfully merged: $rel_path"
           else
             info "Merge conflict in: $rel_path (no base version)"
@@ -1100,7 +1101,7 @@ main() {
     show_changed_files_and_confirm "remote"
 
     info "Pulling remote changes..."
-    git pull
+    git pull || { error "Failed to pull remote changes."; exit 1; }
     rm -rf "$DECRYPTED_DIR"/*
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
     hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
@@ -1125,12 +1126,9 @@ main() {
     # Commit and push
     cd "$LOCAL_REPO_PATH" || exit 1
     git add .
-    git commit -m "Update encrypted files: $(date)"
-    git push
-    if [[ $? -ne 0 ]]; then
-      error "Failed to push changes."
-      exit 1
-    fi
+    git commit -m "Update encrypted files: $(date)" \
+      || warning "Nothing to commit for encrypted update."
+    git push || { error "Failed to push changes."; exit 1; }
     mv "$TEMP_DIR/temp_hashes" "$LOCAL_HASH_FILE"
     debug "Local changes encrypted and pushed successfully."
     exit 0
@@ -1187,17 +1185,13 @@ main() {
     REMOTE_TEMP="$TEMP_DIR/remote_decrypted"
     mkdir -p "$REMOTE_TEMP"
 
-    # Save current state
-    git stash
-
-    # Get remote version
-    git pull
+    # The working tree was reset to HEAD above, so there is nothing to
+    # stash — pull the remote version directly. (A previous stash/pop
+    # pair here always failed: no stash entry exists on a clean tree.)
+    git pull || { error "Failed to pull remote changes during merge."; exit 1; }
 
     # Decrypt remote files
     decrypt_recursive "$LOCAL_REPO_PATH" "$REMOTE_TEMP"
-
-    # Pop the stash to revert to our local state
-    git stash pop
 
     # Merged directory
     MERGED_DIR="$TEMP_DIR/merged"
@@ -1223,8 +1217,9 @@ main() {
     # Commit and push
     cd "$LOCAL_REPO_PATH" || exit 1
     git add .
-    git commit -m "Merge changes: $(date)"
-    git push
+    git commit -m "Merge changes: $(date)" \
+      || warning "Nothing to commit after merge."
+    git push || { error "Failed to push merged changes."; exit 1; }
 
     debug "Files merged, encrypted, and pushed successfully."
     exit 0

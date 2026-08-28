@@ -779,7 +779,9 @@ remove_all_broken_links() {
         if [[ -L "$file" ]] && [[ ! -e "$file" ]]; then
             warning "Removing broken symlink: $file -> $(readlink "$file")"
             rm "$file"
-            ((count++))
+            # NB: not ((count++)) — that returns 1 when count is 0 and
+            # kills the script under set -e (first broken link = abort).
+            count=$((count + 1))
         fi
     done < <(find "$directory" -maxdepth 2 -type l 2>/dev/null)
     

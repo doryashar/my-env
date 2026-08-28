@@ -13,7 +13,8 @@ DEFAULT_PORT=2222
 
 listen_for_incoming_connections() {
   local port="${1:-$DEFAULT_PORT}"
-  local host="${2:-0.0.0.0}"
+  # Default to loopback: EXEC hands out an unauthenticated shell.
+  local host="${2:-127.0.0.1}"
   local cert="$(mktemp)"
   local dhparam="$HOME/.dhparam"
   if [[ "$CREATE_CERT" == "1" ]]; then
@@ -39,7 +40,7 @@ connect_to_host() {
 
 wait_for_invite() {
   local port="${1:-$DEFAULT_PORT}"
-  local host="${2:-0.0.0.0}"
+  local host="${2:-127.0.0.1}"
   local cert="$(mktemp)"
   local dhparam="$HOME/.dhparam"
   echo "[+] Preparing the certificate..."

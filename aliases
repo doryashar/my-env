@@ -19,7 +19,7 @@ alias ls="${aliases[ls]:-ls} -A"
 alias meld='/bin/meld'
 alias emacs='/bin/emacs'
 alias e='emacs --reverse-video'
-alias snxx="echo $XSIGHT_PASSWORD | snx"
+alias snxx='printf "%s" "$XSIGHT_PASSWORD" | snx'
 
 alias home='cd /projects/$PROJECT/home/$USER'
 alias work='cd /projects/$PROJECT/work/$USER'

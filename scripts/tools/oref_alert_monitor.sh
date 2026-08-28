@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../functions/pingme"
+source "$SCRIPT_DIR/../../functions/pingme"
 
 if [[ -z "${TELEGRAM_CHAT_ID:-}" || -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
   SECRETS_FILE="${ENV_DIR:-$HOME/env}/tmp/private/secrets"
@@ -64,7 +64,8 @@ send_alert() {
     msg+=$'\n\n'"${desc}"
   fi
 
-  pingme "$msg"
+  # A failed notification must never kill the monitor daemon.
+  pingme "$msg" || log "ERROR: notification failed for alert '$alert_id'"
 }
 
 while true; do
@@ -101,19 +102,20 @@ while true; do
     title=$(echo "$clean" | jq -r '.title // empty')
     desc=$(echo "$clean" | jq -r '.desc // empty')
 
-    area_count=$(echo "$clean" | jq '.data | length')
+    # data can be null even when id is set; guard every jq consumer
+    area_count=$(echo "$clean" | jq '(.data // []) | length')
     if [[ "$area_count" -gt "$MAX_AREAS_DISPLAY" ]]; then
-      areas=$(echo "$clean" | jq -r ".data[:$MAX_AREAS_DISPLAY] | join(\", \")")
+      areas=$(echo "$clean" | jq -r "(.data // [])[:$MAX_AREAS_DISPLAY] | join(\", \")")
       areas+=" ... (+$((area_count - MAX_AREAS_DISPLAY)) more)"
     else
-      areas=$(echo "$clean" | jq -r '.data | join(", ")')
+      areas=$(echo "$clean" | jq -r '(.data // []) | join(", ")')
     fi
 
     log "New alert: $title (id=$alert_id, areas=$area_count)"
     debug "$clean"
 
     if [[ -n "${MARK:-}" ]]; then
-      matched=$(echo "$clean" | jq -r '.data[]' | grep -E "$MARK" || true)
+      matched=$(echo "$clean" | jq -r '(.data // [])[]' | grep -E "$MARK" || true)
       if [[ -z "$matched" ]]; then
         debug "No match for MARK='$MARK', skipping notification"
         sleep "$POLL_INTERVAL"

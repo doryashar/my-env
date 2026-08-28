@@ -18,8 +18,16 @@ cd ~/projects/sato-be/sato/sato-be || cd "$HOME/env/scripts"
 git worktree remove .worktrees/push-test --force 2>/dev/null || true
 git branch -D push-test 2>/dev/null || true
 
+# Clean up even if the test aborts mid-way (set -e)
+cleanup_test() {
+    cd "$REPO_ROOT" 2>/dev/null || true
+    git worktree remove .worktrees/push-test --force 2>/dev/null || true
+    git branch -D push-test 2>/dev/null || true
+}
+
 REPO_ROOT=$(git rev-parse --show-toplevel)
 echo ">>> Repository root: $REPO_ROOT"
+trap cleanup_test EXIT INT TERM
 
 # Create test worktree
 echo ">>> Creating test worktree"
@@ -46,7 +54,9 @@ docker run --rm \
 echo ""
 echo "=== Testing git push (dry-run) ==="
 
-# Test with --dry-run to avoid actually pushing
+# Test with --dry-run to avoid actually pushing.
+# NB: no `|| echo` inside the container — it would mask the real exit
+# code; the docker exit code IS the push result.
 docker run --rm \
     -v "$(pwd):/workspace" \
     -v "$REPO_ROOT/.git:$REPO_ROOT/.git" \
@@ -54,14 +64,12 @@ docker run --rm \
     -e "GITHUB_TOKEN=$GITHUB_API_TOKEN" \
     --entrypoint /bin/bash \
     docker/sandbox-templates:claude-code \
-    -c 'git config --global credential.helper "!f() { echo username=git; echo password=$GITHUB_TOKEN; }; f" && echo "Attempting git push --dry-run..." && git push origin push-test --dry-run 2>&1 || echo "PUSH RESULT: $?"'
+    -c 'git config --global credential.helper "!f() { echo username=git; echo password=$GITHUB_TOKEN; }; f" && echo "Attempting git push --dry-run..." && git push origin push-test --dry-run'
 
 PUSH_RESULT=$?
 
 # Cleanup
-cd "$REPO_ROOT"
-git worktree remove .worktrees/push-test --force
-git branch -D push-test
+cleanup_test
 
 echo ""
 if [ $PUSH_RESULT -eq 0 ]; then
@@ -70,7 +78,7 @@ if [ $PUSH_RESULT -eq 0 ]; then
     echo "Note: This was a dry-run. No actual push was made."
     exit 0
 else
-    echo "? Git push test completed (check output above)"
-    echo "  Dry-run may show 'Everything up-to-date' which is okay"
-    exit 0
+    echo "✗ FAILED: git push --dry-run exited with $PUSH_RESULT"
+    echo "  Check the credential helper configuration and token above."
+    exit 1
 fi

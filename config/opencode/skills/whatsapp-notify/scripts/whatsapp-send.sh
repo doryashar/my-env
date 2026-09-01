@@ -8,6 +8,7 @@
 #   whatsapp-send.sh --list                        (list instances + status)
 #   whatsapp-send.sh --wait ["greeting"] [--timeout SECS]   block until a message arrives from the user
 #   whatsapp-send.sh --listen [--interval SECS]    foreground loop printing new incoming messages
+#   whatsapp-send.sh --follow [--idle SECS]        block until the listen log gets a new line (0=got one, 3=idle)
 # Exit codes: 0 ok/received; 1 API error; 2 config error; 3 wait timed out.
 #
 # Receive notes:
@@ -31,7 +32,7 @@ INSTANCE="${EVOLUTION_INSTANCE:-$(cfg EVOLUTION_INSTANCE)}"
 RECIPIENT="${WA_DEFAULT_RECIPIENT:-$(cfg WA_DEFAULT_RECIPIENT)}"
 
 MODE="send"; TYPE="text"; PAYLOAD=""; CAPTION=""; FILE_DONE=""
-TIMEOUT=300; INTERVAL=3
+TIMEOUT=300; INTERVAL=3; IDLE=180; FOLLOW_LOG="${WA_LISTEN_LOG:-/tmp/opencode/wa-listen.log}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --to)       RECIPIENT="$2"; shift 2 ;;
@@ -43,8 +44,11 @@ while [[ $# -gt 0 ]]; do
     --list)     MODE="list"; shift ;;
     --wait)     MODE="wait"; shift ;;
     --listen)   MODE="listen"; shift ;;
+    --follow)   MODE="follow"; shift ;;
     --timeout)  TIMEOUT="$2"; shift 2 ;;
     --interval) INTERVAL="$2"; shift 2 ;;
+    --idle)     IDLE="$2"; shift 2 ;;
+    --log)      FOLLOW_LOG="$2"; shift 2 ;;
     *)
                 if [[ "$TYPE" != "text" ]]; then
                   # first positional after a media flag = caption, rest ignored
@@ -176,6 +180,34 @@ if [[ "$MODE" == "listen" ]]; then
     # persist (keep seen list bounded)
     state_write "$WATERMARK" ${SEEN:+$(echo "$SEEN" | tr ',' '\n' | tail -50)}
     sleep "$INTERVAL"
+  done
+fi
+
+if [[ "$MODE" == "follow" ]]; then
+  # Block until new [wa] line(s) appear in the listen log (written by --listen).
+  # Prints them and exits 0; exit 3 after IDLE seconds of silence.
+  size() { wc -c < "$FOLLOW_LOG" 2>/dev/null || echo 0; }
+  [[ -f "$FOLLOW_LOG" ]] || { echo "no listen log at $FOLLOW_LOG — start --listen first" >&2; exit 2; }
+  OFF="$(size)"
+  LAST="$(date +%s)"
+  echo "following $FOLLOW_LOG (idle ${IDLE}s)..."
+  while :; do
+    SIZE="$(size)"
+    if [[ "$SIZE" -gt "$OFF" ]]; then
+      CHUNK_BYTES=$(( SIZE - OFF ))
+      COMPLETE_LN="$(tail -c +"$(( OFF + 1 ))" "$FOLLOW_LOG" | wc -l)"
+      if [[ "$COMPLETE_LN" -ge 1 ]]; then
+        LINES="$(tail -c +"$(( OFF + 1 ))" "$FOLLOW_LOG" | head -n "$COMPLETE_LN")"
+        OFF=$(( OFF + $(printf '%s' "$LINES" | wc -c) + 1 ))  # +1: newline stripped by $()
+        if grep -q '\[wa\]' <<< "$LINES"; then
+          echo "$LINES"
+          exit 0
+        fi
+      fi
+    fi
+    NOW="$(date +%s)"
+    [[ $(( NOW - LAST )) -ge "$IDLE" ]] && { echo "idle: nothing new in ${IDLE}s" >&2; exit 3; }
+    sleep 0.5
   done
 fi
 

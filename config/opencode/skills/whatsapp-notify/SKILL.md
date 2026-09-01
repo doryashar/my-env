@@ -28,6 +28,7 @@ description: Use when the user asks to be contacted, notified, pinged, or messag
 | Send photo | `whatsapp-send.sh --photo /path/img.png "caption"` |
 | Wait for reply (blocking) | `whatsapp-send.sh --wait ["greeting"] [--timeout 300]` |
 | Listen in background | `whatsapp-send.sh --listen >> /tmp/opencode/wa-listen.log 2>&1 &` |
+| **Surface new messages** | `whatsapp-send.sh --follow --idle 180` (blocks, exits 0 with the new `[wa]` line, 3 on idle) |
 | Diagnose instances | `whatsapp-send.sh --list` |
 
 Default recipient: the user's phone (in `whatsapp.env`). Sends **from** instance `system_ailaw` ("Peleg"). Exit codes: 0 ok/received, 1 API error, 2 config error, 3 wait timed out.
@@ -35,8 +36,9 @@ Default recipient: the user's phone (in `whatsapp.env`). Sends **from** instance
 ## Receiving messages (--wait / --listen)
 
 - `--wait` blocks until the user sends any WhatsApp message, prints one `[wa] <ts> from <jid> (<name>): <text>` line, exits 0. Timeout → exit 3. Optional positional arg = greeting sent before waiting.
-- `--listen` runs a foreground poll loop printing every new incoming message. Run it **in background** (pattern above), then read the log file to propagate messages into the chat. Stop with `kill $(cat ~/.cache/whatsapp-notify/listen.pid)` (do NOT pkill by pattern — it self-matches your own shell).
-- **Do NOT run `--wait` and `--listen` at the same time** (they would race on the shared state in `~/.cache/whatsapp-notify/`).
+- `--listen` runs a foreground poll loop appending every new incoming message to the log. Run it **in background** (pattern above). Stop with `kill $(cat ~/.cache/whatsapp-notify/listen.pid)` (do NOT pkill by pattern — it self-matches your own shell).
+- **REQUIRED — surfacing (the log alone is NOT notification):** a background listener does not interrupt you. Whenever the session is idle/waiting on the user and the listener is running, you MUST loop on `--follow` (each call blocks up to `--idle` seconds and returns the new message instantly). Only doing other work instead? Re-run `--follow` as soon as that work finishes. Skipping this = messages sit unseen — this exact failure already happened once.
+- **Do NOT run `--wait` and `--listen` at the same time** (they race on the shared state in `~/.cache/whatsapp-notify/`). `--follow` is safe alongside `--listen` (it only reads the log).
 - **Incoming user messages arrive under an `@lid` JID** (e.g. `127818293858341@lid`), NOT `972548826569@s.whatsapp.net` — never filter by phone JID; the script accepts every non-fromMe message.
 - Read the user's reply from the `--wait` output / listen log and act on it.
 

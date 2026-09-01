@@ -31,6 +31,7 @@ description: Use when the user asks to be contacted, notified, pinged, or messag
 | **Wake-on-WhatsApp daemon** | `whatsapp-watch.sh &` (injects incoming messages into the opencode session) |
 | Surface new messages manually | `whatsapp-send.sh --follow --idle 180` (blocks, exits 0 with the new `[wa]` line, 3 on idle) |
 | Diagnose instances | `whatsapp-send.sh --list` |
+| Send later (delayed) | `nohup bash -c 'sleep N; whatsapp-send.sh "msg"' >/dev/null 2>&1 & disown` (save `$!` to `~/.cache/whatsapp-notify/scheduled.pid` for cancellation; lost on reboot) |
 | Find current session id | python sqlite3 RO on `~/.local/share/opencode/opencode.db`: `select id from session where directory='<cwd>' order by time_updated desc limit 1` |
 
 ## Wake-on-WhatsApp (whatsapp-watch.sh) — the autonomous reply daemon

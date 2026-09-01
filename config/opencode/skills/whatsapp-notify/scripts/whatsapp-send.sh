@@ -166,6 +166,10 @@ if [[ "$MODE" == "listen" ]]; then
   [[ "$LAST_TS" -gt 0 && "$LAST_TS" -lt "$WATERMARK" ]] && WATERMARK="$LAST_TS"
   echo $$ > "$STATE_DIR/listen.pid"
   echo "listening (interval ${INTERVAL}s, pid $$); watermark=$WATERMARK"
+  LISTEN_LOG="${WA_LISTEN_LOG:-/tmp/opencode/wa-listen.log}"
+  emit() { # append to the log by REOPENING it per write — survives log rotation/sed -i
+    printf '%s\n' "$1" >> "$LISTEN_LOG"
+  }
   while :; do
     RECORDS="$(fetch_records "$(( WATERMARK - 1 ))")" || { sleep "$INTERVAL"; continue; }
     while IFS= read -r rec; do
@@ -173,7 +177,9 @@ if [[ "$MODE" == "listen" ]]; then
       MID="$(jq -r '.key.id' <<< "$rec")"
       TS="$(jq -r '.messageTimestamp' <<< "$rec")"
       seen_has "$MID" && continue
-      fmt_msg "$rec"
+      LINE="$(fmt_msg "$rec")"
+      emit "$LINE"
+      echo "$LINE"
       SEEN="$SEEN${SEEN:+,}$MID"
       [[ "$TS" -gt "$WATERMARK" ]] && WATERMARK="$TS"
     done < <(jq -c '.[]' <<< "$RECORDS")

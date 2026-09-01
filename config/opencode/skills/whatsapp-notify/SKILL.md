@@ -58,6 +58,19 @@ Default recipient: the user's phone (in `whatsapp.env`). Sends **from** instance
 - **Incoming user messages arrive under an `@lid` JID** (e.g. `127818293858341@lid`), NOT `972548826569@s.whatsapp.net` — never filter by phone JID; the script accepts every non-fromMe message.
 - Read the user's reply from the `--wait` output / listen log and act on it.
 - **NEVER modify the listen log in place** (`sed -i`/`mv`/`rm`) while `--listen` runs — orphans its stdout to a deleted inode, lines vanish silently (verified failure). The listener reopens per write so rotation is safe; to reset: stop it first. Stop listeners/daemons by **pidfile**, never `pkill -f` by pattern (self-matches your own shell — verified failure).
+- **After ANY listen-log reset/truncation, restart BOTH the listener and the watch daemon** — the follow child's byte offset goes stale (old offset > new file size → new lines never fire). Verified failure.
+
+## Validation (independent health checking)
+
+`whatsapp-health.sh [--probe] [--alert]` validates each stage SEPARATELY; exit 1 on any failure:
+- S1 Evolution API + instance `open` — catches API/auth death
+- S2 listener pid alive + loop cycling (state.json mtime < 30s) — catches dead/stuck loops; orphaned stdout = warn (emit() bypasses it)
+- S3 watch daemon + its `--follow` child — catches "alive but can't wake"
+- S4 inbound freshness (age of newest non-fromMe message in store) — catches the **silent linked-device desync** (instance says `open` but nothing arrives; fix: `POST /instance/restart/{name}` — NEVER `/instance/logout` — then have the user send a test message)
+- `--probe` = full local chain self-test: appends a `[healthprobe]` line, expects the daemon to inject it within 8s (arrives as an ignorable session turn)
+- `--alert` = on failure: WhatsApp message + Telegram fallback (independent stack), deduped hourly, auto-resolves. Installed: cron `*/10 * * * * ... whatsapp-health.sh --alert >> /tmp/opencode/wa-health-cron.log`
+
+Full validation = health green + `--probe` green + **a real message from the user's phone** end-to-end. Anything less has already been proven to lie (the 01:07 "Test" worked, the next one didn't).
 
 ## Troubleshooting (verified dead ends — do not rediscover)
 

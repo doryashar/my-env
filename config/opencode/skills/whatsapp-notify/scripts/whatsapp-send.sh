@@ -199,8 +199,10 @@ if [[ "$MODE" == "follow" ]]; then
       if [[ "$COMPLETE_LN" -ge 1 ]]; then
         LINES="$(tail -c +"$(( OFF + 1 ))" "$FOLLOW_LOG" | head -n "$COMPLETE_LN")"
         OFF=$(( OFF + $(printf '%s' "$LINES" | wc -c) + 1 ))  # +1: newline stripped by $()
-        if grep -q '\[wa\]' <<< "$LINES"; then
-          echo "$LINES"
+        # only real listener lines: "[wa] YYYY-MM-DD..." (log may contain test noise)
+        MATCHED="$(grep '^\[wa\] [0-9]\{4\}-[0-9]\{2\}-' <<< "$LINES" || true)"
+        if [[ -n "$MATCHED" ]]; then
+          echo "$MATCHED"
           exit 0
         fi
       fi

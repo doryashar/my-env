@@ -196,7 +196,7 @@ if [[ "$MODE" == "follow" ]]; then
   [[ -f "$FOLLOW_LOG" ]] || { echo "no listen log at $FOLLOW_LOG — start --listen first" >&2; exit 2; }
   OFF="$(size)"
   LAST="$(date +%s)"
-  echo "following $FOLLOW_LOG (idle ${IDLE}s)..."
+  echo "following $FOLLOW_LOG (idle ${IDLE}s)..." >&2 >&2
   while :; do
     SIZE="$(size)"
     if [[ "$SIZE" -gt "$OFF" ]]; then

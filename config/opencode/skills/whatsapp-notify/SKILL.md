@@ -27,22 +27,37 @@ description: Use when the user asks to be contacted, notified, pinged, or messag
 | Send file | `whatsapp-send.sh --file /path/report.pdf "caption"` |
 | Send photo | `whatsapp-send.sh --photo /path/img.png "caption"` |
 | Wait for reply (blocking) | `whatsapp-send.sh --wait ["greeting"] [--timeout 300]` |
-| Listen in background | `whatsapp-send.sh --listen >> /tmp/opencode/wa-listen.log 2>&1 &` |
-| **Surface new messages** | `whatsapp-send.sh --follow --idle 180` (blocks, exits 0 with the new `[wa]` line, 3 on idle) |
+| Listen (capture) | `whatsapp-send.sh --listen >> /tmp/opencode/wa-listen.log 2>&1 &` |
+| **Wake-on-WhatsApp daemon** | `whatsapp-watch.sh &` (injects incoming messages into the opencode session) |
+| Surface new messages manually | `whatsapp-send.sh --follow --idle 180` (blocks, exits 0 with the new `[wa]` line, 3 on idle) |
 | Diagnose instances | `whatsapp-send.sh --list` |
+| Find current session id | python sqlite3 RO on `~/.local/share/opencode/opencode.db`: `select id from session where directory='<cwd>' order by time_updated desc limit 1` |
+
+## Wake-on-WhatsApp (whatsapp-watch.sh) — the autonomous reply daemon
+
+**The full stack, when armed:** `--listen` (captures to `/tmp/opencode/wa-listen.log`) → `whatsapp-watch.sh` daemon (blocks on `--follow`) → `opencode run --session <id> "[whatsapp-notify] ... <the [wa] line>"` → the message arrives as a **user turn in the live session** and the agent replies via `whatsapp-send.sh` without anyone touching the CLI.
+
+- Start: `nohup ~/.config/opencode/skills/whatsapp-notify/scripts/whatsapp-watch.sh >> /tmp/opencode/wa-watch-daemon.log 2>&1 &`
+- Stop: `kill $(cat ~/.cache/whatsapp-notify/watch.pid)` (listener separately: `listen.pid`)
+- The target session id is `WA_OPENCODE_SESSION` in `whatsapp.env` — update it when the session changes (see "Find current session id" above).
+- Loops are impossible: agent replies are `fromMe` → filtered by the listener; the injected preamble tells the agent not to echo it.
+- If the daemon dies or the session id is stale, fall back to manual `--follow` discipline (below) and restart it with the current session id.
 
 Default recipient: the user's phone (in `whatsapp.env`). Sends **from** instance `system_ailaw` ("Peleg"). Exit codes: 0 ok/received, 1 API error, 2 config error, 3 wait timed out.
 
-## Receiving messages (--wait / --listen)
+## Receiving messages (--wait / --listen / watch daemon)
 
-- `--wait` blocks until the user sends any WhatsApp message, prints one `[wa] <ts> from <jid> (<name>): <text>` line, exits 0. Timeout → exit 3. Optional positional arg = greeting sent before waiting.
-- `--listen` runs a foreground poll loop appending every new incoming message to the log. Run it **in background** (pattern above). Stop with `kill $(cat ~/.cache/whatsapp-notify/listen.pid)` (do NOT pkill by pattern — it self-matches your own shell).
-- **REQUIRED — surfacing (the log alone is NOT notification):** a background listener does not interrupt you. Whenever the session is idle/waiting on the user and the listener is running, you MUST loop on `--follow` (each call blocks up to `--idle` seconds and returns the new message instantly). Only doing other work instead? Re-run `--follow` as soon as that work finishes. Skipping this = messages sit unseen — this exact failure already happened once.
-- **Do NOT run `--wait` and `--listen` at the same time** (they race on the shared state in `~/.cache/whatsapp-notify/`). `--follow` is safe alongside `--listen` (it only reads the log).
-- **NEVER modify the listen log in place** (`sed -i`, `rm`, mv) while `--listen` runs — that orphans the listener's stdout to a deleted inode and its lines vanish silently (this exact failure happened). The listener itself reopens the file per write, so external rotation is safe; to reset the log: stop the listener, replace the file, start it again.
-- Running `--follow` in background (user preference): `whatsapp-send.sh --follow --idle 3600 >> /tmp/opencode/wa-unread.log 2>&1 &` — new messages accumulate there; read+clear `wa-unread.log` at every turn boundary and surface them into the chat.
+**Architecture:** `--listen` captures incoming messages to a log; `whatsapp-watch.sh` (daemon) turns new log lines into injected turns in a live opencode session via `opencode run --session <id>` — the agent wakes and responds WITHOUT being poked in the CLI. `--wait`/`--follow` are manual fallbacks.
+
+- **Full auto (preferred):** `nohup whatsapp-send.sh --listen >> /tmp/opencode/wa-listen.log 2>&1 &` then `nohup whatsapp-watch.sh >> /tmp/opencode/wa-watch-daemon.log 2>&1 &`. Requires `WA_OPENCODE_SESSION=<session-id>` in `whatsapp.env`. Find the session id (newest for this project's directory):
+  `.venv/bin/python -c "import sqlite3;db=sqlite3.connect('file:/home/yashar/.local/share/opencode/opencode.db?mode=ro',uri=True);print(*db.execute(\"select id from session where directory='/home/yashar/projects/financial_status' order by time_updated desc limit 1\"))"`
+  (ro sqlite3 works from any venv; or `sqlite3` if installed). The session id changes per conversation — update `whatsapp.env` at session start. Stop: `kill $(cat ~/.cache/whatsapp-notify/{listen,watch}.pid)`.
+- The injected turn arrives as a user message containing the `[wa]` line(s) — treat it as the user talking on WhatsApp; reply via `whatsapp-send.sh`. Do not re-inject or echo the preamble.
+- `--wait ["greeting"] [--timeout N]` blocks until any message arrives (exit 0/3). Don't run alongside `--listen` (shared state race).
+- `--follow --idle N` blocks until the listen log gains a real `[wa]` line (exit 0 with lines / 3 on idle). Only needed if the watch daemon isn't running.
 - **Incoming user messages arrive under an `@lid` JID** (e.g. `127818293858341@lid`), NOT `972548826569@s.whatsapp.net` — never filter by phone JID; the script accepts every non-fromMe message.
 - Read the user's reply from the `--wait` output / listen log and act on it.
+- **NEVER modify the listen log in place** (`sed -i`/`mv`/`rm`) while `--listen` runs — orphans its stdout to a deleted inode, lines vanish silently (verified failure). The listener reopens per write so rotation is safe; to reset: stop it first. Stop listeners/daemons by **pidfile**, never `pkill -f` by pattern (self-matches your own shell — verified failure).
 
 ## Troubleshooting (verified dead ends — do not rediscover)
 
@@ -56,3 +71,5 @@ Default recipient: the user's phone (in `whatsapp.env`). Sends **from** instance
 | 400 "Owned media must be a url or base64" | `media` must be PLAIN base64 (no `data:` URI prefix) or a URL — the script handles this; means the payload was mangled |
 | Number rejected | Strip `+` — Evolution wants digits only (`972548826569`) |
 | User says they replied but nothing arrives | Instance stores only messages received while connected (`syncFullHistory: false`); check `--list` shows `system_ailaw` `open`, then re-run `--wait`. Their reply may show up minutes later under an `@lid` JID |
+| Listener alive but lines never appear in the log | Its stdout was orphaned — someone `sed -i`/`mv`/`rm`-ed the live log (check `ls -l /proc/<pid>/fd/1` for "(deleted)"). The listener re-opens per write now, but DON'T mutate the live log; rotate only after stopping it. Stop listeners by pidfile, never `pkill -f` (self-match kills your own shell) |
+| Injection arrives but in the wrong session / nothing happens | Stale `WA_OPENCODE_SESSION` in `whatsapp.env` — re-read the current session id from `opencode.db` and restart the daemon |

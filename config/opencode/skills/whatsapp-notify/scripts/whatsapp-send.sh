@@ -101,13 +101,17 @@ state_read() { # -> sets LAST_TS (int), SEEN (comma list)
   return 0
 }
 
-state_write() { # state_write LAST_TS EPOCH [ID...] (append/replace seen, keep last 50)
+state_write() { # state_write LAST_TS EPOCH [ID...] — NEVER fatal (ENOSPC must not kill the listener)
   local last_ts="$1"; shift
   local seen_json
-  seen_json="$(printf '%s\n' "$@" | jq -R . | jq -s 'map(select(length > 0))')"
-  local tmp; tmp="$(mktemp "$STATE_FILE.XXXXXX")"
-  jq -n --argjson ts "$last_ts" --argjson seen "$seen_json" '{last_ts: $ts, seen: $seen}' > "$tmp"
-  mv "$tmp" "$STATE_FILE"
+  seen_json="$(printf '%s\n' "$@" | jq -R . | jq -s 'map(select(length > 0))' 2>/dev/null)" || seen_json='[]'
+  local tmp; tmp="$(mktemp "$STATE_FILE.XXXXXX" 2>/dev/null)" || { echo "warn: state write skipped (no tmp)" >&2; return 0; }
+  if jq -n --argjson ts "$last_ts" --argjson seen "$seen_json" '{last_ts: $ts, seen: $seen}' > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$STATE_FILE" 2>/dev/null || { rm -f "$tmp"; echo "warn: state move failed" >&2; }
+  else
+    rm -f "$tmp"; echo "warn: state write failed (disk full?)" >&2
+  fi
+  return 0
 }
 
 seen_has() { local IFS=','; [[ ",$SEEN," == *",$1,"* ]]; }
@@ -167,8 +171,8 @@ if [[ "$MODE" == "listen" ]]; then
   echo $$ > "$STATE_DIR/listen.pid"
   echo "listening (interval ${INTERVAL}s, pid $$); watermark=$WATERMARK"
   LISTEN_LOG="${WA_LISTEN_LOG:-/tmp/opencode/wa-listen.log}"
-  emit() { # append to the log by REOPENING it per write — survives log rotation/sed -i
-    printf '%s\n' "$1" >> "$LISTEN_LOG"
+  emit() { # append to the log by REOPENING it per write — survives log rotation/sed -i; never fatal
+    printf '%s\n' "$1" >> "$LISTEN_LOG" 2>/dev/null || echo "warn: log append failed (disk full?)" >&2
   }
   while :; do
     RECORDS="$(fetch_records "$(( WATERMARK - 1 ))")" || { sleep "$INTERVAL"; continue; }

@@ -13,7 +13,6 @@ SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SEND="$SKILL_DIR/scripts/whatsapp-send.sh"
 ENV_FILE="$SKILL_DIR/whatsapp.env"
 STATE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/whatsapp-notify"
-STATE_FILE="$STATE_DIR/health-state.json"
 LOG="${WA_LISTEN_LOG:-/tmp/opencode/wa-listen.log}"
 DLOG="/tmp/opencode/wa-watch-daemon.log"
 
@@ -81,19 +80,28 @@ for f in "${fails[@]:-}"; do [[ -n "$f" ]] && echo "  FAIL $f"; done
 
 if [[ ${#fails[@]} -gt 0 ]]; then
   if [[ "$ALERT" == 1 ]]; then
-    KEY="$(printf '%s|' "${fails[@]}")"
-    LAST_KEY="$(jq -r '.alert_key // ""' "$STATE_FILE" 2>/dev/null)"
-    LAST_T="$(jq -r '.alert_ts // 0' "$STATE_FILE" 2>/dev/null)"
-    NOWS=$(date +%s)
-    if [[ "$KEY" != "$LAST_KEY" || $(( NOWS - LAST_T )) -gt 3600 ]]; then
-      MSG="⚠️ WhatsApp chain unhealthy: ${fails[*]}"
-      "$SEND" "$MSG" >/dev/null 2>&1 || true
-      ~/.config/opencode/skills/telegram-notify/scripts/telegram-send.sh "🔴 $MSG (WhatsApp alert path may also be down)" >/dev/null 2>&1 || true
-      jq -n --arg k "$KEY" --argjson t "$NOWS" '{alert_key:$k, alert_ts:$t}' > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+    # dedup state in RAM (tmpfs) — a full disk must not turn alerts into spam,
+    # and a rate-limit marker that is ALWAYS writable guards even that
+    MARKER=/dev/shm/whatsapp-health-alert.marker
+    MARKER_AGE=$(( $(date +%s) - $(stat -c %Y "$MARKER" 2>/dev/null || echo 0) ))
+    if [[ "$MARKER_AGE" -lt 3300 ]]; then
+      echo "  (alert suppressed: sent ${MARKER_AGE}s ago)"
+    else
+      KEY="$(printf '%s|' "${fails[@]}")"
+      STATE_FILE=/dev/shm/whatsapp-health-state.json
+      LAST_KEY="$(jq -r '.alert_key // ""' "$STATE_FILE" 2>/dev/null)"
+      LAST_T="$(jq -r '.alert_ts // 0' "$STATE_FILE" 2>/dev/null)"
+      NOWS=$(date +%s)
+      if [[ "$KEY" != "$LAST_KEY" || $(( NOWS - LAST_T )) -gt 3600 ]]; then
+        MSG="⚠️ WhatsApp chain unhealthy: ${fails[*]}"
+        "$SEND" "$MSG" >/dev/null 2>&1 || true
+        ~/.config/opencode/skills/telegram-notify/scripts/telegram-send.sh "🔴 $MSG (WhatsApp alert path may also be down)" >/dev/null 2>&1 || true
+        touch "$MARKER" 2>/dev/null || true
+        jq -n --arg k "$KEY" --argjson t "$NOWS" '{alert_key:$k, alert_ts:$t}' > "$STATE_FILE" 2>/dev/null || true
+      fi
     fi
   fi
   exit 1
 fi
-# healthy again -> clear alert state
-[[ -f "$STATE_FILE" ]] && rm -f "$STATE_FILE"
+rm -f /dev/shm/whatsapp-health-state.json /dev/shm/whatsapp-health-alert.marker 2>/dev/null
 exit 0

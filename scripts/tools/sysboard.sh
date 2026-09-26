@@ -132,7 +132,7 @@ collect_timers() {
       done
 }
 
-# collect_docker -> STATE<TAB>NAME<TAB>IMAGE<TAB>STATUS<TAB>PORTS
+# map docker status string -> coarse state (running/exited/created/...)
 docker_state_from_status() {
   case "$1" in
     Up*)         echo running ;;
@@ -144,6 +144,7 @@ docker_state_from_status() {
   esac
 }
 
+# collect_docker -> STATE<TAB>NAME<TAB>IMAGE<TAB>STATUS<TAB>PORTS
 collect_docker() {
   local name image status ports
   while IFS=$'\t' read -r name image status ports; do

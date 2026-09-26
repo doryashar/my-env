@@ -291,6 +291,6 @@ Regression suite: `tests/p2_followups_test.sh` (wired as `p2_followups`).
 - [x] Task 7: report mode
 - [x] Task 8: TUI core (short tab labels, empty-row guard, tty probe)
 - [x] Task 9: TUI actions + help (EOF guard, %b fix)
-- [ ] Task 10: symlink, suite registration, docs
+- [x] Task 10: symlink, suite registration, docs
 - Plan: docs/superpowers/plans/2026-09-26-sysboard.md
 - Spec: docs/superpowers/specs/2026-09-26-sysboard-design.md

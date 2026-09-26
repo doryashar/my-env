@@ -456,6 +456,7 @@ sb_confirm() {
   sb_draw
   local key=""
   sb_input key
+  SB_MSG=""
   [[ "$key" == "y" || "$key" == "Y" ]]
 }
 
@@ -539,7 +540,7 @@ sb_show_logs() {
   section=$(sb_section_name)
   unit=$(sb_selected_unit)
   [[ -z "$unit" ]] && return 1
-  sb_confirm "show logs for $unit?"
+  sb_confirm "show logs for $unit?" || return 1
   tput rmcup 2>/dev/null || true
   tput cnorm 2>/dev/null || true
   if [[ "$section" == "docker" ]]; then

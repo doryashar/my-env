@@ -279,3 +279,18 @@ Regression suite: `tests/p2_followups_test.sh` (wired as `p2_followups`).
 - sync_dotfiles capture-group + backward-wildcard features dead (M1/M2)
 - `functions/common_funcs:200` destructive `~/.ssh` side effect
 - Test orphan suites not wired into runner (7 files)
+
+## sysboard (2026-09-26)
+
+- [x] Task 1: script skeleton + CLI flag parsing
+- [x] Task 2: collect_systemd
+- [x] Task 3: collect_timers
+- [x] Task 4: collect_docker (paused-state fix included)
+- [x] Task 5: collect_cron
+- [x] Task 6: collect_autostart
+- [x] Task 7: report mode
+- [x] Task 8: TUI core (short tab labels, empty-row guard, tty probe)
+- [x] Task 9: TUI actions + help (EOF guard, %b fix)
+- [ ] Task 10: symlink, suite registration, docs
+- Plan: docs/superpowers/plans/2026-09-26-sysboard.md
+- Spec: docs/superpowers/specs/2026-09-26-sysboard-design.md

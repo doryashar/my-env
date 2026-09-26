@@ -447,6 +447,55 @@ test_tui_navigates_and_switches_tabs() {
   assert_exit_code 0 $rc "TUI handles j/k/2/4 then quits"
 }
 
+# ---- TUI action tests ----
+
+test_sb_unit_scope_probes_user_bus() {
+  systemctl() {
+    [[ "${1:-}" == "--user" && "$3" == "photo-scan.timer" ]] && return 0
+    return 1
+  }
+  assert_equals "--user" "$(sb_unit_scope photo-scan.timer)" "user timer -> --user"
+  assert_equals "" "$(sb_unit_scope logrotate.timer)" "system timer -> empty scope"
+}
+
+test_sb_handle_action_readonly_sections() {
+  SB_SECTION=5   # cron
+  SB_ROWS=("user"$'\t'"0 8 * * *"$'\t'"$USER"$'\t'/bin/true)
+  SB_SEL=0
+  SB_MSG=""
+  sb_handle_action s
+  assert_contains "$SB_MSG" "read-only" "cron section rejects stop action"
+  SB_SECTION=6   # autostart
+  sb_handle_action r
+  assert_contains "$SB_MSG" "read-only" "autostart section rejects restart"
+}
+
+test_sb_selected_unit() {
+  SB_SECTION=1
+  SB_ROWS=("active"$'\t'"running"$'\t'"docker.service"$'\t'"enabled")
+  SB_SEL=0
+  assert_equals "docker.service" "$(sb_selected_unit)" "systemd unit extracted"
+  SB_SECTION=4
+  SB_ROWS=("running"$'\t'"env-nginx"$'\t'"nginx:latest"$'\t'"Up"$'\t'"")
+  assert_equals "env-nginx" "$(sb_selected_unit)" "docker name extracted"
+  SB_SECTION=3
+  SB_ROWS=("next"$'\t'"last"$'\t'"photo-scan.timer")
+  assert_equals "photo-scan.timer" "$(sb_selected_unit)" "timer unit extracted"
+}
+
+test_sb_toggle_enable_direction() {
+  SB_SECTION=1
+  SB_ROWS=("inactive"$'\t'"dead"$'\t'"ollama.service"$'\t'"disabled")
+  SB_SEL=0
+  systemctl() {
+    [[ "$1" == "is-enabled" ]] && echo "disabled" && return 0
+    return 1
+  }
+  sb_systemd_action() { SB_MSG="would ${1:-} ${2:-}"; }
+  sb_toggle_enable
+  assert_contains "$SB_MSG" "would enable" "disabled unit toggles toward enable"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -471,6 +520,10 @@ test_render_report_empty_section_says_none
 test_non_tty_falls_back_to_report
 test_tui_quits_on_q
 test_tui_navigates_and_switches_tabs
+test_sb_unit_scope_probes_user_bus
+test_sb_handle_action_readonly_sections
+test_sb_selected_unit
+test_sb_toggle_enable_direction
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

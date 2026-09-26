@@ -340,12 +340,14 @@ sb_tty_ok() {
 
 sb_input() {
   # read one key from /dev/tty when available, else stdin
+  # SB_INPUT_RC records read's exit code: 1 = EOF, >128 = timeout
+  SB_INPUT_RC=0
   local t=()
   [[ $AUTO_REFRESH -eq 1 ]] && t=(-t "$REFRESH_INTERVAL")
   if sb_tty_ok; then
-    IFS= read -rsn1 ${t[@]+"${t[@]}"} "$1" </dev/tty || true
+    IFS= read -rsn1 ${t[@]+"${t[@]}"} "$1" </dev/tty || SB_INPUT_RC=$?
   else
-    IFS= read -rsn1 ${t[@]+"${t[@]}"} "$1" || true
+    IFS= read -rsn1 ${t[@]+"${t[@]}"} "$1" || SB_INPUT_RC=$?
   fi
 }
 
@@ -444,7 +446,7 @@ sb_draw() {
     fi
   done
   printf '%*s\n' "$cols" '' | tr ' ' '-'
-  printf '%bj/k move · 1-6/tab section · s/t/r start/stop/restart · e enable%s\n' "$GRAY" "$NC"
+  printf '%bj/k move · 1-6/tab section · s/t/r start/stop/restart · e enable%b\n' "$GRAY" "$NC"
   printf '%bl logs · R refresh · ? help · q quit%b\n' "$GRAY" "$NC"
   [[ -n "$SB_MSG" ]] && printf '%b%s%b\n' "$YELLOW" "$(sb_truncate "$SB_MSG" $((cols - 2)))" "$NC"
 }
@@ -457,9 +459,158 @@ sb_confirm() {
   [[ "$key" == "y" || "$key" == "Y" ]]
 }
 
-sb_handle_action() { SB_MSG="no actions in this section"; }
+# ---- TUI actions ----
+
+sb_section_name() { echo "${SECTIONS[$((SB_SECTION - 1))]}"; }
+
+sb_selected_unit() {
+  local row="${SB_ROWS[$SB_SEL]:-}"
+  local a b c
+  IFS=$'\t' read -r a b c _ <<<"$row"
+  case "$(sb_section_name)" in
+    system|user|timers) echo "$c" ;;
+    docker)             echo "$b" ;;
+    *)                  echo "" ;;
+  esac
+}
+
+sb_unit_scope() {
+  # echoes "--user" if unit lives on the user bus, else "" (system)
+  if systemctl --user cat "$1" &>/dev/null; then echo "--user"; else echo ""; fi
+}
+
+sb_systemd_action() {
+  local verb="$1"
+  local unit scope=()
+  unit=$(sb_selected_unit)
+  [[ -z "$unit" ]] && return 1
+  case "$(sb_section_name)" in
+    user)   scope=(--user) ;;
+    timers) [[ -n "$(sb_unit_scope "$unit")" ]] && scope=(--user) ;;
+  esac
+  sb_confirm "$verb $unit?" || return 1
+  local rc=0
+  if [[ ${#scope[@]} -eq 0 ]]; then
+    tput rmcup 2>/dev/null || true
+    tput cnorm 2>/dev/null || true
+    sudo systemctl "$verb" "$unit"
+    rc=$?
+    tput civis 2>/dev/null || true
+    tput smcup 2>/dev/null || true
+  else
+    systemctl --user "$verb" "$unit"
+    rc=$?
+  fi
+  SB_MSG="$verb $unit -> exit $rc"
+  sb_refresh_counts
+  sb_load_section
+}
+
+sb_toggle_enable() {
+  local unit scope=() cur
+  unit=$(sb_selected_unit)
+  [[ -z "$unit" ]] && return 1
+  case "$(sb_section_name)" in
+    user)   scope=(--user) ;;
+    timers) [[ -n "$(sb_unit_scope "$unit")" ]] && scope=(--user) ;;
+  esac
+  cur=$(systemctl "${scope[@]}" is-enabled "$unit" 2>/dev/null || echo unknown)
+  if [[ "$cur" == "enabled" ]]; then
+    sb_systemd_action disable
+  else
+    sb_systemd_action enable
+  fi
+}
+
+sb_docker_action() {
+  local verb="$1" name
+  name=$(sb_selected_unit)
+  [[ -z "$name" ]] && return 1
+  sb_confirm "docker $verb $name?" || return 1
+  docker "$verb" "$name" &>/dev/null
+  local rc=$?
+  SB_MSG="docker $verb $name -> exit $rc"
+  sb_refresh_counts
+  sb_load_section
+}
+
+sb_show_logs() {
+  local unit section scope=()
+  section=$(sb_section_name)
+  unit=$(sb_selected_unit)
+  [[ -z "$unit" ]] && return 1
+  sb_confirm "show logs for $unit?"
+  tput rmcup 2>/dev/null || true
+  tput cnorm 2>/dev/null || true
+  if [[ "$section" == "docker" ]]; then
+    docker logs --tail 200 "$unit" | "${PAGER:-less}"
+  else
+    case "$section" in
+      user)   scope=(--user) ;;
+      timers) [[ -n "$(sb_unit_scope "$unit")" ]] && scope=(--user) ;;
+    esac
+    journalctl "${scope[@]}" -u "$unit" -n 200 --no-pager | "${PAGER:-less}"
+  fi
+  tput civis 2>/dev/null || true
+  tput smcup 2>/dev/null || true
+}
+
+sb_handle_action() {
+  SB_MSG=""
+  case "$(sb_section_name)" in
+    system|user|timers)
+      case "$1" in
+        s) sb_systemd_action stop ;;
+        t) sb_systemd_action start ;;
+        r) sb_systemd_action restart ;;
+        e) sb_toggle_enable ;;
+        l) sb_show_logs ;;
+      esac
+      ;;
+    docker)
+      case "$1" in
+        s) sb_docker_action stop ;;
+        t) sb_docker_action start ;;
+        r) sb_docker_action restart ;;
+        l) sb_show_logs ;;
+        *) SB_MSG="read-only action" ;;
+      esac
+      ;;
+    *)
+      SB_MSG="read-only section"
+      ;;
+  esac
+}
+
 sb_help_overlay() {
-  SB_MSG="help overlay: implemented in next task"
+  local box=(
+    'sysboard keys'
+    ''
+    '  j/k or arrows   move selection'
+    '  1-6 or Tab      switch section'
+    '  g / G           jump to top / bottom'
+    '  s / t / r       stop / start / restart'
+    '  e               toggle enable/disable (systemd)'
+    '  l               view logs (journalctl / docker logs)'
+    '  R               refresh now'
+    '  q               quit'
+    ''
+    '  cron and autostart sections are read-only'
+  )
+  local lines cols i
+  lines=$(tput lines 2>/dev/null || echo 24)
+  cols=$(tput cols 2>/dev/null || echo 80)
+  local top=$(((lines - ${#box[@]}) / 2))
+  printf '\033[H'
+  for ((i = 0; i < top; i++)); do printf '\n'; done
+  printf '%*s┌─ help ─┐\n' $(((cols - 10) / 2)) ''
+  for i in "${box[@]}"; do
+    printf '%*s│ %s │\n' $(((cols - 10) / 2)) '' "$(sb_truncate "$i" $((cols - 16)))"
+  done
+  printf '%*s└────────┘\n' $(((cols - 10) / 2)) ''
+  printf 'press any key...'
+  local key=""
+  sb_input key
 }
 
 sb_tui() {
@@ -474,6 +625,9 @@ sb_tui() {
     sb_draw
     sb_read_key
     if [[ -z "$SB_KEY" ]]; then
+      if (( SB_INPUT_RC > 0 && SB_INPUT_RC < 128 )); then
+        sleep 1   # stdin EOF (non-interactive) — avoid busy spin
+      fi
       sb_refresh_counts
       sb_load_section
       continue

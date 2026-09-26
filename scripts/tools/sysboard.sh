@@ -132,6 +132,27 @@ collect_timers() {
       done
 }
 
+# collect_docker -> STATE<TAB>NAME<TAB>IMAGE<TAB>STATUS<TAB>PORTS
+docker_state_from_status() {
+  case "$1" in
+    Up*)         echo running ;;
+    Exited*)     echo exited ;;
+    Created*)    echo created ;;
+    Restarting*) echo restarting ;;
+    Paused*)     echo paused ;;
+    *)           echo other ;;
+  esac
+}
+
+collect_docker() {
+  local name image status ports
+  while IFS=$'\t' read -r name image status ports; do
+    [[ -z "$name" ]] && continue
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+      "$(docker_state_from_status "$status")" "$name" "$image" "$status" "$ports"
+  done < <(docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null)
+}
+
 sb_render_report() { echo "(not implemented yet)"; }
 sb_tui() { echo "(not implemented yet)"; }
 

@@ -186,6 +186,48 @@ test_collect_timers() {
     "user timer with n/a last trigger"
 }
 
+# ---- collect_docker tests ----
+
+mock_docker() {
+  # Rows mimic: docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+  # (single tabs; consecutive IFS-whitespace tabs collapse in `read`, and real
+  # docker never emits empty double-tab fields). Rows 1/3 have empty ports.
+  docker() {
+    printf 'rclone-mount\trclone/rclone:1.66\tUp 3 days\t\n'
+    printf 'env-nginx\tnginx:latest\tExited (0) 2 days ago\t0.0.0.0:80->80/tcp\n'
+    printf 'fresh\talpine:3.20\tCreated\t\n'
+  }
+}
+
+test_docker_state_from_status() {
+  assert_equals "running" "$(docker_state_from_status 'Up 3 days (healthy)')" "Up -> running"
+  assert_equals "exited" "$(docker_state_from_status 'Exited (0) 2 days ago')" "Exited -> exited"
+  assert_equals "created" "$(docker_state_from_status 'Created')" "Created -> created"
+  assert_equals "restarting" "$(docker_state_from_status 'Restarting (1) 5s ago')" "Restarting -> restarting"
+  assert_equals "other" "$(docker_state_from_status 'Dead')" "unknown -> other"
+}
+
+test_collect_docker() {
+  mock_docker
+  local out
+  out=$(collect_docker)
+  assert_contains "$out" \
+    "$(printf 'running\trclone-mount\trclone/rclone:1.66\tUp 3 days\t')" \
+    "running container row"
+  assert_contains "$out" \
+    "$(printf 'exited\tenv-nginx\tnginx:latest\tExited (0) 2 days ago\t0.0.0.0:80->80/tcp')" \
+    "exited container row with ports"
+  assert_equals "3" "$(collect_docker | wc -l)" "3 containers mocked"
+}
+
+test_collect_docker_missing_binary() {
+  mock_docker
+  docker() { return 127; }   # simulate missing/broken docker
+  local out
+  out=$(collect_docker)
+  assert_equals "" "$out" "broken docker yields no rows"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -195,6 +237,9 @@ test_parse_args_rejects_bad_input
 test_collect_systemd
 test_collect_systemd_missing_unit_file_entry
 test_collect_timers
+test_docker_state_from_status
+test_collect_docker
+test_collect_docker_missing_binary
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

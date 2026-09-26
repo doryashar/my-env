@@ -20,7 +20,7 @@ REFRESH_INTERVAL=5
 START_SECTION=1
 
 SECTIONS=(system user timers docker cron autostart)
-SECTION_LABELS=(System User Timers Docker Cron Autostart)
+SECTION_LABELS=("System Services" "User Services" Timers Docker Cron Autostart)
 
 SB_SECTION=1
 SB_SEL=0
@@ -237,7 +237,98 @@ collect_autostart() {
   done
 }
 
-sb_render_report() { echo "(not implemented yet)"; }
+# ---- formatting / report ----
+
+sb_state_color() {
+  case "$1" in
+    active|running|enabled) echo "$GREEN" ;;
+    activating)             echo "$YELLOW" ;;
+    failed)                 echo "$RED" ;;
+    *)                      echo "$GRAY" ;;
+  esac
+}
+
+# sb_row_state SECTION ROW -> state word ("" when section has no state)
+sb_row_state() {
+  local a
+  IFS=$'\t' read -r a _ <<<"$2"
+  case "$1" in
+    system|user|docker|autostart) echo "$a" ;;
+    *) echo "" ;;
+  esac
+}
+
+# sb_row_color SECTION ROW -> ANSI color for the row ("" = default)
+sb_row_color() {
+  local section="$1" row="$2"
+  if [[ "$section" == "autostart" ]]; then
+    local scope
+    IFS=$'\t' read -r _ _ _ scope _ <<<"$row"
+    [[ "$scope" == "system" ]] && { echo "$GRAY"; return; }
+  fi
+  local st
+  st=$(sb_row_state "$section" "$row")
+  [[ -z "$st" ]] && { echo ""; return; }
+  sb_state_color "$st"
+}
+
+sb_truncate() {
+  local s="$1" w="$2"
+  if (( ${#s} > w )); then s="${s:0:$((w - 1))}…"; fi
+  printf '%s' "$s"
+}
+
+sb_format_row() {
+  local section="$1"
+  local a b c d e
+  IFS=$'\t' read -r a b c d e <<<"$2"
+  case "$section" in
+    system|user) printf '%-14s %-42s %s' "$a/$b" "$c" "$d" ;;
+    timers)      printf '%-25s %-25s %s' "$a" "last: $b" "$c" ;;
+    docker)      printf '%-10s %-24s %-24s %s' "$a" "$b" "$c" "$e" ;;
+    cron)        printf '%-21s %-15s %-10s %s' "$(basename "$a")" "$b" "$c" "$d" ;;
+    autostart)   printf '%-9s %-26s [%s] %s' "$a" "$b" "$d" "$c" ;;
+  esac
+}
+
+# sb_collect_one SECTION -> raw TSV rows for that section name
+sb_collect_one() {
+  case "$1" in
+    system)    collect_systemd ;;
+    user)      collect_systemd user ;;
+    timers)    printf '%s\n%s' "$(collect_timers)" "$(collect_timers user)" ;;
+    docker)    collect_docker ;;
+    cron)      collect_cron ;;
+    autostart) collect_autostart ;;
+  esac
+}
+
+sb_render_report() {
+  local i=1 section rows row color
+  for section in "${SECTIONS[@]}"; do
+    if [[ -n "$SECTION_FILTER" && "$section" != "$SECTION_FILTER" ]]; then
+      i=$((i + 1)); continue
+    fi
+    printf '\n%b== %s ==%b\n' "$BOLD" "${SECTION_LABELS[$((i - 1))]}" "$NC"
+    rows=$(sb_collect_one "$section")
+    if [[ "$section" == "docker" ]] && ! command -v docker &>/dev/null; then
+      echo "  (docker not installed)"
+    elif [[ -z "${rows//$'\n'/}" ]]; then
+      echo "  (none)"
+    else
+      while IFS= read -r row; do
+        [[ -z "$row" ]] && continue
+        color=$(sb_row_color "$section" "$row")
+        printf '  '
+        [[ -n "$color" ]] && printf '%b' "$color"
+        sb_format_row "$section" "$row"
+        printf '%b\n' "$NC"
+      done <<<"$rows"
+    fi
+    i=$((i + 1))
+  done
+}
+
 sb_tui() { echo "(not implemented yet)"; }
 
 sb_main() {

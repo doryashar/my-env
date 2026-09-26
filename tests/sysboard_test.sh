@@ -349,6 +349,87 @@ test_collect_autostart() {
     "system entry (no enable key defaults enabled, scope=system)"
 }
 
+# ---- report rendering tests ----
+
+mock_all_collectors_for_report() {
+  systemctl() {
+    local scope=0
+    [[ "${1:-}" == "--user" ]] && { scope=1; shift; }
+    case "$1" in
+      list-unit-files) [[ $scope -eq 1 ]] && printf 'wa-face-bot.service enabled\n' || printf 'docker.service enabled\n' ;;
+      list-units)
+        if [[ "$2" == "timer" ]]; then
+          [[ $scope -eq 1 ]] && printf 'photo-scan.timer loaded active waiting\n' || printf 'logrotate.timer loaded active waiting\n'
+        else
+          [[ $scope -eq 1 ]] && printf 'wa-face-bot.service loaded failed failed bot\n' || printf 'docker.service loaded active running docker\n'
+        fi
+        ;;
+      show)
+        local prop="$3"; prop="${prop#--property=}"
+        [[ "$prop" == "NextElapseUSecRealtime" ]] && printf 'Mon 2026-09-28 08:00:00 IDT' || printf 'n/a'
+        ;;
+    esac
+  }
+  docker() { printf 'env-nginx\tnginx:latest\tExited (0) 2 days ago\t\n'; }
+  crontab() { [[ "${1:-}" == "-l" ]] && printf '0 8 * * * /home/me/brief.py\n'; }
+  setup_cron_fixtures
+  setup_autostart_fixtures
+}
+
+test_state_color_mapping() {
+  assert_equals "$GREEN" "$(sb_state_color active)" "active -> green"
+  assert_equals "$GREEN" "$(sb_state_color running)" "running -> green"
+  assert_equals "$YELLOW" "$(sb_state_color activating)" "activating -> yellow"
+  assert_equals "$RED" "$(sb_state_color failed)" "failed -> red"
+  assert_equals "$GRAY" "$(sb_state_color inactive)" "inactive -> gray"
+  assert_equals "$GRAY" "$(sb_state_color exited)" "exited -> gray"
+}
+
+test_render_report_contains_all_sections() {
+  mock_all_collectors_for_report
+  local out
+  out=$(SYSBOARD_CRON_D="$FIXTURES/cron.d" \
+        SYSBOARD_USER_AUTOSTART="$FIXTURES/user-autostart" \
+        SYSBOARD_SYSTEM_AUTOSTART="$FIXTURES/system-autostart" \
+        sb_render_report)
+  assert_contains "$out" "System Services" "report has system services header"
+  assert_contains "$out" "User Services" "report has user services header"
+  assert_contains "$out" "Timers" "report has timers header"
+  assert_contains "$out" "Docker" "report has docker header"
+  assert_contains "$out" "Cron" "report has cron header"
+  assert_contains "$out" "Autostart" "report has autostart header"
+  assert_contains "$out" "docker.service" "report lists docker.service"
+  assert_contains "$out" "env-nginx" "report lists docker container"
+  assert_contains "$out" "/home/me/brief.py" "report lists cron command"
+}
+
+test_render_report_section_filter() {
+  mock_all_collectors_for_report
+  SECTION_FILTER="docker"
+  local out
+  out=$(sb_render_report)
+  assert_contains "$out" "Docker" "filtered report has docker header"
+  ! printf '%s' "$out" | grep -q "System Services"
+  assert_equals "0" $? "filtered report omits system services"
+  SECTION_FILTER=""
+}
+
+test_render_report_empty_section_says_none() {
+  systemctl() { :; }
+  docker() { :; }
+  crontab() { return 1; }
+  local out
+  out=$(SYSBOARD_CRON_D=/nonexistent sb_render_report)
+  assert_contains "$out" "(none)" "empty sections show (none)"
+}
+
+test_non_tty_falls_back_to_report() {
+  local out rc
+  out=$(bash "$SYSBOARD" </dev/null 2>&1); rc=$?
+  assert_exit_code 0 $rc "non-TTY invocation exits 0"
+  assert_contains "$out" "falling back to report mode" "notices fallback"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -366,6 +447,11 @@ test_cron_parse_line_system
 test_cron_parse_line_skips
 test_collect_cron
 test_collect_autostart
+test_state_color_mapping
+test_render_report_contains_all_sections
+test_render_report_section_filter
+test_render_report_empty_section_says_none
+test_non_tty_falls_back_to_report
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

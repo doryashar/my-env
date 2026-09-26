@@ -496,6 +496,20 @@ test_sb_toggle_enable_direction() {
   assert_contains "$SB_MSG" "would enable" "disabled unit toggles toward enable"
 }
 
+test_sb_msg_color_on_failure() {
+  SB_SECTION=2   # user scope: avoids the sudo path in sb_systemd_action
+  SB_ROWS=("active"$'\t'"running"$'\t'"docker.service"$'\t'"enabled")
+  SB_SEL=0
+  SB_MSG=""
+  SB_MSG_COLOR=""
+  # stub confirm to auto-accept and systemctl to fail
+  sb_confirm() { return 0; }
+  systemctl() { return 3; }
+  sb_systemd_action restart
+  assert_equals "$RED" "$SB_MSG_COLOR" "failed action sets red message color"
+  assert_contains "$SB_MSG" "exit 3" "failure message includes exit code"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -523,6 +537,7 @@ test_tui_navigates_and_switches_tabs
 test_sb_unit_scope_probes_user_bus
 test_sb_handle_action_readonly_sections
 test_sb_selected_unit
+test_sb_msg_color_on_failure
 test_sb_toggle_enable_direction
 
 print_test_summary

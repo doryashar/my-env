@@ -7,7 +7,6 @@ set -uo pipefail
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
 GRAY='\033[90m'
 BOLD='\033[1m'
 NC='\033[0m'
@@ -27,8 +26,9 @@ SB_SECTION=1
 SB_SEL=0
 SB_ROWS=()
 SB_MSG=""
+SB_MSG_COLOR=""
 SB_KEY=""
-declare -A SB_COUNTS
+declare -gA SB_COUNTS
 
 sb_usage() {
   cat <<'EOF'
@@ -45,8 +45,8 @@ Options:
   -h, --help        show this help
 
 TUI keys:
-  j/k or arrows  move   1-6/Tab  switch section   R  refresh
-  s stop  t start  r restart  e enable/disable  l logs  q quit
+  j/k or arrows  move (g/G top/bottom)   1-6/Tab  switch section   R  refresh
+  s stop  t start  r restart  e enable/disable  l logs  ? help  q quit
 EOF
 }
 
@@ -448,7 +448,7 @@ sb_draw() {
   printf '%*s\n' "$cols" '' | tr ' ' '-'
   printf '%bj/k move · 1-6/tab section · s/t/r start/stop/restart · e enable%b\n' "$GRAY" "$NC"
   printf '%bl logs · R refresh · ? help · q quit%b\n' "$GRAY" "$NC"
-  [[ -n "$SB_MSG" ]] && printf '%b%s%b\n' "$YELLOW" "$(sb_truncate "$SB_MSG" $((cols - 2)))" "$NC"
+  [[ -n "$SB_MSG" ]] && printf '%b%s%b\n' "${SB_MSG_COLOR:-$YELLOW}" "$(sb_truncate "$SB_MSG" $((cols - 2)))" "$NC"
 }
 
 sb_confirm() {
@@ -457,6 +457,7 @@ sb_confirm() {
   local key=""
   sb_input key
   SB_MSG=""
+  SB_MSG_COLOR=""
   [[ "$key" == "y" || "$key" == "Y" ]]
 }
 
@@ -502,6 +503,7 @@ sb_systemd_action() {
     systemctl --user "$verb" "$unit"
     rc=$?
   fi
+  if [[ $rc -ne 0 ]]; then SB_MSG_COLOR="$RED"; else SB_MSG_COLOR=""; fi
   SB_MSG="$verb $unit -> exit $rc"
   sb_refresh_counts
   sb_load_section
@@ -530,6 +532,7 @@ sb_docker_action() {
   sb_confirm "docker $verb $name?" || return 1
   docker "$verb" "$name" &>/dev/null
   local rc=$?
+  if [[ $rc -ne 0 ]]; then SB_MSG_COLOR="$RED"; else SB_MSG_COLOR=""; fi
   SB_MSG="docker $verb $name -> exit $rc"
   sb_refresh_counts
   sb_load_section
@@ -558,6 +561,7 @@ sb_show_logs() {
 
 sb_handle_action() {
   SB_MSG=""
+  SB_MSG_COLOR=""
   case "$(sb_section_name)" in
     system|user|timers)
       case "$1" in
@@ -618,6 +622,7 @@ sb_tui() {
   tput smcup 2>/dev/null || true
   tput civis 2>/dev/null || true
   trap 'tput cnorm 2>/dev/null; tput rmcup 2>/dev/null; exit 0' INT TERM
+  trap 'tput cnorm 2>/dev/null; tput rmcup 2>/dev/null' EXIT
   SB_SECTION=$START_SECTION
   SB_SEL=0
   sb_refresh_counts
@@ -638,7 +643,10 @@ sb_tui() {
       j) (( SB_SEL < ${#SB_ROWS[@]} - 1 )) && SB_SEL=$((SB_SEL + 1)) ;;
       k) (( SB_SEL > 0 )) && SB_SEL=$((SB_SEL - 1)) ;;
       g) SB_SEL=0 ;;
-      G) SB_SEL=$(( ${#SB_ROWS[@]} - 1 )) ;;
+      G)
+        SB_SEL=$(( ${#SB_ROWS[@]} - 1 ))
+        (( SB_SEL < 0 )) && SB_SEL=0
+        ;;
       [1-6])
         SB_SECTION="$SB_KEY"
         SB_SEL=0

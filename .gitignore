@@ -132,3 +132,6 @@ pip-delete-this-directory.txt
 # *.7z
 # Worktrees
 .worktrees/
+
+# sysboard test fixtures (generated at runtime)
+tests/fixtures/sysboard/

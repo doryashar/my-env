@@ -205,6 +205,9 @@ test_docker_state_from_status() {
   assert_equals "created" "$(docker_state_from_status 'Created')" "Created -> created"
   assert_equals "restarting" "$(docker_state_from_status 'Restarting (1) 5s ago')" "Restarting -> restarting"
   assert_equals "other" "$(docker_state_from_status 'Dead')" "unknown -> other"
+  assert_equals "paused" "$(docker_state_from_status 'Up 2 hours (Paused)')" "Up (Paused) -> paused"
+  assert_equals "paused" "$(docker_state_from_status 'Paused')" "bare Paused -> paused"
+  assert_equals "running" "$(docker_state_from_status 'Up 2 minutes (unhealthy)')" "health suffix ignored -> running"
 }
 
 test_collect_docker() {

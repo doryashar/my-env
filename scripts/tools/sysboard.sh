@@ -135,6 +135,7 @@ collect_timers() {
 # map docker status string -> coarse state (running/exited/created/...)
 docker_state_from_status() {
   case "$1" in
+    *" (Paused)") echo paused ;;
     Up*)         echo running ;;
     Exited*)     echo exited ;;
     Created*)    echo created ;;

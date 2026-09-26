@@ -298,6 +298,57 @@ test_collect_cron() {
   assert_equals "0" $? "MAILTO env line not present"
 }
 
+# ---- collect_autostart tests ----
+
+setup_autostart_fixtures() {
+  rm -rf "$FIXTURES"
+  mkdir -p "$FIXTURES/user-autostart" "$FIXTURES/system-autostart"
+  cat > "$FIXTURES/user-autostart/nimbus.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Nimbus Clipper
+Exec=/usr/local/bin/nimbus --clip
+X-GNOME-Autostart-enabled=true
+EOF
+  cat > "$FIXTURES/user-autostart/paused-app.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Paused App
+Exec=/usr/bin/paused-app
+X-GNOME-Autostart-enabled=false
+EOF
+  cat > "$FIXTURES/user-autostart/hidden-app.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Hidden App
+Exec=/usr/bin/hidden-app
+Hidden=true
+EOF
+  cat > "$FIXTURES/system-autostart/org-gnome-Settings.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=GNOME Settings Daemon
+Exec=/usr/libexec/gsd-settings
+EOF
+}
+
+test_collect_autostart() {
+  setup_autostart_fixtures
+  local out
+  out=$(collect_autostart "$FIXTURES/user-autostart" "$FIXTURES/system-autostart")
+  assert_equals "4" "$(printf '%s' "$out" | grep -c .)" "3 user + 1 system entries"
+  assert_contains "$out" \
+    "$(printf 'enabled\tNimbus Clipper\t/usr/local/bin/nimbus --clip\tuser\t%s/user-autostart/nimbus.desktop' "$FIXTURES")" \
+    "enabled user entry"
+  assert_contains "$out" "$(printf 'disabled\tPaused App\t/usr/bin/paused-app')" \
+    "X-GNOME-Autostart-enabled=false -> disabled"
+  assert_contains "$out" "$(printf 'hidden\tHidden App\t/usr/bin/hidden-app')" \
+    "Hidden=true -> hidden"
+  assert_contains "$out" \
+    "$(printf 'enabled\tGNOME Settings Daemon\t/usr/libexec/gsd-settings\tsystem\t%s/system-autostart/org-gnome-Settings.desktop' "$FIXTURES")" \
+    "system entry (no enable key defaults enabled, scope=system)"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -314,6 +365,7 @@ test_cron_parse_line_user
 test_cron_parse_line_system
 test_cron_parse_line_skips
 test_collect_cron
+test_collect_autostart
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

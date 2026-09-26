@@ -204,6 +204,39 @@ collect_cron() {
   done
 }
 
+# autostart_parse_desktop FILE user|system -> STATE<TAB>NAME<TAB>EXEC<TAB>SCOPE<TAB>FILEPATH
+autostart_parse_desktop() {
+  local file="$1" scope="$2"
+  local name="" exec_cmd="" hidden="false" autostart="true" key value
+  while IFS='=' read -r key value; do
+    key="${key//[[:space:]]/}"
+    case "$key" in
+      Name) name="$value" ;;
+      Exec) exec_cmd="$value" ;;
+      Hidden) hidden="$value" ;;
+      X-GNOME-Autostart-enabled) autostart="$value" ;;
+    esac
+  done <"$file"
+  local state="enabled"
+  [[ "$hidden" == "true" ]] && state="hidden"
+  [[ "$autostart" == "false" ]] && state="disabled"
+  printf '%s\t%s\t%s\t%s\t%s\n' \
+    "$state" "${name:-$(basename "$file" .desktop)}" "$exec_cmd" "$scope" "$file"
+}
+
+# collect_autostart [USER_DIR] [SYSTEM_DIR] -> STATE<TAB>NAME<TAB>EXEC<TAB>SCOPE<TAB>FILEPATH
+collect_autostart() {
+  local user_dir="${1:-${SYSBOARD_USER_AUTOSTART:-$HOME/.config/autostart}}"
+  local system_dir="${2:-${SYSBOARD_SYSTEM_AUTOSTART:-/etc/xdg/autostart}}"
+  local f
+  for f in "$user_dir"/*.desktop; do
+    [[ -f "$f" ]] && autostart_parse_desktop "$f" user
+  done
+  for f in "$system_dir"/*.desktop; do
+    [[ -f "$f" ]] && autostart_parse_desktop "$f" system
+  done
+}
+
 sb_render_report() { echo "(not implemented yet)"; }
 sb_tui() { echo "(not implemented yet)"; }
 

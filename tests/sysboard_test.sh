@@ -231,6 +231,73 @@ test_collect_docker_missing_binary() {
   assert_equals "" "$out" "broken docker yields no rows"
 }
 
+# ---- collect_cron tests ----
+
+setup_cron_fixtures() {
+  rm -rf "$FIXTURES"
+  mkdir -p "$FIXTURES/cron.d"
+  cat > "$FIXTURES/crontab" <<'EOF'
+# daily brief
+0 8 * * * /home/yashar/financial_status/daily_brief.py
+*/30 * * * * /home/yashar/bin/whatsapp-send.sh disk-low
+@reboot /usr/bin/some-daemon --foreground
+MAILTO=admin@example.com
+SHELL=/bin/bash
+EOF
+  cat > "$FIXTURES/cron.d/custom-job" <<'EOF'
+5 4 * * * root /usr/local/bin/backup.sh daily
+# comment line
+15 14 * * 0 yashar /usr/local/bin/weekly.sh
+EOF
+}
+
+test_cron_parse_line_user() {
+  local entry
+  entry=$(cron_parse_line "0 8 * * * /home/me/run.py arg" user)
+  assert_equals "$(printf '0 8 * * *\t%s\t/home/me/run.py arg' "$USER")" "$entry" \
+    "user line: 5-field schedule, USER, rest is command"
+
+  entry=$(cron_parse_line "@reboot /usr/bin/daemon" user)
+  assert_equals "$(printf '@reboot\t%s\t/usr/bin/daemon' "$USER")" "$entry" \
+    "user @-schedule"
+}
+
+test_cron_parse_line_system() {
+  local entry
+  entry=$(cron_parse_line "5 4 * * * root /usr/local/bin/backup.sh daily" system)
+  assert_equals "$(printf '5 4 * * *\troot\t/usr/local/bin/backup.sh daily')" "$entry" \
+    "cron.d line: schedule, user field, command"
+
+  entry=$(cron_parse_line "@daily yashar /usr/local/bin/cleanup.sh" system)
+  assert_equals "$(printf '@daily\tyashar\t/usr/local/bin/cleanup.sh')" "$entry" \
+    "cron.d @-schedule with user"
+}
+
+test_cron_parse_line_skips() {
+  cron_parse_line "# just a comment" user
+  assert_exit_code 1 $? "comments skipped"
+  cron_parse_line "MAILTO=foo@bar" user
+  assert_exit_code 1 $? "env assignments skipped"
+  cron_parse_line "" user
+  assert_exit_code 1 $? "empty lines skipped"
+}
+
+test_collect_cron() {
+  setup_cron_fixtures
+  crontab() { [[ "${1:-}" == "-l" ]] && cat "$FIXTURES/crontab"; }
+  local out
+  out=$(collect_cron "$FIXTURES/cron.d")
+  assert_equals "5" "$(printf '%s' "$out" | grep -c .)" "3 user + 2 cron.d entries"
+  assert_contains "$out" "$(printf 'user\t0 8 * * *\t%s\t/home/yashar/financial_status/daily_brief.py' "$USER")" \
+    "user daily brief row"
+  assert_contains "$out" "$(printf '%s/custom-job\t5 4 * * *\troot\t/usr/local/bin/backup.sh daily' "$FIXTURES/cron.d")" \
+    "cron.d row labeled with file path"
+  assert_contains "$out" "$(printf 'user\t@reboot\t%s\t/usr/bin/some-daemon --foreground' "$USER")" \
+    "@reboot row"
+  ! printf '%s' "$out" | grep -q MAILTO
+  assert_equals "0" $? "MAILTO env line not present"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -243,6 +310,10 @@ test_collect_timers
 test_docker_state_from_status
 test_collect_docker
 test_collect_docker_missing_binary
+test_cron_parse_line_user
+test_cron_parse_line_system
+test_cron_parse_line_skips
+test_collect_cron
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

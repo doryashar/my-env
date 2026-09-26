@@ -155,6 +155,55 @@ collect_docker() {
   done < <(docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null)
 }
 
+# cron_parse_line LINE user|system -> SCHEDULE<TAB>WHO<TAB>COMMAND (rc 1 = skip)
+cron_parse_line() {
+  local line="$1" src="$2"
+  [[ "$line" =~ ^[[:space:]]*(#|$) ]] && return 1
+  [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]] && return 1
+  local first rest who cmd sched
+  read -r first rest <<<"$line"
+  if [[ "$first" == @* ]]; then
+    sched="$first"
+    if [[ "$src" == "user" ]]; then
+      who="${USER:-$(id -un)}"; cmd="$rest"
+    else
+      read -r who cmd <<<"$rest"
+    fi
+  else
+    local m h dom mon dow
+    read -r m h dom mon dow rest <<<"$line"
+    sched="$m $h $dom $mon $dow"
+    if [[ "$src" == "user" ]]; then
+      who="${USER:-$(id -un)}"; cmd="$rest"
+    else
+      read -r who cmd <<<"$rest"
+    fi
+  fi
+  printf '%s\t%s\t%s\n' "$sched" "$who" "$cmd"
+}
+
+# collect_cron [CRON_D_DIR] -> SOURCE<TAB>SCHEDULE<TAB>WHO<TAB>COMMAND
+# SOURCE is "user" or the /etc/cron.d file path.
+collect_cron() {
+  local cron_d_dir="${1:-${SYSBOARD_CRON_D:-/etc/cron.d}}"
+  local out line entry file
+  if out=$(crontab -l 2>/dev/null); then
+    while IFS= read -r line; do
+      if entry=$(cron_parse_line "$line" user); then
+        printf 'user\t%s\n' "$entry"
+      fi
+    done <<<"$out"
+  fi
+  for file in "$cron_d_dir"/*; do
+    [[ -f "$file" && -r "$file" ]] || continue
+    while IFS= read -r line; do
+      if entry=$(cron_parse_line "$line" system); then
+        printf '%s\t%s\n' "$file" "$entry"
+      fi
+    done <"$file"
+  done
+}
+
 sb_render_report() { echo "(not implemented yet)"; }
 sb_tui() { echo "(not implemented yet)"; }
 

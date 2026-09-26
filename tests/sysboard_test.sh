@@ -430,6 +430,23 @@ test_non_tty_falls_back_to_report() {
   assert_contains "$out" "falling back to report mode" "notices fallback"
 }
 
+# ---- TUI tests ----
+# TUI tests run under `setsid -w` so /dev/tty has no controlling terminal
+# and sb_input falls back to the piped stdin keys (works from any shell).
+
+test_tui_quits_on_q() {
+  local out rc
+  out=$(printf 'q' | SYSBOARD_FORCE_TUI=1 TERM=xterm setsid -w bash "$SYSBOARD" --no-auto 2>&1); rc=$?
+  assert_exit_code 0 $rc "TUI exits 0 on q"
+  assert_contains "$out" "sysboard" "TUI renders header"
+}
+
+test_tui_navigates_and_switches_tabs() {
+  local out rc
+  out=$(printf 'jj2kk4q' | SYSBOARD_FORCE_TUI=1 TERM=xterm setsid -w bash "$SYSBOARD" --no-auto 2>&1); rc=$?
+  assert_exit_code 0 $rc "TUI handles j/k/2/4 then quits"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -452,6 +469,8 @@ test_render_report_contains_all_sections
 test_render_report_section_filter
 test_render_report_empty_section_says_none
 test_non_tty_falls_back_to_report
+test_tui_quits_on_q
+test_tui_navigates_and_switches_tabs
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

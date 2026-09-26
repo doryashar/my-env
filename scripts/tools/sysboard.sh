@@ -21,6 +21,7 @@ START_SECTION=1
 
 SECTIONS=(system user timers docker cron autostart)
 SECTION_LABELS=("System Services" "User Services" Timers Docker Cron Autostart)
+TAB_LABELS=(Sys Usr Timers Dkr Cron Auto)
 
 SB_SECTION=1
 SB_SEL=0
@@ -329,7 +330,182 @@ sb_render_report() {
   done
 }
 
-sb_tui() { echo "(not implemented yet)"; }
+# ---- TUI ----
+
+sb_tty_ok() {
+  # /dev/tty is mode 666 everywhere, so -r is always true; probe by
+  # actually opening it (fails with no controlling terminal, e.g. setsid)
+  { : </dev/tty; } 2>/dev/null
+}
+
+sb_input() {
+  # read one key from /dev/tty when available, else stdin
+  local t=()
+  [[ $AUTO_REFRESH -eq 1 ]] && t=(-t "$REFRESH_INTERVAL")
+  if sb_tty_ok; then
+    IFS= read -rsn1 ${t[@]+"${t[@]}"} "$1" </dev/tty || true
+  else
+    IFS= read -rsn1 ${t[@]+"${t[@]}"} "$1" || true
+  fi
+}
+
+sb_read_key() {
+  SB_KEY=""
+  sb_input SB_KEY
+  if [[ "$SB_KEY" == $'\e' ]]; then
+    local seq=""
+    if sb_tty_ok; then
+      IFS= read -rsn2 -t 0.1 seq </dev/tty || true
+    else
+      IFS= read -rsn2 -t 0.1 seq || true
+    fi
+    case "$seq" in
+      '[A') SB_KEY='k' ;;
+      '[B') SB_KEY='j' ;;
+      *)    SB_KEY='' ;;
+    esac
+  fi
+}
+
+sb_refresh_counts() {
+  local section rows n
+  for section in "${SECTIONS[@]}"; do
+    rows=$(sb_collect_one "$section")
+    n=$(printf '%s' "$rows" | grep -c . || true)
+    if [[ "$section" == "docker" ]]; then
+      local running
+      running=$(printf '%s' "$rows" | grep -c '^running' || true)
+      SB_COUNTS[docker]="$running/$n"
+    else
+      SB_COUNTS[$section]="$n"
+    fi
+  done
+}
+
+sb_load_section() {
+  SB_ROWS=()
+  local rows
+  rows=$(sb_collect_one "${SECTIONS[$((SB_SECTION - 1))]}")
+  if [[ -n "${rows//$'\n'/}" ]]; then
+    mapfile -t SB_ROWS <<<"$rows"
+    local filtered=() r
+    for r in "${SB_ROWS[@]}"; do
+      [[ -n "$r" ]] && filtered+=("$r")
+    done
+    SB_ROWS=("${filtered[@]+"${filtered[@]}"}")
+  fi
+  (( SB_SEL >= ${#SB_ROWS[@]} )) && SB_SEL=$(( ${#SB_ROWS[@]} - 1 ))
+  (( SB_SEL < 0 )) && SB_SEL=0
+}
+
+sb_summary_line() {
+  printf '%bSYS%b %s ▪ USR %s ▪ TIMER %s ▪ DKR %s ▪ CRON %s ▪ AUTO %s%b' \
+    "$BOLD" "$NC" "${SB_COUNTS[system]:-?}" "${SB_COUNTS[user]:-?}" \
+    "${SB_COUNTS[timers]:-?}" "${SB_COUNTS[docker]:-?}" \
+    "${SB_COUNTS[cron]:-?}" "${SB_COUNTS[autostart]:-?}" "$NC"
+}
+
+sb_draw() {
+  local cols lines
+  cols=$(tput cols 2>/dev/null || echo 80)
+  lines=$(tput lines 2>/dev/null || echo 24)
+  printf '\033[H\033[2J'
+  printf '%b sysboard %b' "$BOLD" "$NC"
+  local n=1 tabstr=""
+  for n in "${!SECTION_LABELS[@]}"; do
+    if [[ $((n + 1)) -eq $SB_SECTION ]]; then
+      tabstr+="\033[7m[$((n + 1)):${TAB_LABELS[n]}]\033[0m "
+    else
+      tabstr+="[$((n + 1)):${TAB_LABELS[n]}] "
+    fi
+  done
+  printf '%b\n' "$tabstr"
+  printf '%b\n' "$(sb_summary_line)"
+  printf '%*s\n' "$cols" '' | tr ' ' '-'
+  local height=$((lines - 6))
+  local first=0
+  if [[ $SB_SEL -ge $height ]]; then first=$((SB_SEL - height + 1)); fi
+  local section="${SECTIONS[$((SB_SECTION - 1))]}"
+  local i idx color line
+  for ((i = 0; i < height; i++)); do
+    idx=$((first + i))
+    if [[ $idx -ge ${#SB_ROWS[@]} ]]; then
+      printf '\n'
+      continue
+    fi
+    line=$(sb_format_row "$section" "${SB_ROWS[$idx]}")
+    if [[ $idx -eq $SB_SEL ]]; then
+      printf '\033[7m %s\033[0m\n' "$(sb_truncate "$line" $((cols - 2)))"
+    else
+      color=$(sb_row_color "$section" "${SB_ROWS[$idx]}")
+      [[ -n "$color" ]] && printf '%b' "$color"
+      printf ' %s' "$(sb_truncate "$line" $((cols - 2)))"
+      printf '%b\n' "$NC"
+    fi
+  done
+  printf '%*s\n' "$cols" '' | tr ' ' '-'
+  printf '%bj/k move · 1-6/tab section · s/t/r start/stop/restart · e enable%s\n' "$GRAY" "$NC"
+  printf '%bl logs · R refresh · ? help · q quit%b\n' "$GRAY" "$NC"
+  [[ -n "$SB_MSG" ]] && printf '%b%s%b\n' "$YELLOW" "$(sb_truncate "$SB_MSG" $((cols - 2)))" "$NC"
+}
+
+sb_confirm() {
+  SB_MSG="$1 [y/N]"
+  sb_draw
+  local key=""
+  sb_input key
+  [[ "$key" == "y" || "$key" == "Y" ]]
+}
+
+sb_handle_action() { SB_MSG="no actions in this section"; }
+sb_help_overlay() {
+  SB_MSG="help overlay: implemented in next task"
+}
+
+sb_tui() {
+  tput smcup 2>/dev/null || true
+  tput civis 2>/dev/null || true
+  trap 'tput cnorm 2>/dev/null; tput rmcup 2>/dev/null; exit 0' INT TERM
+  SB_SECTION=$START_SECTION
+  SB_SEL=0
+  sb_refresh_counts
+  sb_load_section
+  while true; do
+    sb_draw
+    sb_read_key
+    if [[ -z "$SB_KEY" ]]; then
+      sb_refresh_counts
+      sb_load_section
+      continue
+    fi
+    case "$SB_KEY" in
+      q) break ;;
+      j) (( SB_SEL < ${#SB_ROWS[@]} - 1 )) && SB_SEL=$((SB_SEL + 1)) ;;
+      k) (( SB_SEL > 0 )) && SB_SEL=$((SB_SEL - 1)) ;;
+      g) SB_SEL=0 ;;
+      G) SB_SEL=$(( ${#SB_ROWS[@]} - 1 )) ;;
+      [1-6])
+        SB_SECTION="$SB_KEY"
+        SB_SEL=0
+        sb_load_section
+        ;;
+      $'\t')
+        SB_SECTION=$(( SB_SECTION % ${#SECTIONS[@]} + 1 ))
+        SB_SEL=0
+        sb_load_section
+        ;;
+      R)
+        sb_refresh_counts
+        sb_load_section
+        SB_MSG="refreshed $(date +%H:%M:%S)"
+        ;;
+      s|t|r|e|l) sb_handle_action "$SB_KEY" ;;
+      '?') sb_help_overlay ;;
+    esac
+  done
+  tput cnorm 2>/dev/null || true
+  tput rmcup 2>/dev/null || true
+}
 
 sb_main() {
   sb_parse_args "$@" || { sb_usage >&2; return 1; }

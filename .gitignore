@@ -130,3 +130,5 @@ pip-delete-this-directory.txt
 # *.tar.gz
 # *.rar
 # *.7z
+# Worktrees
+.worktrees/

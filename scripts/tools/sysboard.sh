@@ -98,6 +98,24 @@ sb_parse_args() {
   done
 }
 
+# ---- collectors: emit TSV rows, one entry per line ----
+
+# collect_systemd [user] -> ACTIVE<TAB>SUB<TAB>UNIT<TAB>ENABLED
+collect_systemd() {
+  local scope=()
+  [[ "${1:-}" == "user" ]] && scope=(--user)
+  local unit state
+  declare -A enabled_map=()
+  while read -r unit state; do
+    [[ -n "$unit" ]] && enabled_map["$unit"]="$state"
+  done < <(systemctl "${scope[@]}" list-unit-files --type=service --no-legend 2>/dev/null | awk 'NF{print $1, $2}')
+  systemctl "${scope[@]}" list-units --type=service --all --no-legend 2>/dev/null \
+    | awk 'NF{print $3 "\t" $4 "\t" $1}' \
+    | while IFS=$'\t' read -r active sub unit; do
+        printf '%s\t%s\t%s\t%s\n' "$active" "$sub" "$unit" "${enabled_map[$unit]:-static}"
+      done
+}
+
 sb_render_report() { echo "(not implemented yet)"; }
 sb_tui() { echo "(not implemented yet)"; }
 

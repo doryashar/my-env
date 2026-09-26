@@ -116,6 +116,22 @@ collect_systemd() {
       done
 }
 
+# collect_timers [user] -> NEXT<TAB>LAST<TAB>UNIT
+# Per-unit `systemctl show` instead of parsing list-timers columns
+# (column widths vary; "n/a" breaks positional parsing).
+collect_timers() {
+  local scope=()
+  [[ "${1:-}" == "user" ]] && scope=(--user)
+  systemctl "${scope[@]}" list-units --type=timer --all --no-legend 2>/dev/null \
+    | awk 'NF{print $1}' \
+    | while read -r unit; do
+        local next last
+        next=$(systemctl "${scope[@]}" show "$unit" --property=NextElapseUSecRealtime --value 2>/dev/null)
+        last=$(systemctl "${scope[@]}" show "$unit" --property=LastTriggerUSec --value 2>/dev/null)
+        printf '%s\t%s\t%s\n' "${next:-n/a}" "${last:-n/a}" "$unit"
+      done
+}
+
 sb_render_report() { echo "(not implemented yet)"; }
 sb_tui() { echo "(not implemented yet)"; }
 

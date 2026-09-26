@@ -127,6 +127,57 @@ test_collect_systemd_missing_unit_file_entry() {
     "unit missing from list-unit-files defaults to static"
 }
 
+# ---- collect_timers tests ----
+
+mock_systemctl_timers() {
+  systemctl() {
+    local scope=0
+    [[ "${1:-}" == "--user" ]] && { scope=1; shift; }
+    case "$1" in
+      list-units)
+        if [[ $scope -eq 1 ]]; then
+          printf 'photo-scan.timer loaded active waiting\n'
+        else
+          printf 'logrotate.timer loaded active waiting\nman-db.timer loaded inactive dead\n'
+        fi
+        ;;
+      show)
+        # args: show UNIT --property=P --value
+        local unit="$2" prop="$3"
+        prop="${prop#--property=}"
+        if [[ "$prop" == "NextElapseUSecRealtime" ]]; then
+          if [[ "$unit" == "photo-scan.timer" ]]; then
+            printf 'Mon 2026-09-28 08:00:00 IDT'
+          else
+            printf 'Sun 2026-09-27 06:30:00 IDT'
+          fi
+        elif [[ "$prop" == "LastTriggerUSec" ]]; then
+          if [[ "$unit" == "photo-scan.timer" ]]; then
+            printf 'n/a'
+          else
+            printf 'Sat 2026-09-26 06:30:00 IDT'
+          fi
+        fi
+        ;;
+    esac
+  }
+}
+
+test_collect_timers() {
+  mock_systemctl_timers
+  local out
+  out=$(collect_timers)
+  assert_contains "$out" \
+    "$(printf 'Sun 2026-09-27 06:30:00 IDT\tSat 2026-09-26 06:30:00 IDT\tlogrotate.timer')" \
+    "system timer row: next, last, unit"
+  assert_equals "2" "$(collect_timers | wc -l)" "2 system timers mocked"
+
+  out=$(collect_timers user)
+  assert_contains "$out" \
+    "$(printf 'Mon 2026-09-28 08:00:00 IDT\tn/a\tphoto-scan.timer')" \
+    "user timer with n/a last trigger"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -135,6 +186,7 @@ test_parse_args_flags
 test_parse_args_rejects_bad_input
 test_collect_systemd
 test_collect_systemd_missing_unit_file_entry
+test_collect_timers
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

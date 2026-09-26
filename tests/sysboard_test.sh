@@ -143,17 +143,22 @@ mock_systemctl_timers() {
         ;;
       show)
         # args: show UNIT --property=P --value
+        # Unset properties emit NOTHING (real systemctl --value
+        # prints an empty line), so the n/a in output must come
+        # from collect_timers' ${x:-n/a} fallback, not mock data.
         local unit="$2" prop="$3"
         prop="${prop#--property=}"
         if [[ "$prop" == "NextElapseUSecRealtime" ]]; then
           if [[ "$unit" == "photo-scan.timer" ]]; then
             printf 'Mon 2026-09-28 08:00:00 IDT'
+          elif [[ "$unit" == "man-db.timer" ]]; then
+            printf ''
           else
             printf 'Sun 2026-09-27 06:30:00 IDT'
           fi
         elif [[ "$prop" == "LastTriggerUSec" ]]; then
           if [[ "$unit" == "photo-scan.timer" ]]; then
-            printf 'n/a'
+            printf ''
           else
             printf 'Sat 2026-09-26 06:30:00 IDT'
           fi
@@ -170,6 +175,9 @@ test_collect_timers() {
   assert_contains "$out" \
     "$(printf 'Sun 2026-09-27 06:30:00 IDT\tSat 2026-09-26 06:30:00 IDT\tlogrotate.timer')" \
     "system timer row: next, last, unit"
+  assert_contains "$out" \
+    "$(printf 'n/a\tSat 2026-09-26 06:30:00 IDT\tman-db.timer')" \
+    "system timer row: empty next falls back to n/a"
   assert_equals "2" "$(collect_timers | wc -l)" "2 system timers mocked"
 
   out=$(collect_timers user)

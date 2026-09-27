@@ -238,6 +238,24 @@ collect_autostart() {
   done
 }
 
+# collect_ports -> PORT<TAB>PROC<TAB>PID<TAB>ADDRESS (tcp LISTEN only, sorted by port)
+collect_ports() {
+  ss -tulpn 2>/dev/null \
+    | awk '$1 == "tcp" && $2 == "LISTEN"' \
+    | while read -r _netid _state _rq _sq local_addr _peer procfield; do
+        local port addr proc pid
+        port="${local_addr##*:}"
+        addr="${local_addr%:*}"
+        proc=""; pid=""
+        if [[ "$procfield" =~ \"([^\"]+)\",pid=([0-9]+) ]]; then
+          proc="${BASH_REMATCH[1]}"
+          pid="${BASH_REMATCH[2]}"
+        fi
+        printf '%s\t%s\t%s\t%s\n' "$port" "$proc" "$pid" "$addr"
+      done \
+    | sort -n
+}
+
 # ---- formatting / report ----
 
 sb_state_color() {

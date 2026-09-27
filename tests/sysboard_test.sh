@@ -510,6 +510,37 @@ test_sb_msg_color_on_failure() {
   assert_contains "$SB_MSG" "exit 3" "failure message includes exit code"
 }
 
+# ---- collect_ports tests ----
+
+mock_ss() {
+  ss() {
+    printf 'Netid State Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n'
+    printf 'tcp   LISTEN 0      511    0.0.0.0:8000       0.0.0.0:*    users:(("tagger-serve",pid=1234,fd=4))\n'
+    printf 'tcp   LISTEN 0      128    [::]:22            [::]:*       users:(("sshd",pid=900,fd=3))\n'
+    printf 'tcp   LISTEN 0      511    127.0.0.1:5432     0.0.0.0:*\n'
+    printf 'udp   UNCONN 0      0      172.18.0.1:55783   0.0.0.0:*    users:(("stremio",pid=2772,fd=27))\n'
+    printf 'tcp   ESTAB  0      0      1.2.3.4:5555        5.6.7.8:80   users:(("curl",pid=99,fd=5))\n'
+  }
+}
+
+test_collect_ports() {
+  mock_ss
+  local out
+  out=$(collect_ports)
+  assert_equals "3" "$(printf '%s' "$out" | grep -c .)" "only tcp LISTEN rows (udp/estab filtered)"
+  assert_contains "$out" "$(printf '22\tsshd\t900\t[::]')" "v6 listener parsed"
+  assert_contains "$out" "$(printf '5432\t\t\t127.0.0.1')" "no-process row has empty proc/pid"
+  assert_contains "$out" "$(printf '8000\ttagger-serve\t1234\t0.0.0.0')" "v4 listener parsed"
+  assert_equals "22" "$(collect_ports | head -1 | cut -f1)" "rows sorted by port (22 first)"
+}
+
+test_collect_ports_missing_ss() {
+  ss() { return 1; }
+  local out
+  out=$(collect_ports)
+  assert_equals "" "$out" "failed ss yields no rows"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -539,6 +570,8 @@ test_sb_handle_action_readonly_sections
 test_sb_selected_unit
 test_sb_msg_color_on_failure
 test_sb_toggle_enable_direction
+test_collect_ports
+test_collect_ports_missing_ss
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

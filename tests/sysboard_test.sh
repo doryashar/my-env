@@ -541,6 +541,90 @@ test_collect_ports_missing_ss() {
   assert_equals "" "$out" "failed ss yields no rows"
 }
 
+# ---- ports section integration tests ----
+
+test_ports_section_registered() {
+  assert_equals "ports" "${SECTIONS[6]}" "ports is section 7"
+  assert_equals "Listening Ports" "${SECTION_LABELS[6]}" "report label"
+  assert_equals "Ports" "${TAB_LABELS[6]}" "tab label"
+  assert_equals "7" "$(sb_section_index ports)" "--section ports maps to 7"
+}
+
+test_ports_report_render() {
+  mock_ss
+  local out
+  out=$(SYSBOARD_CRON_D=/nonexistent sb_render_report)
+  assert_contains "$out" "Listening Ports" "report has ports header"
+  assert_contains "$out" "tagger-serve" "report lists listener process"
+  assert_contains "$out" "8000" "report lists port"
+}
+
+test_ports_format_row() {
+  local line
+  line=$(sb_format_row ports "$(printf '8000\ttagger-serve\t1234\t0.0.0.0')")
+  assert_contains "$line" "8000" "row shows port"
+  assert_contains "$line" "tagger-serve(1234)" "row shows proc(pid)"
+  assert_contains "$line" "0.0.0.0" "row shows address"
+  line=$(sb_format_row ports "$(printf '5432\t\t\t127.0.0.1')")
+  assert_contains "$line" "-" "empty proc renders as dash"
+}
+
+test_sb_kill_process() {
+  SB_SECTION=7
+  SB_ROWS=("8000"$'\t'"tagger-serve"$'\t'"1234"$'\t'"0.0.0.0")
+  SB_SEL=0
+  sb_confirm() { return 0; }
+  KILL_CALLED=0
+  kill() { KILL_CALLED=1; KILL_PID="$1"; return 0; }
+  sb_refresh_counts() { :; }
+  sb_load_section() { :; }
+  SB_MSG=""; SB_MSG_COLOR=""
+  sb_kill_process
+  assert_equals "1" "$KILL_CALLED" "kill invoked"
+  assert_equals "1234" "$KILL_PID" "kill targets row pid"
+  assert_contains "$SB_MSG" "exit 0" "success message"
+
+  # declined confirm must not kill
+  KILL_CALLED=0
+  sb_confirm() { return 1; }
+  sb_kill_process
+  assert_equals "0" "$KILL_CALLED" "declined confirm skips kill"
+}
+
+test_sb_kill_process_no_pid() {
+  SB_SECTION=7
+  SB_ROWS=("$(printf '5432\t\t\t127.0.0.1')")
+  SB_SEL=0
+  SB_MSG=""
+  sb_kill_process
+  assert_contains "$SB_MSG" "no process visible" "pid-less row rejects kill"
+}
+
+test_sb_kill_process_failure_red() {
+  SB_SECTION=7
+  SB_ROWS=("8000"$'\t'"tagger-serve"$'\t'"1234"$'\t'"0.0.0.0")
+  SB_SEL=0
+  sb_confirm() { return 0; }
+  kill() { return 1; }
+  sb_refresh_counts() { :; }
+  sb_load_section() { :; }
+  SB_MSG=""; SB_MSG_COLOR=""
+  sb_kill_process
+  assert_equals "$RED" "$SB_MSG_COLOR" "failed kill sets red"
+  assert_contains "$SB_MSG" "exit 1" "failure message"
+}
+
+test_ports_other_keys_readonly() {
+  SB_SECTION=7
+  SB_ROWS=("8000"$'\t'"tagger-serve"$'\t'"1234"$'\t'"0.0.0.0")
+  SB_SEL=0
+  SB_MSG=""
+  sb_handle_action s
+  assert_contains "$SB_MSG" "read-only" "stop rejected on ports"
+  sb_handle_action e
+  assert_contains "$SB_MSG" "read-only" "enable rejected on ports"
+}
+
 # --- run tests ---
 test_script_exists_and_sources
 test_usage_help
@@ -572,6 +656,13 @@ test_sb_msg_color_on_failure
 test_sb_toggle_enable_direction
 test_collect_ports
 test_collect_ports_missing_ss
+test_ports_section_registered
+test_ports_report_render
+test_ports_format_row
+test_sb_kill_process
+test_sb_kill_process_no_pid
+test_sb_kill_process_failure_red
+test_ports_other_keys_readonly
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

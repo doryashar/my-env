@@ -2,7 +2,7 @@
 
 Terminal dashboard for everything running or scheduled on the machine:
 systemd services (system + user), timers, docker containers, cron jobs,
-and autostart apps.
+autostart apps, and listening TCP ports.
 
 ## Usage
 
@@ -19,17 +19,19 @@ Falls back to `--report` mode when stdin is not a terminal.
 | Key | Action |
 |---|---|
 | `j`/`k`, arrows | move selection (`g`/`G` top/bottom) |
-| `1`-`6`, `Tab` | switch section |
+| `1`-`7`, `Tab` | switch section |
 | `s` / `t` / `r` | stop / start / restart (systemd, docker) |
 | `e` | toggle enable/disable (systemd) |
 | `l` | view logs (`journalctl` / `docker logs`, via `$PAGER`) |
+| `k` | kill process (ports section, with confirm) |
 | `R` | refresh now |
 | `?` | help overlay |
 | `q` | quit |
 
 System-level systemd actions prompt for sudo (the TUI leaves the alternate
 screen for the password prompt, then redraws). Docker actions assume the
-user is in the `docker` group. Cron and autostart sections are read-only.
+user is in the `docker` group. Cron and autostart sections are read-only;
+ports supports only `k` (kill).
 
 ## Sections
 
@@ -39,6 +41,7 @@ user is in the `docker` group. Cron and autostart sections are read-only.
 4. **Docker** — `docker ps -a` (all states; paused shown as `paused`)
 5. **Cron** — `crontab -l` + `/etc/cron.d/*`
 6. **Autostart** — `~/.config/autostart` + `/etc/xdg/autostart` (system entries dimmed)
+7. **Listening Ports** — `ss -tulpn` TCP LISTEN sockets (port, process, address)
 
 ## Testing
 

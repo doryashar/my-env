@@ -18,9 +18,9 @@ AUTO_REFRESH=1
 REFRESH_INTERVAL=5
 START_SECTION=1
 
-SECTIONS=(system user timers docker cron autostart)
-SECTION_LABELS=("System Services" "User Services" Timers Docker Cron Autostart)
-TAB_LABELS=(Sys Usr Timers Dkr Cron Auto)
+SECTIONS=(system user timers docker cron autostart ports)
+SECTION_LABELS=("System Services" "User Services" Timers Docker Cron Autostart "Listening Ports")
+TAB_LABELS=(Sys Usr Timers Dkr Cron Auto Ports)
 
 SB_SECTION=1
 SB_SEL=0
@@ -39,14 +39,14 @@ Usage: sysboard [options]
 Options:
   --report          print all sections and exit (pretty, colored)
   --section NAME    report mode: show only that section; TUI mode: start on it
-                    (system|user|timers|docker|cron|autostart)
+                    (system|user|timers|docker|cron|autostart|ports)
   --no-auto         disable auto-refresh (TUI)
   --refresh N       auto-refresh interval in seconds (default 5)
   -h, --help        show this help
 
 TUI keys:
-  j/k or arrows  move (g/G top/bottom)   1-6/Tab  switch section   R  refresh
-  s stop  t start  r restart  e enable/disable  l logs  ? help  q quit
+  j/k or arrows  move (g/G top/bottom)   1-7/Tab  switch section   R  refresh
+  s stop  t start  r restart  e enable/disable  k kill  l logs  ? help  q quit
 EOF
 }
 
@@ -307,6 +307,15 @@ sb_format_row() {
     docker)      printf '%-10s %-24s %-24s %s' "$a" "$b" "$c" "$e" ;;
     cron)        printf '%-21s %-15s %-10s %s' "$(basename "$a")" "$b" "$c" "$d" ;;
     autostart)   printf '%-9s %-26s [%s] %s' "$a" "$b" "$d" "$c" ;;
+    ports)
+      # IFS-tab read collapses empty proc/pid fields: a no-process row
+      # arrives as a=port b=addr c=d="" -> render dash for proc.
+      if [[ -z "$c" && -z "$d" ]]; then
+        printf '%-6s %-34s %s' "$a" '-' "$b"
+      else
+        printf '%-6s %-34s %s' "$a" "$b($c)" "$d"
+      fi
+      ;;
   esac
 }
 
@@ -319,6 +328,7 @@ sb_collect_one() {
     docker)    collect_docker ;;
     cron)      collect_cron ;;
     autostart) collect_autostart ;;
+    ports)      collect_ports ;;
   esac
 }
 
@@ -419,10 +429,11 @@ sb_load_section() {
 }
 
 sb_summary_line() {
-  printf '%bSYS%b %s ▪ USR %s ▪ TIMER %s ▪ DKR %s ▪ CRON %s ▪ AUTO %s%b' \
+  printf '%bSYS%b %s ▪ USR %s ▪ TIMER %s ▪ DKR %s ▪ CRON %s ▪ AUTO %s ▪ PORTS %s%b' \
     "$BOLD" "$NC" "${SB_COUNTS[system]:-?}" "${SB_COUNTS[user]:-?}" \
     "${SB_COUNTS[timers]:-?}" "${SB_COUNTS[docker]:-?}" \
-    "${SB_COUNTS[cron]:-?}" "${SB_COUNTS[autostart]:-?}" "$NC"
+    "${SB_COUNTS[cron]:-?}" "${SB_COUNTS[autostart]:-?}" \
+    "${SB_COUNTS[ports]:-?}" "$NC"
 }
 
 sb_draw() {
@@ -464,8 +475,8 @@ sb_draw() {
     fi
   done
   printf '%*s\n' "$cols" '' | tr ' ' '-'
-  printf '%bj/k move · 1-6/tab section · s/t/r start/stop/restart · e enable%b\n' "$GRAY" "$NC"
-  printf '%bl logs · R refresh · ? help · q quit%b\n' "$GRAY" "$NC"
+  printf '%bj/k move · 1-7/tab section · s/t/r start/stop/restart · e enable%b\n' "$GRAY" "$NC"
+  printf '%bl logs · k kill · R refresh · ? help · q quit%b\n' "$GRAY" "$NC"
   [[ -n "$SB_MSG" ]] && printf '%b%s%b\n' "${SB_MSG_COLOR:-$YELLOW}" "$(sb_truncate "$SB_MSG" $((cols - 2)))" "$NC"
 }
 
@@ -556,6 +567,23 @@ sb_docker_action() {
   sb_load_section
 }
 
+sb_kill_process() {
+  local port proc pid addr
+  IFS=$'\t' read -r port proc pid addr <<<"${SB_ROWS[$SB_SEL]:-}"
+  if [[ -z "$pid" ]]; then
+    SB_MSG="no process visible for this socket"
+    SB_MSG_COLOR=""
+    return 1
+  fi
+  sb_confirm "kill $proc (pid $pid)?" || return 1
+  kill "$pid"
+  local rc=$?
+  if [[ $rc -ne 0 ]]; then SB_MSG_COLOR="$RED"; else SB_MSG_COLOR=""; fi
+  SB_MSG="kill $proc (pid $pid) -> exit $rc"
+  sb_refresh_counts
+  sb_load_section
+}
+
 sb_show_logs() {
   local unit section scope=()
   section=$(sb_section_name)
@@ -599,6 +627,12 @@ sb_handle_action() {
         *) SB_MSG="read-only action" ;;
       esac
       ;;
+    ports)
+      case "$1" in
+        k) sb_kill_process ;;
+        *) SB_MSG="read-only action" ;;
+      esac
+      ;;
     *)
       SB_MSG="read-only section"
       ;;
@@ -610,11 +644,12 @@ sb_help_overlay() {
     'sysboard keys'
     ''
     '  j/k or arrows   move selection'
-    '  1-6 or Tab      switch section'
+    '  1-7 or Tab      switch section'
     '  g / G           jump to top / bottom'
     '  s / t / r       stop / start / restart'
     '  e               toggle enable/disable (systemd)'
     '  l               view logs (journalctl / docker logs)'
+    '  k               kill process (ports section)'
     '  R               refresh now'
     '  q               quit'
     ''
@@ -659,13 +694,21 @@ sb_tui() {
     case "$SB_KEY" in
       q) break ;;
       j) (( SB_SEL < ${#SB_ROWS[@]} - 1 )) && SB_SEL=$((SB_SEL + 1)) ;;
-      k) (( SB_SEL > 0 )) && SB_SEL=$((SB_SEL - 1)) ;;
+      k)
+        # k moves up everywhere except ports, where it kills (this
+        # branch shadows the s|t|r|e|l|k) action pattern below).
+        if [[ "$(sb_section_name)" == "ports" ]]; then
+          sb_handle_action k
+        else
+          (( SB_SEL > 0 )) && SB_SEL=$((SB_SEL - 1))
+        fi
+        ;;
       g) SB_SEL=0 ;;
       G)
         SB_SEL=$(( ${#SB_ROWS[@]} - 1 ))
         (( SB_SEL < 0 )) && SB_SEL=0
         ;;
-      [1-6])
+      [1-7])
         SB_SECTION="$SB_KEY"
         SB_SEL=0
         sb_load_section
@@ -680,7 +723,7 @@ sb_tui() {
         sb_load_section
         SB_MSG="refreshed $(date +%H:%M:%S)"
         ;;
-      s|t|r|e|l) sb_handle_action "$SB_KEY" ;;
+      s|t|r|e|l|k) sb_handle_action "$SB_KEY" ;;
       '?') sb_help_overlay ;;
     esac
   done

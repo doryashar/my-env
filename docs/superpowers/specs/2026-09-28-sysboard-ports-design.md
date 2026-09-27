@@ -7,13 +7,13 @@
 
 Add a seventh section to `sysboard`: **Ports** — apps listening on TCP ports,
 with their port, process name/PID, and bind address. Read-only except a
-`k` (kill process) action with confirmation.
+`x` (kill process) action with confirmation.
 
 ## Requirements
 
 - List TCP sockets in LISTEN state (TCP only; UDP excluded).
 - Show port, process name (+PID when visible), bind address.
-- `k` kills the selected listener's process after a y/N confirm (SIGTERM,
+- `x` kills the selected listener's process after a y/N confirm (SIGTERM,
   no sudo — only own processes; failures show in red on the status bar).
 - Rows without a visible PID (other users'/root sockets) ignore actions.
 - Integrates with TUI (tab `7:Ports`), report mode, summary line, keybind
@@ -58,10 +58,13 @@ PORT<TAB>PROC<TAB>PID<TAB>ADDRESS
 
 ## Actions
 
-- `k`: confirm `kill PID (proc)?` → `kill PID` (SIGTERM). Success → status
+- `x`: confirm `kill PID (proc)?` → `kill PID` (SIGTERM). Success → status
   message + refresh; failure (e.g. not owner) → red status message. Rows
   with empty PID report "no process visible for this socket" instead.
-- All other action keys (`s`/`t`/`r`/`e`/`l`) report read-only.
+- All other action keys (`s`/`t`/`r`/`e`/`l`/`k`) report read-only.
+
+> Note: the kill key shipped as `x` instead of the originally drafted `k` —
+> `k` collides with up-arrow navigation (arrows decode to `k`/`j`).
 
 ## Testing
 
@@ -73,4 +76,4 @@ registration, report rendering.
 
 ## Documentation
 
-Update `docs/sysboard.md` (section list, `7`/`k` keys) and the usage text.
+Update `docs/sysboard.md` (section list, `7`/`x` keys) and the usage text.

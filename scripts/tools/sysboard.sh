@@ -46,7 +46,7 @@ Options:
 
 TUI keys:
   j/k or arrows  move (g/G top/bottom)   1-7/Tab  switch section   R  refresh
-  s stop  t start  r restart  e enable/disable  k kill  l logs  ? help  q quit
+   s stop  t start  r restart  e enable/disable  x kill  l logs  ? help  q quit
 EOF
 }
 
@@ -476,7 +476,7 @@ sb_draw() {
   done
   printf '%*s\n' "$cols" '' | tr ' ' '-'
   printf '%bj/k move · 1-7/tab section · s/t/r start/stop/restart · e enable%b\n' "$GRAY" "$NC"
-  printf '%bl logs · k kill · R refresh · ? help · q quit%b\n' "$GRAY" "$NC"
+  printf '%bl logs · x kill · R refresh · ? help · q quit%b\n' "$GRAY" "$NC"
   [[ -n "$SB_MSG" ]] && printf '%b%s%b\n' "${SB_MSG_COLOR:-$YELLOW}" "$(sb_truncate "$SB_MSG" $((cols - 2)))" "$NC"
 }
 
@@ -629,7 +629,7 @@ sb_handle_action() {
       ;;
     ports)
       case "$1" in
-        k) sb_kill_process ;;
+        x) sb_kill_process ;;
         *) SB_MSG="read-only action" ;;
       esac
       ;;
@@ -649,7 +649,7 @@ sb_help_overlay() {
     '  s / t / r       stop / start / restart'
     '  e               toggle enable/disable (systemd)'
     '  l               view logs (journalctl / docker logs)'
-    '  k               kill process (ports section)'
+    '  x               kill process (ports section)'
     '  R               refresh now'
     '  q               quit'
     ''
@@ -694,15 +694,7 @@ sb_tui() {
     case "$SB_KEY" in
       q) break ;;
       j) (( SB_SEL < ${#SB_ROWS[@]} - 1 )) && SB_SEL=$((SB_SEL + 1)) ;;
-      k)
-        # k moves up everywhere except ports, where it kills (this
-        # branch shadows the s|t|r|e|l|k) action pattern below).
-        if [[ "$(sb_section_name)" == "ports" ]]; then
-          sb_handle_action k
-        else
-          (( SB_SEL > 0 )) && SB_SEL=$((SB_SEL - 1))
-        fi
-        ;;
+      k) (( SB_SEL > 0 )) && SB_SEL=$((SB_SEL - 1)) ;;
       g) SB_SEL=0 ;;
       G)
         SB_SEL=$(( ${#SB_ROWS[@]} - 1 ))
@@ -723,7 +715,7 @@ sb_tui() {
         sb_load_section
         SB_MSG="refreshed $(date +%H:%M:%S)"
         ;;
-      s|t|r|e|l|k) sb_handle_action "$SB_KEY" ;;
+      s|t|r|e|l|x) sb_handle_action "$SB_KEY" ;;
       '?') sb_help_overlay ;;
     esac
   done

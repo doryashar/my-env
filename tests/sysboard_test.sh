@@ -623,6 +623,23 @@ test_ports_other_keys_readonly() {
   assert_contains "$SB_MSG" "read-only" "stop rejected on ports"
   sb_handle_action e
   assert_contains "$SB_MSG" "read-only" "enable rejected on ports"
+  SB_MSG=""
+  sb_handle_action k
+  assert_contains "$SB_MSG" "read-only" "k not an action on ports"
+}
+
+test_ports_kill_key_dispatch() {
+  SB_SECTION=7
+  SB_ROWS=("8000"$'\t'"tagger-serve"$'\t'"1234"$'\t'"0.0.0.0")
+  SB_SEL=0
+  sb_confirm() { return 0; }
+  KILL_CALLED=0
+  kill() { KILL_CALLED=1; return 0; }
+  sb_refresh_counts() { :; }
+  sb_load_section() { :; }
+  SB_MSG=""; SB_MSG_COLOR=""
+  sb_handle_action x
+  assert_equals "1" "$KILL_CALLED" "x dispatches kill on ports"
 }
 
 # --- run tests ---
@@ -663,6 +680,7 @@ test_sb_kill_process
 test_sb_kill_process_no_pid
 test_sb_kill_process_failure_red
 test_ports_other_keys_readonly
+test_ports_kill_key_dispatch
 
 print_test_summary
 [[ $TESTS_FAILED -eq 0 ]] || exit 1

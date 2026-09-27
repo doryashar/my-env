@@ -23,7 +23,7 @@ Falls back to `--report` mode when stdin is not a terminal.
 | `s` / `t` / `r` | stop / start / restart (systemd, docker) |
 | `e` | toggle enable/disable (systemd) |
 | `l` | view logs (`journalctl` / `docker logs`, via `$PAGER`) |
-| `k` | kill process (ports section, with confirm) |
+| `x` | kill process (ports section, with confirm) |
 | `R` | refresh now |
 | `?` | help overlay |
 | `q` | quit |
@@ -31,7 +31,7 @@ Falls back to `--report` mode when stdin is not a terminal.
 System-level systemd actions prompt for sudo (the TUI leaves the alternate
 screen for the password prompt, then redraws). Docker actions assume the
 user is in the `docker` group. Cron and autostart sections are read-only;
-ports supports only `k` (kill).
+ports supports only `x` (kill).
 
 ## Sections
 

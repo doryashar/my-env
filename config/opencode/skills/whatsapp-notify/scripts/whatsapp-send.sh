@@ -235,14 +235,20 @@ if [[ "$TYPE" == "text" ]]; then
   response=$(api -X POST "$API_URL/message/sendText/$INSTANCE" -d "$BODY")
 else
   [[ -f "$PAYLOAD" ]] || { echo "ERROR: file not found: $PAYLOAD" >&2; exit 2; }
-  MIME=$(file --brief --mime-type "$PAYLOAD")
-  # Evolution expects PLAIN base64 (no data: URI prefix) or a URL
-  MEDIA="$(base64 -w0 "$PAYLOAD")"
+  # Evolution expects PLAIN base64 (no data: URI prefix) or a URL.
+  # Base64 goes through a temp FILE (jq --rawfile), never argv — large
+  # media as --arg overflows ARG_MAX (verified with a ~120KB PNG).
+  MEDIA_B64="$(mktemp /tmp/wa-media-b64.XXXXXX)"
+  base64 -w0 "$PAYLOAD" > "$MEDIA_B64"
   FILENAME=$(basename "$PAYLOAD")
-  BODY="$(jq -n --arg number "$RECIPIENT" --arg mediatype "$TYPE" --arg media "$MEDIA" \
+  BODY="$(jq -n --arg number "$RECIPIENT" --arg mediatype "$TYPE" --rawfile media "$MEDIA_B64" \
               --arg fileName "$FILENAME" --arg caption "$CAPTION" \
-              '{number: $number, mediatype: $mediatype, media: $media, fileName: $fileName, caption: $caption}')"
-  response=$(api -X POST "$API_URL/message/sendMedia/$INSTANCE" -d "$BODY")
+              '{number: $number, mediatype: $mediatype, media: ($media | gsub("\n";"")), fileName: $fileName, caption: $caption}')"
+  rm -f "$MEDIA_B64"
+  BODY_FILE="$(mktemp /tmp/wa-body.XXXXXX)"
+  printf '%s' "$BODY" > "$BODY_FILE"
+  response=$(api -X POST "$API_URL/message/sendMedia/$INSTANCE" --data @"$BODY_FILE")
+  rm -f "$BODY_FILE"
 fi
 
 if echo "$response" | jq -e '.key.id' >/dev/null 2>&1; then

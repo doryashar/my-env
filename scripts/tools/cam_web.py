@@ -89,6 +89,21 @@ class CamAPIHandler(BaseHTTPRequestHandler):
                     return ("html", f.read(), 200)
             return ("json", {"error": "cam_web.html not found"}, 404)
 
+        # /api/stream-url returns static localhost go2rtc URLs and does NOT
+        # require a camera (ONVIF) connection. Serve it before get_camera(),
+        # which can hang/timeout and would otherwise break video startup.
+        if path == "/api/stream-url":
+            return (
+                "json",
+                {
+                    "hls": GO2RTC_HLS,
+                    "mjpeg": GO2RTC_MJPEG,
+                    "mse": GO2RTC_MSE,
+                    "webrtc": GO2RTC_WEBRTC,
+                },
+                200,
+            )
+
         try:
             cam = cam_ctrl.get_camera()
         except Exception as e:
@@ -107,17 +122,6 @@ class CamAPIHandler(BaseHTTPRequestHandler):
                 return (
                     "json",
                     [{"token": p.token, "name": p.Name} for p in (presets or [])],
-                    200,
-                )
-            elif path == "/api/stream-url":
-                return (
-                    "json",
-                    {
-                        "hls": GO2RTC_HLS,
-                        "mjpeg": GO2RTC_MJPEG,
-                        "mse": GO2RTC_MSE,
-                        "webrtc": GO2RTC_WEBRTC,
-                    },
                     200,
                 )
             elif path == "/api/snapshot":

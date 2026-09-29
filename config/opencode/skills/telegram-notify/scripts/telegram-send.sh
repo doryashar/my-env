@@ -73,7 +73,7 @@ if [[ -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   exit 1
 fi
 
-API="https://api.telegram.org/${TELEGRAM_BOT_TOKEN}"
+API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
 
 # Text message
 if [[ "$TYPE" == "text" ]]; then

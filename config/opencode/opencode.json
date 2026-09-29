@@ -26,15 +26,6 @@
         "baseURL": "http://localhost:8080/v1"
       },
       "models": {
-        "qwen3.6-27b": {
-          "name": "Qwen 3.6 27B (llama.cpp)",
-          "tool_call": true,
-          "reasoning": true,
-          "limit": {
-            "context": 131072,
-            "output": 64000
-          }
-        },
         "qwen3.6-35b-a3b": {
           "name": "Qwen 3.6 35B-A3B (llama.cpp)",
           "tool_call": true,
@@ -54,11 +45,96 @@
           }
         }
       }
+    },
+    "llamacpp-qwen38": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llama.cpp Qwen 3.8 27B (local)",
+      "options": {
+        "baseURL": "http://localhost:8085/v1"
+      },
+      "models": {
+        "qwen3.8-27b": {
+          "name": "Qwen 3.8 27B (llama.cpp, UD-Q5_K_XL + mmproj + MTP)",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 245760,
+            "output": 64000
+          }
+        }
+      }
+    },
+    "ninfer": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "NInfer-custom Qwen 3.8 27B (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8901/v1"
+      },
+      "models": {
+        "qwen38-ninfer-custom-nvfp4": {
+          "name": "Qwen 3.8 27B (NInfer-custom, NVFP4 + DFlash2 + vision, systemd :8901)",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 262144,
+            "output": 32768
+          }
+        }
+      }
+    },
+    "llamacpp-qwen38-flash": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llama.cpp Qwen 3.8 Flash-Next (local)",
+      "options": {
+        "baseURL": "http://localhost:8086/v1"
+      },
+      "models": {
+        "qwen3.8-flash-next": {
+          "name": "Qwen 3.8 Flash-Next 125B-A6B (llama.cpp, UD-IQ3_XXS + mmproj, 512k YaRN)",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 524288,
+            "output": 64000
+          }
+        },
+        "qwen3.8-flash-next-256k": {
+          "name": "Qwen 3.8 Flash-Next 125B-A6B (llama.cpp, UD-IQ3_XXS + mmproj, native 256K)",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 262144,
+            "output": 64000
+          }
+        }
+      }
     }
   },
-  "model": "llamacpp/qwen3.6-27b",
+  "model": "ninfer/qwen38-ninfer-custom-nvfp4",
+  "permission": "allow",
   "plugin": [
     "superpowers@git+https://github.com/obra/superpowers.git",
-    "@warp-dot-dev/opencode-warp"
+    "@warp-dot-dev/opencode-warp",
+    "@frankhommers/opencode-yolo"
   ]
 }

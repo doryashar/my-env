@@ -353,8 +353,11 @@ async function playWebRTC(url) {
 
   pc.addEventListener('connectionstatechange', () => {
     const s = pc.connectionState;
-    if (s === 'failed' || s === 'disconnected') {
-      statusText.textContent = 'WebRTC lost, reconnecting...';
+    console.log('[webrtc] connectionState =', s);
+    // 'disconnected' is usually transient (a missed ICE consent check); ICE
+    // recovers on its own. Only tear down + reconnect on terminal 'failed'.
+    if (s === 'failed') {
+      statusText.textContent = 'WebRTC failed, reconnecting...';
       setTimeout(() => { pc.close(); pc = null; initVideo(); }, 2000);
     }
   });
@@ -362,12 +365,21 @@ async function playWebRTC(url) {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
+  // Bound ICE gathering: host candidates (enough for localhost/LAN) arrive
+  // almost instantly, but srflx via STUN can stall on multi-interface hosts
+  // and never reach "complete". Proceed after a short window instead of
+  // hanging on "Connecting" forever.
   await new Promise((resolve) => {
     if (pc.iceGatheringState === 'complete') return resolve();
-    pc.addEventListener('icegatheringstatechange', () => {
-      if (pc.iceGatheringState === 'complete') resolve();
-    });
+    const finish = () => {
+      pc.removeEventListener('icegatheringstatechange', check);
+      resolve();
+    };
+    const check = () => { if (pc.iceGatheringState === 'complete') finish(); };
+    pc.addEventListener('icegatheringstatechange', check);
+    setTimeout(finish, 2000);
   });
+  console.log('[webrtc] sending offer; iceGatheringState =', pc.iceGatheringState);
 
   const resp = await fetch(url, {
     method: 'POST',

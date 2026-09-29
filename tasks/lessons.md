@@ -194,3 +194,25 @@ resolution, which the kernel still exposes even without EDID).
 **Rule:** Identify monitors by data that survives a cable swap. EDID vendor is
 fragile (DDC can fail while TMDS video succeeds); the preferred-mode resolution
 is more robust. When EDID vendor is `unknown`, fall back to resolution matching.
+
+## 2026-09-26: "terminal stuck" was not a shell config problem
+
+- D-state (uninterruptible sleep) processes are killed by nothing —
+  `timeout`/`kill -9` fail. When diagnosing frozen shells, ALWAYS check
+  `ps` state column and `/proc/<pid>/stack` FIRST, before touching rc files.
+- Never probe a suspect FUSE/network mount from the foreground shell;
+  background the `ls` and check on it, or you freeze your own session.
+- Dead rclone FUSE mounts under ~/mnt/* are this machine's recurring
+  freeze pattern — see docs/troubleshooting-stuck-zsh-fuse.md runbook.
+
+## 2026-09-26 (later): infrastructure recreation + async probe races
+
+- Before deleting/recreating a container, dump its FULL spec
+  (docker inspect: Devices, CapAdd, SecurityOpt, User) — I lost the
+  originals and had to rediscover --device /dev/fuse, SYS_ADMIN,
+  apparmor=unconfined and --user by trial.
+- mktemp CREATES the file. Using file-existence as a "job done" signal
+  races and always passes instantly — put markers inside a mktemp -d
+  directory instead.
+- Changing a container from root to --user 1000 requires chown of any
+  shared state (vfs cache dirs) or it silently degrades.

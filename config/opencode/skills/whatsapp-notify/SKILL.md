@@ -34,9 +34,13 @@ description: Use when the user asks to be contacted, notified, pinged, or messag
 | Send later (delayed) | `nohup bash -c 'sleep N; whatsapp-send.sh "msg"' >/dev/null 2>&1 & disown` (save `$!` to `~/.cache/whatsapp-notify/scheduled.pid` for cancellation; lost on reboot) |
 | Find current session id | python sqlite3 RO on `~/.local/share/opencode/opencode.db`: `select id from session where directory='<cwd>' order by time_updated desc limit 1` |
 
+## On-demand, NOT always-on (read first)
+
+**The `--listen` listener and the `whatsapp-watch.sh` daemon are OPT-IN.** Do not start them to "keep things healthy" and do NOT run a health cron against them. Standing user decision (2026-09-06): if the agent needs to receive WhatsApp messages, it starts listening *for the task at hand* and stops when done. There is no persistent chain to babysit. Start them only when the user asks to be reachable / wants hands-free replies, or a specific task must wait on a phone reply. When finished, stop both (kill by pidfile) so nothing lingers across reboots.
+
 ## Wake-on-WhatsApp (whatsapp-watch.sh) — the autonomous reply daemon
 
-**The full stack, when armed:** `--listen` (captures to `/tmp/opencode/wa-listen.log`) → `whatsapp-watch.sh` daemon (blocks on `--follow`) → `opencode run --session <id> "[whatsapp-notify] ... <the [wa] line>"` → the message arrives as a **user turn in the live session** and the agent replies via `whatsapp-send.sh` without anyone touching the CLI.
+**The full stack, when armed (start deliberately, stop when done):** `--listen` (captures to `/tmp/opencode/wa-listen.log`) → `whatsapp-watch.sh` daemon (blocks on `--follow`) → `opencode run --session <id> "[whatsapp-notify] ... <the [wa] line>"` → the message arrives as a **user turn in the live session** and the agent replies via `whatsapp-send.sh` without anyone touching the CLI.
 
 - Start: `nohup ~/.config/opencode/skills/whatsapp-notify/scripts/whatsapp-watch.sh >> /tmp/opencode/wa-watch-daemon.log 2>&1 &`
 - Stop: `kill $(cat ~/.cache/whatsapp-notify/watch.pid)` (listener separately: `listen.pid`)
@@ -69,7 +73,7 @@ Default recipient: the user's phone (in `whatsapp.env`). Sends **from** instance
 - S3 watch daemon + its `--follow` child — catches "alive but can't wake"
 - S4 inbound freshness (age of newest non-fromMe message in store) — catches the **silent linked-device desync** (instance says `open` but nothing arrives; fix: `POST /instance/restart/{name}` — NEVER `/instance/logout` — then have the user send a test message)
 - `--probe` = full local chain self-test: appends a `[healthprobe]` line, expects the daemon to inject it within 8s (arrives as an ignorable session turn)
-- `--alert` = on failure: WhatsApp message + Telegram fallback (independent stack), deduped hourly, auto-resolves. Installed: cron `*/10 * * * * ... whatsapp-health.sh --alert >> /tmp/opencode/wa-health-cron.log`
+- `--alert` = on failure: WhatsApp message + Telegram fallback (independent stack), deduped hourly, auto-resolves. **No longer installed as a cron** (removed 2026-09-06 — chain is on-demand now). Run it manually if you ever arm the stack and want monitoring; do NOT re-install the `*/10` health cron.
 
 Full validation = health green + `--probe` green + **a real message from the user's phone** end-to-end. Anything less has already been proven to lie (the 01:07 "Test" worked, the next one didn't).
 

@@ -280,6 +280,50 @@ Regression suite: `tests/p2_followups_test.sh` (wired as `p2_followups`).
 - `functions/common_funcs:200` destructive `~/.ssh` side effect
 - Test orphan suites not wired into runner (7 files)
 
+---
+
+# 2026-09-26: Stuck zsh terminals (dead rclone FUSE mount)
+
+## Status: FIXED ✅
+
+- [x] Diagnose: shells in D-state (`request_wait_answer` on FUSE conn 134/132)
+- [x] Prove rc files innocent: `zsh --no_rcs` also stuck; full z4h startup does 0 I/O on mounts
+- [x] Abort stuck FUSE connections (woke all frozen shells)
+- [x] Lazy-unmount dead mountpoints, restart rclone containers
+- [x] Verify mounts serve data (both respond, rc=0)
+- [x] Restore dotfiles/.zshenv from git (keep .zshrc fnm addition)
+- [x] Verify full z4h zsh startup works (`zsh -lic` clean, rc=0)
+- [x] Add tests/storagebox_mount_health_test.sh (5/5 pass) + wire into run_all_tests.sh
+- [x] Write docs/troubleshooting-stuck-zsh-fuse.md
+
+## Review
+
+Root cause: rclone mount containers (up 10 days) had wedged backends.
+Any `stat()` under ~/mnt/hetzner-storagebox__* blocked forever in
+uninterruptible sleep. Fix: abort FUSE connections -> umount -l ->
+docker start. Left alone: storagebox-bisync.service (failed during
+outage; timer will retry on schedule).
+
+## 2026-09-26 (later): Prevention layers for StorageBox mount freezes
+
+## Status: DONE ✅
+
+- [x] Recreate both containers with HEALTHCHECK (backend probe), fail-fast
+      rclone timeouts, --user 1000:1000, /dev/fuse + SYS_ADMIN + apparmor=unconfined
+- [x] Fix vfs cache ownership (root -> 1000) after switching to --user
+- [x] scripts/tools/storagebox_mount_monitor.sh: probe + telegram alert + self-heal
+- [x] config/systemd-user/storagebox-mount-monitor.{service,timer} + timer enabled (5 min)
+- [x] Fix probe race (mktemp pre-creates file -> existence check always true)
+- [x] Recovery order fixed: detach corpse mounts BEFORE docker restart
+- [x] Tests extended to 10 assertions (all pass) + docs updated
+
+## Review
+
+Debugging the recreate flow surfaced 3 infra gotchas (fuse device/apparmor,
+cache ownership, corpse-mount blocking docker start). All documented in
+docs/troubleshooting-stuck-zsh-fuse.md so the next recovery is one command:
+scripts/tools/storagebox_mount_recreate.sh
+
 ## sysboard (2026-09-26)
 
 - [x] Task 1: script skeleton + CLI flag parsing

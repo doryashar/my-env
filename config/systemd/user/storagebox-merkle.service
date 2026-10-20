@@ -1,0 +1,8 @@
+[Unit]
+Description=Nightly Merkle picture of Backups HDD (corruption/deletion tripwire)
+
+[Service]
+Type=oneshot
+ExecStart=/home/yashar/storagebox-sync/merkle-snap.sh
+Nice=10
+IOSchedulingClass=idle

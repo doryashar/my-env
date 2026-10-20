@@ -1,0 +1,12 @@
+[Unit]
+Description=StorageBox bisync resync loop (runs until init succeeds, then self-disables)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/home/yashar/storagebox-sync/resync-until-done.sh
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=default.target

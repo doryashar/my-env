@@ -1,0 +1,13 @@
+[Unit]
+Description=StorageBox change watcher (triggers bisync on local changes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/home/yashar/storagebox-sync/watcher.sh
+Restart=always
+RestartSec=30
+Nice=5
+
+[Install]
+WantedBy=default.target

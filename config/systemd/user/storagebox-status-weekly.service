@@ -1,0 +1,6 @@
+[Unit]
+Description=StorageBox sync weekly status
+
+[Service]
+Type=oneshot
+ExecStart=/home/yashar/storagebox-sync/status-update.sh weekly

@@ -1,0 +1,6 @@
+[Unit]
+Description=StorageBox sync health check (silent when healthy, alerts when errors)
+
+[Service]
+Type=oneshot
+ExecStart=/home/yashar/storagebox-sync/status-update.sh auto2h

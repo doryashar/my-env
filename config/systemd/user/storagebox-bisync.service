@@ -1,0 +1,10 @@
+[Unit]
+Description=StorageBox bisync one-shot (two-way sync local HDD <-> Hetzner Storage Box)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/yashar/storagebox-sync/bisync-run.sh
+Nice=10
+IOSchedulingClass=idle

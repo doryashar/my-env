@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic StorageBox bisync (catches remote-side changes)
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=8h
+AccuracySec=5min
+Unit=storagebox-bisync.service
+
+[Install]
+WantedBy=timers.target

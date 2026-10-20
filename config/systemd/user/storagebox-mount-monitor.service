@@ -1,0 +1,8 @@
+[Unit]
+Description=StorageBox mount health monitor (probe + alert + self-heal)
+Documentation=file://%h/env/docs/troubleshooting-stuck-zsh-fuse.md
+
+[Service]
+Type=oneshot
+ExecStart=%h/env/scripts/tools/storagebox_mount_monitor.sh
+# Alert-only mode would be: Environment=RECOVER=0

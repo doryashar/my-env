@@ -73,6 +73,8 @@ if [[ -z "${TELEGRAM_CHAT_ID:-}" ]]; then
   exit 1
 fi
 
+# Normalize token: tolerate values stored with or without the "bot" prefix
+TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN#bot}"
 API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
 
 # Text message

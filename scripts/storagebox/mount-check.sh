@@ -3,7 +3,7 @@
 # Match by filesystem UUID: kernel device names (sda/sdb/...) swap on replug order.
 set -u
 PATH_CHECK="${1:-/media/yashar/Backups}"
-EXPECTED_UUID="${2:-428E297D01064BA5}"
+EXPECTED_UUID="${2:-7E8CA9FF6BC18252}"
 LOG=/home/yashar/logs/mount-check.log
 
 fail() {

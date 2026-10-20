@@ -136,3 +136,14 @@ init, regular runs create/keep the `.lst` listings and exit 0.
 - Completion ping watcher: was `/tmp/opencode/resync-watch.sh` (session-scoped)
   — **superseded** by `storagebox-resync.service` above.
 
+
+## 2026-10-20: definitive HDD rebuild (GPT)
+
+- QEMU+Win11 attempts hit a hard wall: Windows cannot see **partitionless**
+  NTFS (no volume object → no chkdsk), MBR caps at 2.2TB, and GPT structures
+  would overwrite the MFT (cluster 4 = LBA 16). Approved path: full rebuild.
+- `storagebox-sync/recover-hdd-rebuild.sh` (root, supervised unit
+  `storagebox-rebuild`): GPT + sda1 + fresh NTFS, fstab/mount-check/test
+  UUID auto-update, full restore from Box, fresh bisync --resync init,
+  merkle baseline, timers resume. Old chkdsk plan obsolete (fresh NTFS).
+- USB device-name churn (sda/sdb/sdc) is chronic — always match by UUID.

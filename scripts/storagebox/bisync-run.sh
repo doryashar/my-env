@@ -13,7 +13,7 @@ if ! flock -n 9; then
 fi
 /home/yashar/storagebox-sync/mount-check.sh || exit 7
 echo "$(date -Is) bisync start" >> "$LOG"
-"$RCLONE" bisync "$L1" "$L2" \
+"$RCLONE" bisync "$L1" "$L2" --config /home/yashar/.config/rclone/rclone.conf \
     --conflict-resolve newer --conflict-loser num \
     --max-delete 25 --max-delete-size 10G \
     --max-transfer 200G \
@@ -21,6 +21,7 @@ echo "$(date -Is) bisync start" >> "$LOG"
     --recover --resilient \
     --transfers 8 --checkers 8 --multi-thread-streams 1 \
     --retries 5 --low-level-retries 20 \
+    --exclude "*.partial" --exclude "*.partial-*" \
     --log-file "$LOG" --log-level INFO "$@"
 rc=$?
 echo "$(date -Is) bisync exit=$rc" >> "$LOG"

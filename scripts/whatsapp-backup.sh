@@ -18,7 +18,12 @@ for PHONE in old new; do
   [ -d "$SRC" ] || { echo "[$PHONE] SKIP: $SRC missing"; continue; }
 
   # --- 1. media: full mirror (no rotation — irreplaceable content) ---
-  if [ -d "$SRC/media" ] && [ -n "$(find "$SRC/media" -type f -print -quit)" ]; then
+  # [new] media is excepted: its syncthing folder writes DIRECTLY into the
+  # StorageBox mount (/mnt/storagebox) — mirroring an empty local dir would
+  # DELETE the box copies. [old] media still lives locally.
+  if [ "$PHONE" = "new" ]; then
+    echo "[$PHONE] media: skipped (synced directly to StorageBox via mount)"
+  elif [ -d "$SRC/media" ] && [ -n "$(find "$SRC/media" -type f -print -quit)" ]; then
     if ! rclone sync "$SRC/media" "$RBASE/$PHONE/media" --transfers 4 --checkers 8 \
          --stats-one-line --log-level WARNING 2>&1; then
       FAIL="${FAIL:+$FAIL; }[$PHONE] media sync failed"

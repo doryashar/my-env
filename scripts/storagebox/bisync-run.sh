@@ -29,6 +29,12 @@ pair() {  # pair <subdir-or-'.'> [extra flags...]
     else
         p1="$L1/$sub" p2="hetzner-sftp:/$sub"
     fi
+    # backup pair: server-managed whatsapp pipeline writes live here (syncthing
+    # + nightly backup cron). 86K+ files of churn/.tmp renames abort bisync
+    # (--max-delete) and it must NOT mirror 100GB of phone media to the HDD.
+    if [ "$sub" = "backup" ]; then
+        set -- --filter "- /whatsapp/**" "$@"
+    fi
     esc1=$(printf %s "$p1" | md5sum | cut -c1-8)
     esc2=$(printf %s "$p2" | md5sum | cut -c1-8)
     if ! ls "$B"/*"${esc1}..${esc2}".path1.lst >/dev/null 2>&1; then

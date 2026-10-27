@@ -5,7 +5,7 @@
 # weekly (Mon 09:00): always sends the weekly summary.
 set -u
 MODE="${1:-auto2h}"
-LST="${STATUS_LST:-$HOME/.cache/rclone/bisync/media_yashar_Backups..hetzner-sftp_.path1.lst}"
+LSTS=$(ls "$HOME"/.cache/rclone/bisync/*.path1.lst 2>/dev/null | grep -vc test)
 LOG="${STATUS_LOG:-/home/yashar/logs/storagebox-bisync.log}"
 UNHEALTHY_MARKER=/home/yashar/logs/.sync-unhealthy
 
@@ -13,17 +13,19 @@ set -a; source /home/yashar/.config/ailaw-pr-review/env; set +a
 SEND=/home/yashar/.config/opencode/skills/telegram-notify/scripts/telegram-send.sh
 
 healthy() {
-    [ -f "$LST" ] || return 1
     local errs
     errs=$(grep -c ERROR <(tail -200 "$LOG") 2>/dev/null); errs=${errs:-0}
     [ "$errs" -le 20 ] || return 1
-    local last_exit
-    last_exit=$(grep -oE 'bisync exit=[0-9]+' "$LOG" | tail -1 | grep -oE '[0-9]+$')
-    [ "$last_exit" = "0" ] && return 0
-    # stale non-zero exit is fine while a pass is live and the log is fresh
+    # a live, actively-logging pass is healthy even mid-resync (listings pending)
     local age
     age=$(( $(date +%s) - $(stat -c %Y "$LOG") ))
-    pgrep -f 'rclone bisync' >/dev/null 2>&1 && [ "$age" -lt 1800 ]
+    if pgrep -f 'rclone bisync' >/dev/null 2>&1 && [ "$age" -lt 1800 ]; then
+        return 0
+    fi
+    [ "${LSTS:-0}" -ge 1 ] || return 1
+    local last_exit
+    last_exit=$(grep -oE 'bisync exit=[0-9]+' "$LOG" | tail -1 | grep -oE '[0-9]+$')
+    [ "$last_exit" = "0" ]
 }
 
 snap() {
@@ -37,8 +39,8 @@ snap() {
     drive_free=$(df -h /media/yashar/Backups 2>/dev/null | awk 'END{print $4}')
     box_free=$(df -h /mnt/StorageBox 2>/dev/null | awk 'END{print $4}')
     local l1 l2 copied stats walk
-    l1=$(wc -l < "$HOME/.cache/rclone/bisync/media_yashar_Backups..hetzner-sftp_.path1.lst" 2>/dev/null || echo 0)
-    l2=$(wc -l < "$HOME/.cache/rclone/bisync/media_yashar_Backups..hetzner-sftp_.path2.lst" 2>/dev/null || echo 0)
+    l1=$(ls "$HOME"/.cache/rclone/bisync/*.path1.lst 2>/dev/null | grep -vc test)
+    l2=$(ls "$HOME"/.cache/rclone/bisync/*.path2.lst 2>/dev/null | grep -vc test)
     copied=$(awk '/bisync start/{n=0} /Copied/{n++} END{print n+0}' "$LOG" 2>/dev/null)
     stats=$(grep -E '^Transferred:' "$LOG" | tail -1 | sed 's/  */ /g')
     walk=$(grep -E '^Checks:' "$LOG" | tail -1 | sed 's/  */ /g')

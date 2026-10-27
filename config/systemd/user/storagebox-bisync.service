@@ -8,3 +8,4 @@ Type=oneshot
 ExecStart=/home/yashar/storagebox-sync/bisync-run.sh
 Nice=10
 IOSchedulingClass=idle
+MemoryMax=12G

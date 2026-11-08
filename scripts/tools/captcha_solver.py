@@ -15,9 +15,16 @@ Usage:
   captcha_solver.py cmd --template 'my solver {image}' <image>
 
 Config via env or flags (flags win):
-  CAPTCHA_API_BASE   default http://10.147.17.2:5170/v1
+  CAPTCHA_API_BASE   default http://10.147.17.2:5170
   CAPTCHA_MODEL      default qwen38-27b-q4   (vision-capable build needed)
   CAPTCHA_API_KEY    default none
+
+Path modes:
+  upstream (default)  gpu-box llama-swap style: POST
+                      {api_base}/upstream/{model}/v1/chat/completions,
+                      model NOT in body (per box routing, 2026-11)
+  standard            generic OpenAI shape: POST {api_base}/chat/completions
+                      with "model" in body
 
 Output: single JSON line: {"answer": str, "backend": str, "ok": bool,
 "latency_ms": int, "raw": str}  — raw holds backend payload for debugging.
@@ -35,7 +42,7 @@ import urllib.request
 import urllib.error
 
 DEFAULT_BASE = os.environ.get("CAPTCHA_API_BASE",
-                              "http://10.147.17.2:5170/v1")
+                              "http://10.147.17.2:5170")
 DEFAULT_MODEL = os.environ.get("CAPTCHA_MODEL", "qwen38-27b-q4")
 
 DEFAULT_PROMPT = (
@@ -54,10 +61,10 @@ def b64_image(path):
         return base64.b64encode(f.read()).decode("ascii")
 
 
-def solve_openai(image_path, prompt, api_base, model, api_key, timeout=60):
+def solve_openai(image_path, prompt, api_base, model, api_key, timeout=60,
+                 path_mode="upstream"):
     """Send image+prompt to an OpenAI-compatible chat endpoint."""
     payload = {
-        "model": model,
         "max_tokens": 64,
         "temperature": 0,
         "messages": [{
@@ -70,8 +77,16 @@ def solve_openai(image_path, prompt, api_base, model, api_key, timeout=60):
             ],
         }],
     }
+    if path_mode == "upstream":
+        # llama-swap /upstream/{model}/ routing: model in URL path,
+        # not in body
+        url = "%s/upstream/%s/v1/chat/completions" % (
+            api_base.rstrip("/"), model)
+    else:
+        payload["model"] = model
+        url = api_base.rstrip("/") + "/chat/completions"
     req = urllib.request.Request(
-        api_base.rstrip("/") + "/chat/completions",
+        url,
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json",
                  **({"Authorization": "Bearer " + api_key}
@@ -147,6 +162,15 @@ def main():
 
     if a.backend == "solve":
         res = solve_openai(a.image, a.prompt, a.api_base, a.model, a.api_key)
+        if not res.get("answer"):
+            # empty read: retry once with a blunt fallback prompt
+            fb = ("Read the distorted text or arithmetic in this image. "
+                  "Reply with ONLY the answer characters or number.")
+            res2 = solve_openai(a.image, fb, a.api_base, a.model, a.api_key)
+            if res2.get("answer"):
+                res2["retry"] = True
+                res = res2
+        res["image"] = a.image
     elif a.backend == "manual":
         res = solve_manual(a.image, a.prompt)
     else:

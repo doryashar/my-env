@@ -105,3 +105,5 @@ if [ -d "$FNM_PATH" ]; then
 fi
 # opencode
 export PATH="$HOME/.opencode/bin:$PATH"
+
+. "$HOME/.local/bin/env"

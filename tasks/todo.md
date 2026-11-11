@@ -324,6 +324,39 @@ cache ownership, corpse-mount blocking docker start). All documented in
 docs/troubleshooting-stuck-zsh-fuse.md so the next recovery is one command:
 scripts/tools/storagebox_mount_recreate.sh
 
+## Stealth hardening — webgl_spoof.py (2026-11-08)
+
+Brief: `tmp/glm_stealth_task.md`. Deliverable: hardened
+`scripts/tools/webgl_spoof.py` only (route-injection contract unchanged).
+
+- [x] 66. Item 1: Linux-consistent NVIDIA ANGLE/Vulkan vendor+renderer
+- [x] 67. Item 2: enumerateDevices mic+webcam+speaker spoof,
+       gUM NotFound→NotAllowed rewrite, permission-consistent reveal
+- [x] 68. Item 3: per-context seeded LSB-parity canvas noise
+       (toDataURL/toBlob/getImageData/readPixels)
+- [x] 69. Item 5: hook hardening (name/length/toString mask, prototype-
+       level replacement, no globals, fail-open sections)
+- [x] 70. Verify: py_compile, node shim, live localhost run under
+       xvfb+patchright
+
+### Review Notes (2026-11-08)
+
+- Verification (all fresh, exit 0): py_compile; ≤80-col awk check;
+  node --check on built JS; node shim test (TDD red-green — caught a
+  real bug: mask() leaked bare label instead of native toString
+  string); live patchright run against 127.0.0.1 via route injection,
+  24/24 assertions across two contexts (kinds list, blank
+  pre-permission fields, instanceof/toStringTag/toJSON, descriptor
+  shapes, gUM NotAllowedError story, canvas stability+idempotence+
+  cross-session hash difference, renderer consistency).
+- Gotcha: single-threaded http.server wedges on Chromium preconnect
+  sockets during route.fetch() — must use ThreadingHTTPServer for
+  localhost harnesses.
+- Repo suite doesn't cover webgl_spoof (grep-verified); dedicated
+  harness used instead. Battery left as-is per brief default.
+- Residuals documented in module docstring: about:blank/srcdoc/data:
+  iframe realms, CSP-no-inline pages, native WebGL ext lists.
+
 ## sysboard (2026-09-26)
 
 - [x] Task 1: script skeleton + CLI flag parsing

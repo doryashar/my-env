@@ -105,3 +105,7 @@ if [ -d "$FNM_PATH" ]; then
 fi
 # opencode
 export PATH="$HOME/.opencode/bin:$PATH"
+
+# Local bin env hook (created by bun/pip user installs); PATH itself is
+# already covered by the `path` array above.
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"

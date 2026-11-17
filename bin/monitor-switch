@@ -3,7 +3,14 @@
 # Monitor switching script for Wayland/GNOME
 # Toggles between two monitor profiles
 
-PYTHON_HELPER="$HOME/.local/bin/monitor-switch-gnome.py"
+PYTHON_HELPER="${MONITOR_SWITCH_HELPER:-$HOME/.local/bin/monitor-switch-gnome.py}"
+
+# Last-applied profile (profile1|profile2|custom:CONN...), persisted so
+# `restore` can re-assert it after display hotplug events.
+STATE_FILE="${MONITOR_SWITCH_STATE:-$HOME/.local/state/monitor-switch/last-profile}"
+# Seconds to wait for expected monitors to (re)appear before restoring
+# with whatever subset is available. 0 = apply immediately.
+RESTORE_WAIT="${MONITOR_SWITCH_RESTORE_WAIT:-5}"
 
 # Monitor profiles
 # Physical arrangement (left to right): HP, DEL, LEN
@@ -169,6 +176,93 @@ build_position_args() {
     echo "${args[@]}"
 }
 
+# Persist the last applied profile for hotplug restore
+save_state() {
+  mkdir -p "$(dirname "$STATE_FILE")"
+  printf '%s\n' "$1" > "$STATE_FILE"
+}
+
+read_state() {
+  [ -r "$STATE_FILE" ] || return 1
+  cat "$STATE_FILE"
+}
+
+# Wait up to RESTORE_WAIT seconds for all expected connectors to become
+# available. Returns 0 if all appeared, 1 on timeout.
+wait_for_connectors() {
+  local expected=("$@")
+  local deadline=$((SECONDS + RESTORE_WAIT))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    local available=($(get_available_monitors))
+    local all_present=true
+    local conn
+    for conn in "${expected[@]}"; do
+      if [[ " ${available[*]} " != *" $conn "* ]]; then
+        all_present=false
+        break
+      fi
+    done
+    [ "$all_present" = true ] && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
+# Re-apply the last saved profile (invoked on display hotplug).
+# Profiles restore with their available subset; custom sets are
+# all-or-nothing.
+restore_profile() {
+  local state
+  if ! state=$(read_state); then
+    echo "No saved profile to restore"
+    return 0
+  fi
+
+  local expected=()
+  if [ "$state" = "profile1" ] || [ "$state" = "profile2" ]; then
+    local vendors=()
+    if [ "$state" = "profile1" ]; then
+      vendors=("${PROFILE1_VENDORS[@]}")
+    else
+      vendors=("${PROFILE2_VENDORS[@]}")
+    fi
+    local vid conn
+    for vid in "${vendors[@]}"; do
+      conn=$(resolve_connector "$vid")
+      [ -n "$conn" ] && [ "$conn" != "-" ] && expected+=("$conn")
+    done
+  elif [[ "$state" == custom:* ]]; then
+    read -ra expected <<< "${state#custom:}"
+  else
+    echo "Unknown saved state: $state"
+    return 0
+  fi
+
+  wait_for_connectors "${expected[@]}"
+
+  local available=($(get_available_monitors))
+  local candidates=()
+  local conn
+  for conn in "${expected[@]}"; do
+    [[ " ${available[*]} " == *" $conn "* ]] && candidates+=("$conn")
+  done
+  if [ ${#candidates[@]} -eq 0 ]; then
+    echo "Restore: no expected monitors available, nothing to do"
+    return 0
+  fi
+  if [[ "$state" == custom:* ]] && [ ${#candidates[@]} -ne ${#expected[@]} ]; then
+    echo "Restore: not all custom monitors available, nothing to do"
+    return 0
+  fi
+
+  echo "Restoring: $state (${candidates[*]})"
+  if [ "$state" = "profile1" ] || [ "$state" = "profile2" ]; then
+    enable_profile "${state#profile}"
+  else
+    enable_monitors "${expected[@]}"
+  fi
+}
+
 # Toggle between profiles
 toggle_profiles() {
     local current_profile=$(get_current_profile)
@@ -185,7 +279,9 @@ toggle_profiles() {
         local pos_args=($(build_position_args "${monitors[@]}"))
         echo "Switching to Profile 2: $PROFILE2_NAME (primary: $primary)"
         echo "Available monitors: ${monitors[*]}"
-        "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"
+        if "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"; then
+            save_state "profile2"
+        fi
     else
         local primary=$(resolve_connector "${PROFILE1_VENDORS[0]}")
         local monitors=($(get_available_from_profile "${PROFILE1_VENDORS[@]}"))
@@ -198,7 +294,11 @@ toggle_profiles() {
         local pos_args=($(build_position_args "${monitors[@]}"))
         echo "Switching to Profile 1: $PROFILE1_NAME (primary: $primary)"
         echo "Available monitors: ${monitors[*]}"
-        "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"
+        if "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"; then
+            save_state "profile1"
+        else
+            return 1
+        fi
     fi
 }
 
@@ -218,7 +318,11 @@ enable_profile() {
         local pos_args=($(build_position_args "${monitors[@]}"))
         echo "Enabling Profile 1: $PROFILE1_NAME (primary: $primary)"
         echo "Available monitors: ${monitors[*]}"
-        "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"
+        if "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"; then
+            save_state "profile1"
+        else
+            return 1
+        fi
     elif [ "$profile" = "2" ] || [ "$profile" = "profile2" ]; then
         local primary=$(resolve_connector "${PROFILE2_VENDORS[0]}")
         local monitors=($(get_available_from_profile "${PROFILE2_VENDORS[@]}"))
@@ -231,7 +335,11 @@ enable_profile() {
         local pos_args=($(build_position_args "${monitors[@]}"))
         echo "Enabling Profile 2: $PROFILE2_NAME (primary: $primary)"
         echo "Available monitors: ${monitors[*]}"
-        "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"
+        if "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"; then
+            save_state "profile2"
+        else
+            return 1
+        fi
     else
         echo "Unknown profile: $profile"
         echo "Valid profiles: 1 (or profile1), 2 (or profile2)"
@@ -243,7 +351,11 @@ enable_profile() {
 enable_monitors() {
     local monitors=("$@")
     echo "Enabling monitors: ${monitors[*]}"
-    "$PYTHON_HELPER" profile "${monitors[@]}"
+    if "$PYTHON_HELPER" profile "${monitors[@]}"; then
+        save_state "custom:${monitors[*]}"
+    else
+        return 1
+    fi
 }
 
 # List connected monitors
@@ -251,6 +363,7 @@ list_monitors() {
     "$PYTHON_HELPER" list
     echo ""
     echo "Current profile: $(get_current_profile)"
+    echo "Saved profile: $(read_state || echo '(none)')"
     echo ""
     echo "Resolved monitors:"
     for vid in "${MONITOR_VENDORS[@]}"; do
@@ -274,6 +387,7 @@ Usage:
   monitor-switch toggle       Toggle between profiles
   monitor-switch profile <1|2>     Enable specific profile
   monitor-switch enable <monitors...>   Enable specific monitor(s)
+  monitor-switch restore      Re-apply the last saved profile (used on hotplug)
   monitor-switch list         List all monitors and profiles
   monitor-switch help         Show this help message
 
@@ -292,20 +406,27 @@ Note:
   This script uses GNOME's display management API on Wayland.
   Profiles define which monitors are enabled side by side.
   Monitors are identified by vendor ID and resolved to connector names at runtime.
+  Every successful apply is saved to $STATE_FILE; `restore` re-applies it
+  (profiles with their available subset, custom sets all-or-nothing) after
+  display hotplug events.
 EOF
 }
 
 # Main logic
 resolve_all_monitors
 
-# Ensure keybinding is set up (silent for most operations)
-if [[ "$1" != "list" && "$1" != "help" && "$1" != "--help" && "$1" != "-h" ]]; then
+# Ensure keybinding is set up (silent for most operations; skipped for
+# restore/list/help which may run outside an interactive session)
+if [[ "$1" != "restore" && "$1" != "list" && "$1" != "help" && "$1" != "--help" && "$1" != "-h" ]]; then
     ensure_keybinding
 fi
 
 case "${1:-toggle}" in
     toggle)
         toggle_profiles
+        ;;
+    restore)
+        restore_profile
         ;;
     profile)
         shift

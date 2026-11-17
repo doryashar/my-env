@@ -1,0 +1,10 @@
+/backup/timin/**
+/photos/google-photos/**
+/photos/immich/**
+/photos/media/**
+/projects/gpu-emulator/**
+/landisdiam-wordpress-wp-data/wp-content/**
+/landisdiam-wordpress-wp-data/wp-includes/**
+/personal/work/**
+/personal/documents/**
+/hermes/hermes-backup-*

@@ -1,0 +1,3 @@
+0 8 * * * cd /home/yashar/projects/financial_status && xvfb-run -a .venv/bin/python scripts/daily_brief.py >> output/daily_brief.log 2>&1
+*/30 * * * * AV=$(df --output=avail -m / | tail -1); [ "$AV" -lt 5000 ] && /home/yashar/.config/opencode/skills/whatsapp-notify/scripts/whatsapp-send.sh "🔴 DISK LOW: ${AV}MB free on / — last night's ENOSPC chain-failure incoming" >/dev/null 2>&1 || true
+30 8 * * 0 cd /home/yashar/projects/financial_status && xvfb-run -a .venv/bin/python scripts/weekly_report.py >> output/weekly_report.log 2>&1

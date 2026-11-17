@@ -54,7 +54,7 @@ notify() {
   local message="$1"
   # Telegram creds (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) live in the
   # private secrets file, which uses shell syntax -> source it.
-  local secrets="${SECRETS_FILE:-$HOME/env/tmp/private/secrets}"
+  local secrets="${SECRETS_FILE:-$HOME/env/var/private/secrets}"
   # shellcheck disable=SC1090
   [ -f "$secrets" ] || secrets="$HOME/private/secrets"
   if [ -f "$secrets" ]; then

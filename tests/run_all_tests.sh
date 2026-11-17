@@ -54,6 +54,7 @@ echo "  runner_wiring           Test runner wiring + stale-path fixes"
 echo "  dead_scripts_removed    Verify abandoned scripts stay deleted"
 echo "  monitor_switch          Test monitor-switch resolver (pytest)"
 echo "  monitor_switch_restore  Test monitor-switch state + restore"
+echo "  sync_encrypted_units    Test sync_encrypted hash/debris/age units"
 echo "  storagebox_mount_health  Test StorageBox rclone FUSE mounts respond"
 echo "  sysboard               Test sysboard dashboard script"
 echo "  docker                  Docker container comprehensive tests (120 tests)"
@@ -187,6 +188,7 @@ run_runner_wiring=0
 run_dead_scripts_removed=0
 run_monitor_switch=0
 run_monitor_switch_restore=0
+run_sync_encrypted_units=0
 run_storagebox_mount_health=0
 run_sysboard=0
 run_docker=0
@@ -212,6 +214,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_dead_scripts_removed=1
             run_monitor_switch=1
             run_monitor_switch_restore=1
+            run_sync_encrypted_units=1
             run_storagebox_mount_health=1
             run_sysboard=1
             run_docker=1
@@ -234,6 +237,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         dead_scripts_removed) run_dead_scripts_removed=1 ;;
         monitor_switch)        run_monitor_switch=1 ;;
         monitor_switch_restore) run_monitor_switch_restore=1 ;;
+        sync_encrypted_units)  run_sync_encrypted_units=1 ;;
         storagebox_mount_health) run_storagebox_mount_health=1 ;;
         sysboard)              run_sysboard=1 ;;
         docker)               run_docker=1 ;;
@@ -337,6 +341,11 @@ fi
 if [[ $run_monitor_switch_restore -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "Monitor Switch Restore" "$SCRIPT_DIR/test_monitor_switch_restore.sh" "$suite_counter"
+fi
+
+if [[ $run_sync_encrypted_units -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Sync Encrypted Units" "$SCRIPT_DIR/test_sync_encrypted_units.sh" "$suite_counter"
 fi
 
 if [[ $run_storagebox_mount_health -eq 1 ]]; then

@@ -40,9 +40,10 @@ add_secret() {
 #   Non-zero on failure
 get_secret() {
     local name="$1"
-    # add_secret stores as type 2 (secure note) with the secret in .notes.
-    # Try .login.password first (legacy type-1 items), fall back to .notes.
-    bw get item "$name" | jq -r 'if .type == 2 then .notes else .login.password end'
+    # Shared implementation: bw_get_secret in functions/common_funcs
+    # (both files are sourced into the same shell by .env.zsh).
+    # Handles type-2 secure notes (add_secret) and legacy type-1 items.
+    bw_get_secret "$name"
 }
 
 # Delete a secret from Bitwarden

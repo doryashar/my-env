@@ -30,14 +30,24 @@ if [[ -f "${ENV_DIR}/env_vars" ]]; then
     source "${ENV_DIR}/env_vars"
 fi
 
+# Work/project overrides live in the encrypted tree (never in the public
+# repo). Same lookup order as secrets below: symlink, then direct path.
+if [[ -f ~/private/env_work ]]; then
+    env_debug "Loading env_work from ~/private/env_work"
+    source ~/private/env_work
+elif [[ -f "${ENV_DIR}/var/private/env_work" ]]; then
+    env_debug "Loading env_work from ${ENV_DIR}/var/private/env_work"
+    source "${ENV_DIR}/var/private/env_work"
+fi
+
 # Load secrets if available
-# Try symlink first (~/private -> ENV_DIR/tmp/private), then direct path
+# Try symlink first (~/private -> ENV_DIR/var/private), then direct path
 if [[ -f ~/private/secrets ]]; then
     env_debug "Loading secrets from ~/private/secrets"
     source ~/private/secrets
-elif [[ -f "${ENV_DIR}/tmp/private/secrets" ]]; then
-    env_debug "Loading secrets from ${ENV_DIR}/tmp/private/secrets"
-    source "${ENV_DIR}/tmp/private/secrets"
+elif [[ -f "${ENV_DIR}/var/private/secrets" ]]; then
+    env_debug "Loading secrets from ${ENV_DIR}/var/private/secrets"
+    source "${ENV_DIR}/var/private/secrets"
 else
     env_debug "No secrets file found (run setup.sh to sync encrypted files)"
 fi

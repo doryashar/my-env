@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
+# Decrypted tree, hash files and temp dirs must never be group/world readable
+umask 077
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ENV_DIR="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
 source "$ENV_DIR/functions/common_funcs"
@@ -18,12 +20,16 @@ fi
 
 # Configuration variables
 REMOTE_REPO="${PRIVATE_URL:-git@github.com:doryashar/encrypted.git}"
-LOCAL_REPO_PATH="$ENV_DIR/tmp/private_encrypted"
-DECRYPTED_DIR="$ENV_DIR/tmp/private"
-LOCAL_HASH_FILE="$ENV_DIR/tmp/local_hashes"
-TEMP_DIR="$ENV_DIR/tmp/private_encrypted-sync-temp"
-# IDENTITY_FILE="$ENV_DIR/tmp/private/age-key"
-RECIPIENTS_FILE="$ENV_DIR/tmp/private/age-recipients"
+LOCAL_REPO_PATH="$ENV_DIR/var/private_encrypted"
+DECRYPTED_DIR="$ENV_DIR/var/private"
+LOCAL_HASH_FILE="$ENV_DIR/var/local_hashes"
+TEMP_DIR="$ENV_DIR/var/private_encrypted-sync-temp"
+# IDENTITY_FILE="$ENV_DIR/var/private/age-key"
+RECIPIENTS_FILE="$ENV_DIR/var/private/age-recipients"
+
+# Editor/backup debris that must never leave the decrypted tree.
+# Applied consistently to hashing, change detection and encryption.
+DEBRIS_PREDICATE=( \( -name '*~' -o -name '#*#' -o -name '*.bak' -o -name '*.bak-*' \) )
 
 _AGE_IDENTITY_FILE=""
 _cleanup_age_identity() {
@@ -192,7 +198,7 @@ encrypt_recursive() {
   
   mkdir -p "$dest_dir"
   
-  find "$source_dir" -type f -not -path "*/\.*" | while read -r file; do
+  find "$source_dir" -type f -not -path "*/\.*" -not "${DEBRIS_PREDICATE[@]}" | while read -r file; do
     rel_path="${file#$source_dir/}"
     dest_file="$dest_dir/$rel_path.age"
     mkdir -p "$(dirname "$dest_file")"
@@ -239,11 +245,14 @@ decrypt_recursive() {
 #   0 - Success
 #
 # Side Effects:
-#   - Creates hash file with permissions, timestamps, paths, and SHA256 hashes
+#   - Creates hash file with content-only, relative-path SHA256 hashes
 hashit() {
   dir="$1"
   temp_hash_file="$2"
-  find "$dir" -type f -not -path "*/\.*" -printf "%M %TY-%Tm-%Td %TH:%TM:%TS %p\n" -exec sha256sum {} \; | sort > "$temp_hash_file"
+  # Content-only, relative-path hashes: perms/mtime would flag no-op
+  # changes (touch/chmod) and absolute paths break when ENV_DIR moves.
+  (cd "$dir" && find . -type f -not -path "*/.*" -not "${DEBRIS_PREDICATE[@]}" -print0 \
+    | sort -z | xargs -0 -r sha256sum) > "$temp_hash_file"
 }
 
 # Check if files in directory have changed since last hash
@@ -540,7 +549,7 @@ get_age_secret() {
 
     if [[ -n "${BW_SESSION:-}" ]] && command_exists bw; then
         local secret
-        secret=$(bw get password AGE_SECRET 2>/dev/null || echo "")
+        secret=$(bw_get_secret AGE_SECRET 2>/dev/null || echo "")
         if [[ -n "$secret" ]]; then
             export AGE_SECRET="$secret"
             debug "Using AGE_SECRET from Bitwarden"
@@ -652,7 +661,7 @@ get_secret_keys() {
     fi
 
     if [[ -n "${BW_SESSION:-}" ]] && command_exists bw; then
-        export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")}
+        export GITHUB_SSH_PRIVATE_KEY=${GITHUB_SSH_PRIVATE_KEY:-$(bw_get_secret GITHUB_API_KEY 2>/dev/null || echo "")}
     fi
 
     return 0
@@ -993,6 +1002,17 @@ main() {
     exit 0
   fi
 
+  # Cache the age identity locally (0600) so unattended syncs (cron)
+  # never need the Bitwarden master password. Remove the file to force
+  # vault retrieval again (e.g. after key rotation).
+  local age_cache="$HOME/.config/age/secret"
+  if [[ ! -f "$age_cache" ]]; then
+    mkdir -p "$(dirname "$age_cache")"
+    printf '%s\n' "$AGE_SECRET" > "$age_cache"
+    chmod 600 "$age_cache"
+    info "Cached age identity to $age_cache"
+  fi
+
   # Create necessary directories
   mkdir -p "$TEMP_DIR"
   
@@ -1019,8 +1039,7 @@ main() {
     info "Initial Decrypting now from $LOCAL_REPO_PATH to $DECRYPTED_DIR"
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
     hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
-    chmod 600 "$DECRYPTED_DIR"/ssh/* 2>/dev/null || true
-    chmod 600 "$DECRYPTED_DIR"/ssh/secrets 2>/dev/null || true
+    chmod -R go-rwx "$DECRYPTED_DIR"
     if [[ ! -d "$DECRYPTED_DIR/ssh" ]] || [[ -z "$(ls -A "$DECRYPTED_DIR/ssh" 2>/dev/null)" ]]; then
       warning "Decrypted ssh directory is empty or missing: $DECRYPTED_DIR/ssh"
       warning "Ensure sync_dotfiles.sh has run to create ~/.ssh symlink"
@@ -1109,6 +1128,7 @@ main() {
     git pull || { error "Failed to pull remote changes."; exit 1; }
     rm -rf "$DECRYPTED_DIR"/*
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
+    chmod -R go-rwx "$DECRYPTED_DIR"
     hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
     debug "Local files updated successfully."
     exit 0
@@ -1212,6 +1232,7 @@ main() {
 
     # Copy merged files to decrypted directory
     cp -R "$MERGED_DIR/"* "$DECRYPTED_DIR/" 2>/dev/null || true
+    chmod -R go-rwx "$DECRYPTED_DIR"
 
     # Encrypt merged files
     encrypt_recursive "$DECRYPTED_DIR" "$LOCAL_REPO_PATH"

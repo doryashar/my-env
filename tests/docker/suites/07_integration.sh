@@ -66,8 +66,8 @@ test_I06_encrypted_sync_flow() {
     setup_mocks
     reset_full_state
     create_test_config
-    mkdir -p "$TEST_ENV_DIR/tmp/private"
-    echo "secret" > "$TEST_ENV_DIR/tmp/private/test.txt"
+    mkdir -p "$TEST_ENV_DIR/var/private"
+    echo "secret" > "$TEST_ENV_DIR/var/private/test.txt"
     
     assert_success 0 "Encrypted sync setup should work"
 }

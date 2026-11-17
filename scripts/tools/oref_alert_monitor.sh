@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../../functions/pingme"
 
 if [[ -z "${TELEGRAM_CHAT_ID:-}" || -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
-  SECRETS_FILE="${ENV_DIR:-$HOME/env}/tmp/private/secrets"
+  SECRETS_FILE="${ENV_DIR:-$HOME/env}/var/private/secrets"
   if [[ -f "$SECRETS_FILE" ]]; then
     source "$SECRETS_FILE"
   else

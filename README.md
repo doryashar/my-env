@@ -10,15 +10,15 @@ Linux environment configuration with:
 
 ```bash
 # One-liner install (recommended)
-curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/install/setup.sh | bash
 
 # Or with custom fork:
-curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | ENV_URL=https://github.com/YOUR_USER/my-env bash
+curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/install/setup.sh | ENV_URL=https://github.com/YOUR_USER/my-env bash
 
 # Or clone manually:
 git clone git@github.com:doryashar/my-env.git ~/env
 cd ~/env
-./scripts/setup.sh
+./scripts/install/setup.sh
 ```
 
 ## Prerequisites
@@ -41,53 +41,42 @@ The setup script will configure:
 - **Encrypted Secrets**: Bitwarden + age encryption
 - **Cron Jobs**: Automated daily sync and backups
 
-## Repository Structure
-
 ```
 env/
 ├── AGENTS.md           # Agent instructions
 ├── README.md           # This documentation
-├── aliases/            # Custom shell aliases
+├── aliases             # Custom shell aliases
 ├── bin/                # Standalone binaries
 ├── config/             # Application configurations
-│   ├── dotfiles.conf   # Dotfiles sync configuration
-│   ├── repo.conf       # Repository configuration
-│   └── crontab         # Cron job definitions
+│   ├── dotfiles.conf   # Dotfiles sync configuration (symlink mappings)
+│   ├── repo.conf       # Personal repo config (gitignored)
+│   ├── repo.conf.example  # Template for repo.conf
+│   ├── systemd*/       # Unit files (system + user)
+│   └── udev/           # Udev rules
 ├── docker/             # Docker-compose files
-│   ├── rclone-mount/   # Rclone mount service
-│   └── zerotier/       # ZeroTier VPN service
-├── docs/               # Documentation
-│   ├── SETUP_SCRIPT.md
-│   ├── SYNC_DOTFILES.md
-│   └── SYNC_ENCRYPTED.md
-├── dotfiles/           # Dotfiles (e.g., .bashrc, .vimrc)
-├── functions/          # Shell functions
-│   ├── common_funcs    # Common utility functions
-│   ├── bw_funcs        # Bitwarden integration
-│   └── monitors        # System monitoring functions
-├── local/              # Local configurations
-├── private/            # Private encrypted submodule (symlink)
-├── scripts/            # Setup and utility scripts
-│   ├── setup.sh        # Main setup script (entry point)
-│   ├── sync_env.sh     # Environment sync wrapper
-│   ├── sync_dotfiles.sh # Dotfiles synchronization
-│   ├── sync_encrypted.sh # Encrypted files sync
-│   ├── update_infrastructure.sh # Update scripts from upstream
-│   ├── install_fonts.sh # Font installation
-│   └── install_docker.sh # Docker installation
-├── tests/              # Test suite
-│   ├── setup_test.sh   # Setup script tests
-│   └── sync_dotfiles_test.sh # Dotfiles sync tests
-└── tmp/                # Temporary files
-    ├── private/        # Decrypted private files (symlink)
-    └── projects/       # GitHub projects
+├── docs/               # Documentation (RESTORE.md = disaster runbook)
+├── dotfiles/           # Dotfiles (.zshrc, .zshenv, ...)
+├── env_vars            # Public env exports (work stuff lives in var/private/env_work)
+├── functions/          # Shell function libraries (bw_funcs, common_funcs, ...)
+├── private -> var/private  # Decrypted secrets (symlink)
+├── scripts/
+│   ├── install/        # One-time setup (setup.sh, docker, fonts)
+│   ├── sync/           # Ongoing sync (sync_env, sync_dotfiles, sync_encrypted, ...)
+│   ├── storagebox/     # StorageBox bisync/mount tooling
+│   └── tools/          # Personal utilities
+├── tests/              # Test suite (run_all_tests.sh)
+├── var/                # Persistent state (gitignored)
+│   ├── private/        # Decrypted secrets (0600)
+│   └── private_encrypted/  # Clone of the age-encrypted GitHub repo
+└── tmp/                # Actual temp files (caches, locks)
 ```
 
 ## Scripts
 
-### `scripts/setup.sh`
+### `scripts/install/setup.sh`
 
-Main entry point - self-cloning setup script that configures the complete environment.
+Main entry point - self-cloning setup script that configures the complete
+environment. Also the disaster-recovery path (see docs/RESTORE.md).
 
 **Features:**
 - Self-clones if not running from repo (works via curl)
@@ -101,54 +90,57 @@ Main entry point - self-cloning setup script that configures the complete enviro
 **Usage:**
 ```bash
 # Via curl (recommended)
-curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/install/setup.sh | bash
 
 # From repo
-~/env/scripts/setup.sh
+~/env/scripts/install/setup.sh
 ```
 
-### `scripts/sync_env.sh`
+### `scripts/sync/sync_env.sh`
 
 Wrapper script for synchronizing all environment components.
 
 **Usage:**
 ```bash
 # Sync everything (dotfiles, encrypted, git)
-~/env/scripts/sync_env.sh -d -e -l -p
+~/env/scripts/sync/sync_env.sh -d -e -l -p
 
 # Check for updates only
-~/env/scripts/sync_env.sh -u
+~/env/scripts/sync/sync_env.sh -u
 ```
 
-### `scripts/sync_dotfiles.sh`
+### `scripts/sync/sync_dotfiles.sh`
 
-Synchronizes dotfiles between repository and home directory.
+Synchronizes dotfiles between repository and home directory
+(symlink mappings in `config/dotfiles.conf`).
 
 **Usage:**
 ```bash
-~/env/scripts/sync_dotfiles.sh [config_file]
+~/env/scripts/sync/sync_dotfiles.sh [config_file]
 ```
 
-### `scripts/sync_encrypted.sh`
+### `scripts/sync/sync_encrypted.sh`
 
 Synchronizes encrypted files using age encryption and Bitwarden.
+After the first successful decrypt it caches the age identity to
+`~/.config/age/secret`, so routine syncs need no vault unlock.
 
 **Usage:**
 ```bash
-~/env/scripts/sync_encrypted.sh
+~/env/scripts/sync/sync_encrypted.sh
 ```
 
-### `scripts/update_infrastructure.sh`
+### `scripts/sync/update_infrastructure.sh`
 
 Updates infrastructure scripts from upstream repository (useful for fork users).
 
 **Usage:**
 ```bash
 # Check for updates (dry run)
-~/env/scripts/update_infrastructure.sh --dry-run
+~/env/scripts/sync/update_infrastructure.sh --dry-run
 
 # Apply updates
-~/env/scripts/update_infrastructure.sh
+~/env/scripts/sync/update_infrastructure.sh
 ```
 
 ## For Fork Users
@@ -163,21 +155,23 @@ If you've forked this repository:
 
 2. Install from your fork:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/setup.sh | ENV_URL=https://github.com/YOUR_USER/my-env bash
+   curl -fsSL https://raw.githubusercontent.com/doryashar/my-env/master/scripts/install/setup.sh | ENV_URL=https://github.com/YOUR_USER/my-env bash
    ```
 
 3. Update infrastructure scripts from upstream:
    ```bash
-   ~/env/scripts/update_infrastructure.sh
+   ~/env/scripts/sync/update_infrastructure.sh
    ```
 
-Your customizations in `config/`, `dotfiles/`, `aliases/`, `env_vars/`, and `private/` are never overwritten.
+Your customizations in `config/`, `dotfiles/`, `aliases`, `env_vars`, and `var/private` are never overwritten.
 
 ## Configuration
 
 ### `config/repo.conf`
 
-Main repository configuration:
+Main repository configuration. **Gitignored** — the committed template is
+`config/repo.conf.example`; `setup.sh` copies it on first run. Never put
+real emails or repo names in the tracked template:
 
 ```bash
 # Your fork URL
@@ -224,21 +218,24 @@ config/tmux => ~/.config/tmux
 
 ### `config/crontab`
 
-Automated tasks (example):
+Automated tasks (example). After the first successful encrypted sync,
+the age identity is cached at `~/.config/age/secret`, so the cron job
+runs unattended with no vault unlock:
 
 ```bash
 # Auto-sync dotfiles daily at 9 AM
-0 9 * * * $HOME/env/scripts/sync_env.sh -d -e -l -p > /tmp/env_sync.log 2>&1
-
-# Run backups daily at 2 AM
-0 2 * * * $HOME/env/scripts/backup.sh > /tmp/backup.log 2>&1
+0 9 * * * $HOME/env/scripts/sync/sync_env.sh -d -e -l -p > /tmp/env_sync.log 2>&1
 ```
 
 ## Security
 
-- The `private` repository is encrypted using age
-- Encryption keys are stored in Bitwarden
-- Bitwarden authentication via OAuth2 or password
+- The `private` repository is encrypted using age (content-encrypted
+  `.age` files in a private GitHub repo)
+- The age private key lives in Bitwarden (`AGE_SECRET`) and is cached to
+  `~/.config/age/secret` (0600) after first decrypt
+- The decrypted tree (`var/private/`) is 0600 and gitignored
+- Editor debris (`*~`, `#*#`, `*.bak*`) is never encrypted or pushed
+- `config/repo.conf` holds personal values and is gitignored
 - Never commit unencrypted sensitive data
 
 ### Bitwarden Setup
@@ -258,6 +255,10 @@ Automated tasks (example):
    - `GITHUB_API_KEY`: GitHub token for repository access
    - `AGE_SECRET`: Age encryption private key
 
+   Items can be type-1 (password) or type-2 (secure note) — all fetches
+   go through `bw_get_secret` (functions/common_funcs), which handles
+   both.
+
 ## Maintenance
 
 ### Update Environment
@@ -268,30 +269,32 @@ cd ~/env
 git pull
 
 # Run setup again (idempotent)
-./scripts/setup.sh
+./scripts/install/setup.sh
 ```
 
 ### Sync Changes
 
 ```bash
 # Sync dotfiles to repository
-~/env/scripts/sync_dotfiles.sh
+~/env/scripts/sync/sync_dotfiles.sh
 
 # Sync encrypted files
-~/env/scripts/sync_encrypted.sh
+~/env/scripts/sync/sync_encrypted.sh
 
 # Sync everything
-~/env/scripts/sync_env.sh -d -e -p
+~/env/scripts/sync/sync_env.sh -d -e -p
 ```
 
 ### Run Tests
 
 ```bash
-# Run all tests
-cd ~/env/tests
-./setup_test.sh
-./sync_dotfiles_test.sh
+# Full suite (or pick suites with --only <name>; see --help)
+bash tests/run_all_tests.sh --skip-docker
 ```
+
+### Disaster Recovery
+
+New machine, one password. See **docs/RESTORE.md** for the full runbook.
 
 ## Environment Variables
 

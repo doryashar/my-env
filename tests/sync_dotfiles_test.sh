@@ -311,11 +311,11 @@ test_sync_encrypted_ssh_keyscan_conditional() {
 
 # Test: dotfiles.conf has ssh mapping
 test_dotfiles_conf_has_ssh_mapping() {
-    if grep -q 'tmp/private/ssh => ~/.ssh' "$HOME/env/config/dotfiles.conf"; then
-        echo -e "${GREEN}✓${NC} dotfiles.conf should map tmp/private/ssh => ~/.ssh"
+    if grep -q 'var/private/ssh => ~/.ssh' "$HOME/env/config/dotfiles.conf"; then
+        echo -e "${GREEN}✓${NC} dotfiles.conf should map var/private/ssh => ~/.ssh"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}✗${NC} dotfiles.conf should map tmp/private/ssh => ~/.ssh"
+        echo -e "${RED}✗${NC} dotfiles.conf should map var/private/ssh => ~/.ssh"
         TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
     TESTS_RUN=$((TESTS_RUN + 1))

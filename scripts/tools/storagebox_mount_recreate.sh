@@ -98,13 +98,13 @@ main() {
     "rclone-mount-hetzner-storagebox__" \
     "hetzner-storagebox:/" \
     "$MOUNT_BASE/hetzner-storagebox__" \
-    "/home/yashar/env/private_encrypted"
+    "/home/yashar/env/var/private_encrypted"
 
   recreate_container \
     "rclone-mount-hetzner-storagebox__backup" \
     "hetzner-storagebox:/backup" \
     "$MOUNT_BASE/hetzner-storagebox__backup" \
-    "/private_encrypted"
+    "/home/yashar/env/var/private_encrypted"
 
   echo ">>> Waiting for mounts to come up..."
   sleep 8

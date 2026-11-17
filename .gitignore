@@ -2,7 +2,8 @@
 tmp
 private
 private_encrypted
-bin/bw
+# Personal repo config (real values; template is repo.conf.example)
+config/repo.conf
 
 # Python
 __pycache__/

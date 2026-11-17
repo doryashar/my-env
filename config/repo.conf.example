@@ -1,0 +1,27 @@
+# Repository configuration template.
+# Copy to config/repo.conf (gitignored) and fill in your values —
+# setup.sh's generate_config step also creates this file automatically.
+
+# Your fork of the env repository
+REMOTE_URL="git@github.com:YOUR_USER/my-env"
+ENV_DIR="${HOME}/env"
+
+# Bitwarden account (vault holds AGE_SECRET and GITHUB_API_KEY)
+export BW_EMAIL="${BW_EMAIL:-your-email@example.com}"
+
+# Private encrypted repository (age-encrypted files pushed by sync_encrypted.sh)
+PRIVATE_URL="git@github.com:YOUR_USER/encrypted.git"
+
+# Upstream for infrastructure updates (keep pointing to the original)
+UPSTREAM_URL="git@github.com:doryashar/my-env.git"
+
+# Display settings
+SHOW_DUFF=off
+SHOW_NEOFETCH=on
+
+# Sync timing (days)
+CHECK_INTERVAL_DAYS="${CHECK_INTERVAL_DAYS:-1}"
+SYNC_INTERVAL_DAYS="${SYNC_INTERVAL_DAYS:-7}"
+
+# Merge conflict resolution strategy: ask, local, remote, rename, ignore
+DEFAULT_CONFLICT_STRATEGY="${DEFAULT_CONFLICT_STRATEGY:-ask}"

@@ -398,6 +398,14 @@ oauth2_authenticate() {
 # GitHub Authentication Functions
 #########################################################################
 
+# Fetch a secret from the vault by item name. Handles both legacy
+# type-1 password items and type-2 secure notes (as created by
+# add_secret in bw_funcs); `bw get password` fails on type-2 items.
+# (setup.sh is self-contained — keep in sync with functions/common_funcs)
+bw_get_secret() {
+    bw get item "$1" 2>/dev/null | jq -r 'if .type == 2 then .notes else .login.password end'
+}
+
 get_github_token() {
     local token="${GITHUB_TOKEN:-}"
     
@@ -407,7 +415,7 @@ get_github_token() {
     fi
     
     if command_exists bw && [[ -n "${BW_SESSION:-}" ]]; then
-        token=$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")
+        token=$(bw_get_secret GITHUB_API_KEY 2>/dev/null || echo "")
         if [[ -n "$token" ]]; then
             echo "$token"
             return 0
@@ -714,16 +722,20 @@ generate_config() {
     local config_file="$ENV_DIR/config/repo.conf"
     if [[ ! -f "$config_file" ]]; then
         info "Creating $config_file..."
+        # Mirrors config/repo.conf.example (real repo.conf is gitignored)
         cat > "$config_file" << 'EOF'
-# Remote git repository URL (optional)
-REMOTE_URL="git@github.com:doryashar/my-env"
+# Remote git repository URL (your fork)
+REMOTE_URL="git@github.com:YOUR_USER/my-env"
 ENV_DIR="${HOME}/env"
 
-# Bitwarden configuration
-export BW_EMAIL="your-email@example.com"
+# Bitwarden account (vault holds AGE_SECRET and GITHUB_API_KEY)
+export BW_EMAIL="${BW_EMAIL:-your-email@example.com}"
 
 # Private encrypted repository
-PRIVATE_URL="git@github.com:doryashar/encrypted.git"
+PRIVATE_URL="git@github.com:YOUR_USER/encrypted.git"
+
+# Upstream for infrastructure updates (keep pointing to the original)
+UPSTREAM_URL="git@github.com:doryashar/my-env.git"
 
 # Display settings
 SHOW_DUFF=off
@@ -736,7 +748,7 @@ SYNC_INTERVAL_DAYS="${SYNC_INTERVAL_DAYS:-7}"
 # Merge conflict resolution strategy: ask, local, remote, rename, ignore
 DEFAULT_CONFLICT_STRATEGY="${DEFAULT_CONFLICT_STRATEGY:-ask}"
 EOF
-        warning "Please edit $config_file and set your BW_EMAIL"
+        warning "Please edit $config_file: REMOTE_URL, PRIVATE_URL, BW_EMAIL"
     else
         debug "Configuration file already exists"
     fi

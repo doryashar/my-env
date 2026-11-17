@@ -159,12 +159,12 @@ create_encrypted_test_file() {
   local name="$1"
   local content="${2:-secret content}"
   
-  local encrypted_dir="$TEST_ENV_DIR/tmp/private"
+  local encrypted_dir="$TEST_ENV_DIR/var/private"
   mkdir -p "$encrypted_dir"
   
   echo "$content" > "$encrypted_dir/$name"
   
-  local encrypted_repo="$TEST_ENV_DIR/tmp/private_encrypted"
+  local encrypted_repo="$TEST_ENV_DIR/var/private_encrypted"
   mkdir -p "$encrypted_repo"
   echo "age-encryption.org/v1" > "$encrypted_repo/${name}.age"
   echo "$content" >> "$encrypted_repo/${name}.age"

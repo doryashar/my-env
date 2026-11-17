@@ -66,9 +66,23 @@ prompt_yn() {
 }
 
 #########################################################################
+# Fetch a secret from the Bitwarden vault by item name.
+# Handles both legacy type-1 password items and type-2 secure notes
+# (as created by add_secret in bw_funcs); `bw get password` alone
+# silently fails on type-2 items.
+#
+# Args:
+#   $1 - Item name
+#
+# Outputs:
+#   Secret value (empty on failure)
+bw_get_secret() {
+    bw get item "$1" 2>/dev/null | jq -r 'if .type == 2 then .notes else .login.password end'
+}
+
+#########################################################################
 # GitHub Authentication Functions
 #########################################################################
-
 get_github_token() {
     local token="${GITHUB_TOKEN:-}"
     
@@ -78,7 +92,7 @@ get_github_token() {
     fi
     
     if command -v bw &>/dev/null && [[ -n "${BW_SESSION:-}" ]]; then
-        token=$(bw get password GITHUB_API_KEY 2>/dev/null || echo "")
+        token=$(bw_get_secret GITHUB_API_KEY 2>/dev/null || echo "")
         if [[ -n "$token" ]]; then
             echo "$token"
             return 0

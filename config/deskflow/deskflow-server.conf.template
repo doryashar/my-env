@@ -1,0 +1,26 @@
+# Deskflow fleet config — server-side screen map (Barrier-style syntax).
+# Copy to ~/.config/Deskflow/deskflow-server.conf on the machine whose
+# keyboard/mouse you want to share, then edit the screen names to match
+# each machine's hostname (must match exactly).
+#
+# Roles:
+#   server = machine with the physical keyboard + mouse
+#   client = every other machine (points at the server's IP, port 24800)
+
+section: screens
+	HOME-PC:
+	LINUX-DESK:
+end
+
+section: links
+	# HOME-PC screen edge -> other machine
+	HOME-PC:
+		right = LINUX-DESK
+	LINUX-DESK:
+		left = HOME-PC
+end
+
+section: options
+	# lock cursor to a screen: keystroke(Control+Alt+L) = lockCursorToScreen
+	keystroke(Shift+Shift) = switchInDirection(right)
+end

@@ -15,7 +15,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Valid suite names (single source of truth for the argument parser)
-SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|resync_loop|mount_check|recover_script|install_binaries|setup_bootstrap|sync_env_flow|sync_dotfiles_conflicts|shell_libs|setup_steps|update_infrastructure|sync_encrypted_prompts|storagebox_mount_health|sysboard|docker|all"
+SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|resync_loop|mount_check|recover_script|install_binaries|setup_bootstrap|sync_env_flow|sync_dotfiles_conflicts|shell_libs|setup_steps|update_infrastructure|security_tools|sync_encrypted_prompts|storagebox_mount_health|sysboard|docker|all"
 
 # Test tracking
 TOTAL_SUITES=0
@@ -71,6 +71,7 @@ echo "  sync_dotfiles_conflicts   Test sync_dotfiles.sh conflict handling and li
 echo "  shell_libs              Test shell libraries under bash and zsh (temp dirs)"
 echo "  setup_steps             Test setup.sh zsh/pipx/cron steps with stubbed system commands"
 echo "  update_infrastructure   Test update_infrastructure.sh direction and apply (temp git repos)"
+echo "  security_tools            Test letmein bind, cam_web CORS, camera discovery and error handling"
 echo "  sync_encrypted_prompts   Test sync_encrypted.sh key prompts without a terminal (temp HOME)"
 echo "  storagebox_mount_health  Test StorageBox rclone FUSE mounts respond"
 echo "  sysboard               Test sysboard dashboard script"
@@ -225,6 +226,7 @@ run_sync_dotfiles_conflicts=0
 run_shell_libs=0
 run_setup_steps=0
 run_update_infrastructure=0
+run_security_tools=0
 run_sync_encrypted_prompts=0
 run_storagebox_mount_health=0
 run_sysboard=0
@@ -265,6 +267,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_shell_libs=1
             run_setup_steps=1
             run_update_infrastructure=1
+            run_security_tools=1
             run_sync_encrypted_prompts=1
             run_storagebox_mount_health=1
             run_sysboard=1
@@ -302,6 +305,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         shell_libs) run_shell_libs=1 ;;
         setup_steps) run_setup_steps=1 ;;
         update_infrastructure) run_update_infrastructure=1 ;;
+        security_tools) run_security_tools=1 ;;
         sync_encrypted_prompts) run_sync_encrypted_prompts=1 ;;
         storagebox_mount_health) run_storagebox_mount_health=1 ;;
         sysboard)              run_sysboard=1 ;;
@@ -476,6 +480,11 @@ fi
 if [[ $run_update_infrastructure -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "Update Infrastructure" "$SCRIPT_DIR/test_update_infrastructure.sh" "$suite_counter"
+fi
+
+if [[ $run_security_tools -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Security Tools" "$SCRIPT_DIR/test_security_tools.sh" "$suite_counter"
 fi
 
 if [[ $run_sync_encrypted_prompts -eq 1 ]]; then

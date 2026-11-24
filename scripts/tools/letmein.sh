@@ -5,6 +5,11 @@
 #   disabled) and an ephemeral self-signed cert. This is MITM-able by anyone
 #   on the network. Only run this on a fully-trusted LAN, or replace the
 #   ephemeral cert with a pinned CA (pass cafile= to socat).
+
+# The listeners bind the address passed as their second argument
+# (default 127.0.0.1). To let someone in over a LAN or VPN, pass that
+# interface's address as the second argument. The shell is
+# unauthenticated: anyone who reaches the port gets it.
 #
 set -e
 
@@ -16,16 +21,14 @@ listen_for_incoming_connections() {
   # Default to loopback: EXEC hands out an unauthenticated shell.
   local host="${2:-127.0.0.1}"
   local cert="$(mktemp)"
-  local dhparam="$HOME/.dhparam"
   if [[ "$CREATE_CERT" == "1" ]]; then
     echo "[+] Preparing the certificate..."
     openssl req -x509 -new -nodes -subj '/' \
       -keyout "$cert" -out "$cert"
-    [[ ! -r "$dhparam" ]] && openssl dhparam -out "$dhparam" 2048
   fi
   echo "[+] Listening on $host:$port..."
   local cmd="zellij attach --create my-cool-session"
-  socat "openssl-listen:$port,cert=$cert,keepalive=1,verify=0,fork" \
+  socat "openssl-listen:$port,bind=$host,cert=$cert,keepalive=1,verify=0,fork" \
     "EXEC:'$cmd',pty,raw,setsid,ctty,stderr"
   echo "[+] Cleaning up..."
   rm -f "$cert"
@@ -42,13 +45,11 @@ wait_for_invite() {
   local port="${1:-$DEFAULT_PORT}"
   local host="${2:-127.0.0.1}"
   local cert="$(mktemp)"
-  local dhparam="$HOME/.dhparam"
   echo "[+] Preparing the certificate..."
   openssl req -x509 -new -nodes -subj '/' \
     -keyout "$cert" -out "$cert"
-  [[ ! -r "$dhparam" ]] && openssl dhparam -out "$dhparam" 2048
   echo "[+] Listening on $host:$port..."
-  socat openssl-listen:$port,verify=0,keepalive=1,cert=$cert \
+  socat openssl-listen:$port,bind=$host,verify=0,keepalive=1,cert=$cert \
     stdio,raw,echo=0
   echo "[+] Cleaning up..."
   rm -f "$cert"

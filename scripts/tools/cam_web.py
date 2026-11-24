@@ -36,7 +36,6 @@ class CamAPIHandler(BaseHTTPRequestHandler):
         self.send_response(401)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self._send_body(body)
 
@@ -62,7 +61,6 @@ class CamAPIHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self._send_body(body)
 
@@ -74,9 +72,6 @@ class CamAPIHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def _handle_get(self, path):
@@ -204,14 +199,12 @@ class CamAPIHandler(BaseHTTPRequestHandler):
             self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
-            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self._send_body(data)
         elif kind == "image":
             self.send_response(status)
             self.send_header("Content-Type", "image/jpeg")
             self.send_header("Content-Length", str(len(data)))
-            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self._send_body(data)
         else:

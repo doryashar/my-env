@@ -65,7 +65,7 @@ def verify_onvif(ip, onvif_port):
     try:
         from onvif import ONVIFCamera
     except ImportError:
-        return True
+        return False
     try:
         cam = ONVIFCamera(ip, onvif_port, "admin", "")
         cam.devicemgmt.GetSystemDateAndTime()
@@ -94,8 +94,13 @@ def discover(onvif_port, subnet=None, timeout=CONNECT_TIMEOUT):
     for ip in ordered:
         if verify_onvif(ip, onvif_port):
             return ip
-    # Best-effort fallback: first RTSP host if ONVIF verification is flaky.
-    return ordered[0]
+    # No candidate verified: report it and give up.
+    print(
+        f"discover: found {len(ordered)} candidate(s) with RTSP open but none "
+        "verified as a camera",
+        file=sys.stderr,
+    )
+    return None
 
 
 def main():

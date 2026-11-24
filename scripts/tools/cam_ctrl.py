@@ -5,21 +5,26 @@ import os
 import time
 import json
 
+class CameraError(RuntimeError):
+    """A camera command failed (see stderr)."""
+
+
+def _fail(message):
+    print(message, file=sys.stderr)
+    raise CameraError(message)
+
+
 try:
     from onvif import ONVIFCamera
     from onvif.exceptions import ONVIFError
 except ImportError:
-    print(
-        "Error: onvif-zeep not installed. Run: pip install onvif-zeep", file=sys.stderr
-    )
-    sys.exit(1)
+    _fail("Error: onvif-zeep not installed. Run: pip install onvif-zeep")
 
 try:
     import requests
     from requests.auth import HTTPDigestAuth
 except ImportError:
-    print("Error: requests not installed. Run: pip install requests", file=sys.stderr)
-    sys.exit(1)
+    _fail("Error: requests not installed. Run: pip install requests")
 
 
 CAM_IP = os.environ.get("CAM_IP", os.environ.get("CAM_HOST", "192.168.1.140"))
@@ -32,11 +37,7 @@ VIDEO_SOURCE_TOKEN = "000"
 
 def _require_creds():
     if not CAM_USER or not CAM_PASS:
-        print(
-            "Error: CAM_USER and CAM_PASS environment variables must be set.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        _fail("Error: CAM_USER and CAM_PASS environment variables must be set.")
 
 
 def get_camera():
@@ -69,8 +70,7 @@ def get_status(cam):
             },
         }
     except ONVIFError as e:
-        print(f"Error getting status: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error getting status: {e}")
 
 
 def cmd_status(cam):
@@ -82,8 +82,7 @@ def cmd_continuous_move(cam, direction, speed, duration):
     try:
         status = ptz.GetStatus({"ProfileToken": PROFILE_TOKEN})
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
     vec2d = type(status.Position.PanTilt)
     vec1d = type(status.Position.Zoom)
@@ -98,11 +97,7 @@ def cmd_continuous_move(cam, direction, speed, duration):
         "zoom-out": (0, 0, -1),
     }
     if direction not in directions:
-        print(
-            f"Unknown direction: {direction}. Use: {', '.join(directions.keys())}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        _fail(f"Unknown direction: {direction}. Use: {', '.join(directions.keys())}")
 
     px, py, zx = directions[direction]
     velocity = pos_type(
@@ -116,8 +111,7 @@ def cmd_continuous_move(cam, direction, speed, duration):
         request.Velocity = velocity
         ptz.ContinuousMove(request)
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
     if duration and duration > 0:
         time.sleep(duration)
@@ -133,8 +127,7 @@ def cmd_stop(cam):
         request.Zoom = True
         ptz.Stop(request)
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_relative_move(cam, pan_x, pan_y, zoom_x, speed):
@@ -142,8 +135,7 @@ def cmd_relative_move(cam, pan_x, pan_y, zoom_x, speed):
     try:
         status = ptz.GetStatus({"ProfileToken": PROFILE_TOKEN})
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
     vec2d = type(status.Position.PanTilt)
     vec1d = type(status.Position.Zoom)
@@ -165,8 +157,7 @@ def cmd_relative_move(cam, pan_x, pan_y, zoom_x, speed):
         request.Speed = spd
         ptz.RelativeMove(request)
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_home(cam):
@@ -176,8 +167,7 @@ def cmd_home(cam):
         request.ProfileToken = PROFILE_TOKEN
         ptz.GotoHomePosition(request)
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_preset_list(cam):
@@ -187,8 +177,7 @@ def cmd_preset_list(cam):
         request.ProfileToken = PROFILE_TOKEN
         presets = ptz.GetPresets(request)
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
     if not presets:
         print("No presets found.")
@@ -206,8 +195,7 @@ def cmd_preset_goto(cam, token):
         request.PresetToken = str(token)
         ptz.GotoPreset(request)
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_preset_set(cam, token, name=None):
@@ -220,8 +208,7 @@ def cmd_preset_set(cam, token, name=None):
         result = ptz.SetPreset(request)
         print(f"Preset saved: token={result}")
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_preset_remove(cam, token):
@@ -232,8 +219,7 @@ def cmd_preset_remove(cam, token):
         request.PresetToken = str(token)
         ptz.RemovePreset(request)
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_brightness(cam, value):
@@ -245,8 +231,7 @@ def cmd_brightness(cam, value):
             {"VideoSourceToken": VIDEO_SOURCE_TOKEN, "ImagingSettings": settings}
         )
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_contrast(cam, value):
@@ -258,8 +243,7 @@ def cmd_contrast(cam, value):
             {"VideoSourceToken": VIDEO_SOURCE_TOKEN, "ImagingSettings": settings}
         )
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_saturation(cam, value):
@@ -271,8 +255,7 @@ def cmd_saturation(cam, value):
             {"VideoSourceToken": VIDEO_SOURCE_TOKEN, "ImagingSettings": settings}
         )
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_sharpness(cam, value):
@@ -284,8 +267,7 @@ def cmd_sharpness(cam, value):
             {"VideoSourceToken": VIDEO_SOURCE_TOKEN, "ImagingSettings": settings}
         )
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def cmd_snapshot(cam, output=None):
@@ -297,8 +279,7 @@ def cmd_snapshot(cam, output=None):
         result = media.GetSnapshotUri(request)
         url = result.Uri
     except ONVIFError as e:
-        print(f"Error getting snapshot URI: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error getting snapshot URI: {e}")
 
     try:
         resp = requests.get(
@@ -306,8 +287,7 @@ def cmd_snapshot(cam, output=None):
         )
         resp.raise_for_status()
     except Exception as e:
-        print(f"Error downloading snapshot: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error downloading snapshot: {e}")
 
     if output is None:
         output = f"/tmp/cam_snapshot_{int(time.time())}.jpg"
@@ -330,8 +310,7 @@ def cmd_imaging_status(cam):
             "sharpness": float(settings.Sharpness),
         }
     except ONVIFError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        _fail(f"Error: {e}")
 
 
 def print_usage():
@@ -378,76 +357,81 @@ def main():
 
     try:
         cam = get_camera()
+    except CameraError:
+        sys.exit(2)
     except Exception as e:
         print(f"Error connecting to camera: {e}", file=sys.stderr)
         sys.exit(1)
 
-    if command == "status":
-        print(json.dumps(cmd_status(cam), indent=2))
-    elif command == "move":
-        direction = args[0] if args else None
-        if not direction:
-            print("Error: direction required", file=sys.stderr)
+    try:
+        if command == "status":
+            print(json.dumps(cmd_status(cam), indent=2))
+        elif command == "move":
+            direction = args[0] if args else None
+            if not direction:
+                print("Error: direction required", file=sys.stderr)
+                sys.exit(1)
+            speed = float(args[1]) if len(args) > 1 else 0.5
+            duration = float(args[2]) if len(args) > 2 else 1.0
+            cmd_continuous_move(cam, direction, speed, duration)
+        elif command == "stop":
+            cmd_stop(cam)
+        elif command == "home":
+            cmd_home(cam)
+        elif command == "relative":
+            pan_x = float(args[0]) if len(args) > 0 else 0
+            pan_y = float(args[1]) if len(args) > 1 else 0
+            zoom = float(args[2]) if len(args) > 2 else 0
+            speed = float(args[3]) if len(args) > 3 else 0.5
+            cmd_relative_move(cam, pan_x, pan_y, zoom, speed)
+        elif command == "preset-list":
+            cmd_preset_list(cam)
+        elif command == "preset-goto":
+            if not args:
+                print("Error: preset token required", file=sys.stderr)
+                sys.exit(1)
+            cmd_preset_goto(cam, args[0])
+        elif command == "preset-set":
+            if not args:
+                print("Error: preset token required", file=sys.stderr)
+                sys.exit(1)
+            name = args[1] if len(args) > 1 else None
+            cmd_preset_set(cam, args[0], name)
+        elif command == "preset-remove":
+            if not args:
+                print("Error: preset token required", file=sys.stderr)
+                sys.exit(1)
+            cmd_preset_remove(cam, args[0])
+        elif command == "brightness":
+            if not args:
+                print("Error: value required (0-100)", file=sys.stderr)
+                sys.exit(1)
+            cmd_brightness(cam, args[0])
+        elif command == "contrast":
+            if not args:
+                print("Error: value required (0-100)", file=sys.stderr)
+                sys.exit(1)
+            cmd_contrast(cam, args[0])
+        elif command == "saturation":
+            if not args:
+                print("Error: value required (0-100)", file=sys.stderr)
+                sys.exit(1)
+            cmd_saturation(cam, args[0])
+        elif command == "sharpness":
+            if not args:
+                print("Error: value required (0-15)", file=sys.stderr)
+                sys.exit(1)
+            cmd_sharpness(cam, args[0])
+        elif command == "imaging":
+            print(json.dumps(cmd_imaging_status(cam), indent=2))
+        elif command == "snapshot":
+            output = args[0] if args else None
+            cmd_snapshot(cam, output)
+        else:
+            print(f"Unknown command: {command}", file=sys.stderr)
+            print_usage()
             sys.exit(1)
-        speed = float(args[1]) if len(args) > 1 else 0.5
-        duration = float(args[2]) if len(args) > 2 else 1.0
-        cmd_continuous_move(cam, direction, speed, duration)
-    elif command == "stop":
-        cmd_stop(cam)
-    elif command == "home":
-        cmd_home(cam)
-    elif command == "relative":
-        pan_x = float(args[0]) if len(args) > 0 else 0
-        pan_y = float(args[1]) if len(args) > 1 else 0
-        zoom = float(args[2]) if len(args) > 2 else 0
-        speed = float(args[3]) if len(args) > 3 else 0.5
-        cmd_relative_move(cam, pan_x, pan_y, zoom, speed)
-    elif command == "preset-list":
-        cmd_preset_list(cam)
-    elif command == "preset-goto":
-        if not args:
-            print("Error: preset token required", file=sys.stderr)
-            sys.exit(1)
-        cmd_preset_goto(cam, args[0])
-    elif command == "preset-set":
-        if not args:
-            print("Error: preset token required", file=sys.stderr)
-            sys.exit(1)
-        name = args[1] if len(args) > 1 else None
-        cmd_preset_set(cam, args[0], name)
-    elif command == "preset-remove":
-        if not args:
-            print("Error: preset token required", file=sys.stderr)
-            sys.exit(1)
-        cmd_preset_remove(cam, args[0])
-    elif command == "brightness":
-        if not args:
-            print("Error: value required (0-100)", file=sys.stderr)
-            sys.exit(1)
-        cmd_brightness(cam, args[0])
-    elif command == "contrast":
-        if not args:
-            print("Error: value required (0-100)", file=sys.stderr)
-            sys.exit(1)
-        cmd_contrast(cam, args[0])
-    elif command == "saturation":
-        if not args:
-            print("Error: value required (0-100)", file=sys.stderr)
-            sys.exit(1)
-        cmd_saturation(cam, args[0])
-    elif command == "sharpness":
-        if not args:
-            print("Error: value required (0-15)", file=sys.stderr)
-            sys.exit(1)
-        cmd_sharpness(cam, args[0])
-    elif command == "imaging":
-        print(json.dumps(cmd_imaging_status(cam), indent=2))
-    elif command == "snapshot":
-        output = args[0] if args else None
-        cmd_snapshot(cam, output)
-    else:
-        print(f"Unknown command: {command}", file=sys.stderr)
-        print_usage()
+    except CameraError:
         sys.exit(1)
 
 

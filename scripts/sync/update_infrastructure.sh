@@ -9,7 +9,7 @@ set -euo pipefail
 # framework scripts without losing their customizations.
 #
 # Usage:
-#   ./update_infrastructure.sh [--dry-run]
+#   ./update_infrastructure.sh [--dry-run] [--yes]
 #
 # Config (config/repo.conf):
 #   UPSTREAM_URL - URL of upstream repository (default: doryashar/my-env)
@@ -32,14 +32,17 @@ error() { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 # Prompt for y/n (works even when stdin is piped)
 prompt_yn() {
     local question="$1"
-    local reply
+    local reply=""
     if [[ -t 0 ]]; then
         read -p "$question" -n 1 -r
         echo
-    else
+    elif [[ -t 0 ]] || { : 2>/dev/null </dev/tty; }; then
         echo -n "$question"
-        read -r reply < /dev/tty
+        read -r reply </dev/tty || reply=""
         REPLY="${reply:0:1}"
+    else
+        REPLY=""
+        return 1
     fi
     [[ "$REPLY" =~ ^[Yy]$ ]]
 }
@@ -58,9 +61,12 @@ fi
 
 UPSTREAM_URL="${UPSTREAM_URL:-$DEFAULT_UPSTREAM_URL}"
 DRY_RUN=""
+YES=""
 for arg in "$@"; do
     if [[ "$arg" == "--dry-run" ]]; then
         DRY_RUN="--dry-run"
+    elif [[ "$arg" == "--yes" ]]; then
+        YES="--yes"
     fi
 done
 
@@ -100,7 +106,8 @@ fi
 LOCAL_COMMIT=$(git -C "$ENV_DIR" rev-parse HEAD 2>/dev/null || echo "")
 UPSTREAM_COMMIT=$(git -C "$ENV_DIR" rev-parse "$UPSTREAM_REF" 2>/dev/null || echo "")
 
-if [[ "$LOCAL_COMMIT" == "$UPSTREAM_COMMIT" ]]; then
+if [[ "$LOCAL_COMMIT" == "$UPSTREAM_COMMIT" ]] \
+    || git -C "$ENV_DIR" merge-base --is-ancestor "$UPSTREAM_COMMIT" "$LOCAL_COMMIT" 2>/dev/null; then
     info "Already up to date with upstream"
     exit 0
 fi
@@ -111,11 +118,13 @@ echo "Changed infrastructure files:"
 echo "-----------------------------"
 
 CHANGES_FOUND=0
+CHANGED_FILES=()
 for file in "${INFRA_FILES[@]}"; do
     if git -C "$ENV_DIR" diff --quiet "$LOCAL_COMMIT" "$UPSTREAM_REF" -- "$file" 2>/dev/null; then
         continue
     fi
     CHANGES_FOUND=1
+    CHANGED_FILES+=("$file")
     echo "  - $file"
 done
 
@@ -132,7 +141,7 @@ if [[ "$DRY_RUN" == "--dry-run" ]]; then
 fi
 
 echo ""
-if prompt_yn "Apply these updates? [y/N] "; then
+if [[ "$YES" == "--yes" ]] || prompt_yn "Apply these updates? [y/N] "; then
     :  # continue
 else
     info "Aborted"
@@ -143,7 +152,7 @@ fi
 info "Applying infrastructure updates..."
 UPDATED_COUNT=0
 
-for file in "${INFRA_FILES[@]}"; do
+for file in "${CHANGED_FILES[@]}"; do
     # Check if file exists in upstream
     if ! git -C "$ENV_DIR" cat-file -e "$UPSTREAM_REF:$file" 2>/dev/null; then
         continue
@@ -153,10 +162,16 @@ for file in "${INFRA_FILES[@]}"; do
     dir="$(dirname "$ENV_DIR/$file")"
     mkdir -p "$dir"
 
-    # Extract file from upstream
-    if git -C "$ENV_DIR" show "$UPSTREAM_REF:$file" > "$ENV_DIR/$file" 2>/dev/null; then
-        ((UPDATED_COUNT++)) || UPDATED_COUNT=$((UPDATED_COUNT + 1))
+    # Extract file from upstream into a temp file; only move it into
+    # place when the extraction succeeded
+    tmp_file="$(mktemp)"
+    if git -C "$ENV_DIR" show "$UPSTREAM_REF:$file" > "$tmp_file" 2>/dev/null; then
+        mv "$tmp_file" "$ENV_DIR/$file"
+        UPDATED_COUNT=$((UPDATED_COUNT + 1))
         echo "  Updated: $file"
+    else
+        rm -f "$tmp_file"
+        warn "Could not extract $file from upstream"
     fi
 done
 

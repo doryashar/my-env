@@ -55,7 +55,7 @@ mkdir -p "$(dirname "$LOG")"
 exec 9>"$LOCK"
 if ! flock -n 9; then
     echo "$(date -Is) another bisync already running, skipping" >> "$LOG"
-    exit 0
+    exit "${BISYNC_LOCKED_EXIT:-0}"
 fi
 
 # rotate the log if it grew past BISYNC_LOG_MAX_BYTES

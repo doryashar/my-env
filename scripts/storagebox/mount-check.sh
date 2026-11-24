@@ -4,12 +4,13 @@
 set -u
 PATH_CHECK="${1:-/media/yashar/Backups}"
 EXPECTED_UUID="${2:-7E8CA9FF6BC18252}"
-LOG=/home/yashar/logs/mount-check.log
+LOG="${MOUNT_CHECK_LOG:-/home/yashar/logs/mount-check.log}"
+MARKER="${MOUNT_CHECK_MARKER:-/home/yashar/logs/.mount-lost}"
 
 fail() {
     echo "$(date -Is) MOUNT-LOST: $1" | tee -a "$LOG"
     command -v notify-send >/dev/null && notify-send -u critical "storagebox sync" "MOUNT-LOST: $1" 2>/dev/null
-    touch /home/yashar/logs/.mount-lost
+    touch "$MARKER"
     exit "${2:-1}"
 }
 
@@ -18,6 +19,6 @@ SRC=$(findmnt -no SOURCE -T "$PATH_CHECK" 2>/dev/null)
 [ -n "$SRC" ] || fail "$PATH_CHECK exists but is not a mountpoint (stale dir?)" 1
 UUID=$(lsblk -nr -o UUID "$SRC" 2>/dev/null)
 case "$UUID" in
-    "$EXPECTED_UUID") rm -f /home/yashar/logs/.mount-lost; exit 0 ;;
+    "$EXPECTED_UUID") rm -f "$MARKER"; exit 0 ;;
     *) fail "$PATH_CHECK mounted from $SRC (uuid ${UUID:-none}), expected uuid $EXPECTED_UUID" 2 ;;
 esac

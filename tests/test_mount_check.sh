@@ -1,34 +1,115 @@
 #!/usr/bin/env bash
-# Validates mount-check.sh UUID-based matching (docs/storagebox-bisync-init.md)
+# Behavioural tests for scripts/storagebox/mount-check.sh
+# (stub findmnt/lsblk/notify-send, temp dir; nothing under ~/logs).
+#
+# Covers:
+#   - healthy mount with matching UUID: exit 0, marker removed, no log
+#   - missing path: exit 1, logged, marker created, notified
+#   - dir that is not a mountpoint: exit 1
+#   - wrong disk UUID (replug case): exit 2, logged
+#   - works without notify-send installed
+#   - no hardcoded /dev/sd device names
 set -u
-SCRIPT=/home/yashar/storagebox-sync/mount-check.sh
-fail=0
-mkdir -p /tmp/opencode/test-bin
-printf '#!/bin/sh\nexit 0\n' > /tmp/opencode/test-bin/notify-send
-chmod +x /tmp/opencode/test-bin/notify-send
-export PATH="/tmp/opencode/test-bin:$PATH"
 
-check() {
-  if [ "$2" -eq "$3" ]; then echo "PASS: $1"; else echo "FAIL: $1 (got $2 want $3)"; fail=1; fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT="${MOUNT_CHECK_SCRIPT:-$SCRIPT_DIR/../scripts/storagebox/mount-check.sh}"
+
+# shellcheck source=test_helper.sh
+source "$SCRIPT_DIR/test_helper.sh"
+
+echo "========================================"
+echo "Mount Check Tests"
+echo "========================================"
+echo ""
+
+T=$(mktemp -d)
+trap 'rm -rf "$T"' EXIT
+
+mkdir -p "$T/bin" "$T/mp"
+cat > "$T/bin/findmnt" <<'EOF'
+#!/bin/bash
+if [ -z "${STUB_SRC:-}" ]; then
+    exit 1
+fi
+printf '%s\n' "$STUB_SRC"
+EOF
+cat > "$T/bin/lsblk" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$STUB_UUID"
+EOF
+cat > "$T/bin/notify-send" <<EOF
+#!/bin/bash
+echo "\$*" >> "$T/notify.txt"
+EOF
+chmod +x "$T/bin/findmnt" "$T/bin/lsblk" "$T/bin/notify-send"
+
+export STUB_SRC="/dev/sdb1" STUB_UUID="AAAA-BBBB"
+PATH="$T/bin:$PATH"
+
+run() {
+    MOUNT_CHECK_LOG="$T/mount-check.log" MOUNT_CHECK_MARKER="$T/marker" \
+        bash "$SCRIPT" "$@" > "$T/run.out" 2>&1
 }
 
-# 1. Real mount, correct UUID default -> 0
-"$SCRIPT" >/dev/null 2>&1; check "healthy mount returns 0" $? 0
-[ ! -e ~/logs/.mount-lost ] && echo "PASS: .mount-lost cleared" || { echo "FAIL: .mount-lost present"; fail=1; }
+reset() {
+    rm -f "$T/mount-check.log" "$T/marker" "$T/notify.txt"
+}
 
-# 2. Missing path -> 1
-"$SCRIPT" /nonexistent-path-xyz >/dev/null 2>&1; check "missing path returns 1" $? 1
+logged() { cat "$T/mount-check.log" 2>/dev/null; }
 
-# 3. Mounted path but wrong expected UUID -> 2 (covers sda/sdb replug case)
-"$SCRIPT" /media/yashar/Backups 0000-DEADBEEF >/dev/null 2>&1; check "wrong UUID returns 2" $? 2
+notified() {
+    if [[ -f "$T/notify.txt" ]]; then
+        wc -l < "$T/notify.txt"
+    else
+        echo 0
+    fi
+}
 
-# 4. Static: no hardcoded device name, UUID default present
-if grep -q 'EXPECTED_UUID="${2:-428E297D01064BA5}"' "$SCRIPT" && ! grep -q '/dev/sda' "$SCRIPT"; then
-  echo "PASS: UUID-based matching, no device hardcode"
-else
-  echo "FAIL: script still hardcodes device or lacks UUID default"; fail=1
-fi
+# S1: healthy mount, matching UUID
+reset
+STUB_SRC=/dev/sdb1 STUB_UUID=AAAA-BBBB
+touch "$T/marker"
+run "$T/mp" AAAA-BBBB
+assert_exit_code 0 $? "S1: healthy mount must exit 0"
+assert_file_not_exists "$T/mount-check.log" "S1: no log line written"
+assert_file_not_exists "$T/marker" "S1: marker removed"
 
-# cleanup test marker
-rm -f ~/logs/.mount-lost
-exit $fail
+# S2: missing path
+reset
+run "$T/nope" AAAA-BBBB
+assert_exit_code 1 $? "S2: missing path must exit 1"
+assert_contains "$(logged)" "MOUNT-LOST: path $T/nope missing" \
+    "S2: log records the missing path"
+assert_file_exists "$T/marker" "S2: marker created"
+assert_equals "1" "$(notified)" "S2: one notification sent"
+
+# S3: exists but is not a mountpoint
+reset
+mkdir -p "$T/plain"
+STUB_SRC=""
+run "$T/plain" AAAA-BBBB
+assert_exit_code 1 $? "S3: stale dir must exit 1"
+assert_contains "$(logged)" "not a mountpoint" \
+    "S3: log says not a mountpoint"
+
+# S4: wrong disk (replug)
+reset
+STUB_SRC=/dev/sdc1 STUB_UUID=CCCC-DDDD
+run "$T/mp" AAAA-BBBB
+assert_exit_code 2 $? "S4: wrong disk must exit 2"
+assert_contains "$(logged)" "CCCC-DDDD" "S4: log shows the actual uuid"
+assert_contains "$(logged)" "AAAA-BBBB" "S4: log shows the expected uuid"
+
+# S5: works without notify-send installed
+reset
+PATH=/usr/bin:/bin
+run "$T/nope" AAAA-BBBB
+assert_exit_code 1 $? "S5: missing path must exit 1 without notify-send"
+assert_contains "$(logged)" "MOUNT-LOST: path $T/nope missing" \
+    "S5: same log line without notify-send"
+
+# S6: no hardcoded device names
+assert_equals "0" "$(grep -c '/dev/sd' "$SCRIPT" || true)" \
+    "S6: no hardcoded /dev/sd device in the script"
+
+print_test_summary

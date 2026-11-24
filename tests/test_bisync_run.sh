@@ -226,4 +226,24 @@ assert_file_exists "$BISYNC_LOG" "S10: new log exists"
 assert_not_contains "$(cat "$BISYNC_LOG")" "PADDING" \
     "S10: new log does not keep the old content"
 
+# S11: while the lock is held, exit 0 by default (or BISYNC_LOCKED_EXIT)
+exec 9>"$BISYNC_LOCK"
+flock 9
+run_runner
+assert_exit_code 0 $? "S11: lock held exits 0 by default"
+assert_contains "$(newlog)" "another bisync already running" \
+    "S11: log notes the skip"
+export BISYNC_LOCKED_EXIT=75
+run_runner
+assert_exit_code 75 $? "S11: BISYNC_LOCKED_EXIT=75 exits 75"
+assert_contains "$(newlog)" "another bisync already running" \
+    "S11: log notes the skip again"
+assert_not_contains "$(newlog)" "pair[" \
+    "S11: no pair runs while the lock is held"
+unset BISYNC_LOCKED_EXIT
+flock -u 9
+exec 9>&-
+run_runner
+assert_exit_code 0 $? "S11: run succeeds after the lock is released"
+
 print_test_summary

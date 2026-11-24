@@ -15,7 +15,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Valid suite names (single source of truth for the argument parser)
-SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|install_binaries|storagebox_mount_health|sysboard|docker|all"
+SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|resync_loop|mount_check|recover_script|install_binaries|storagebox_mount_health|sysboard|docker|all"
 
 # Test tracking
 TOTAL_SUITES=0
@@ -61,6 +61,9 @@ echo "  sync_encrypted_units    Test sync_encrypted hash/debris/age units"
 echo "  bisync_run              Test StorageBox bisync runner (temp dirs, no network)"
 echo "  storagebox_status       Test StorageBox status check (temp log, stub sender)"
 echo "  merkle_snap             Test merkle shrink tripwire (temp tree, stub sender)"
+echo "  resync_loop             Test StorageBox resync loop (stub runner)"
+echo "  mount_check             Test mount-check UUID matching (stub findmnt/lsblk)"
+echo "  recover_script          Static checks of recover-from-box.sh"
 echo "  install_binaries         Test on-demand binary installer (local fixtures, no network)"
 echo "  storagebox_mount_health  Test StorageBox rclone FUSE mounts respond"
 echo "  sysboard               Test sysboard dashboard script"
@@ -205,6 +208,9 @@ run_sync_encrypted_units=0
 run_bisync_run=0
 run_storagebox_status=0
 run_merkle_snap=0
+run_resync_loop=0
+run_mount_check=0
+run_recover_script=0
 run_install_binaries=0
 run_storagebox_mount_health=0
 run_sysboard=0
@@ -235,6 +241,9 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_bisync_run=1
             run_storagebox_status=1
             run_merkle_snap=1
+            run_resync_loop=1
+            run_mount_check=1
+            run_recover_script=1
             run_install_binaries=1
             run_storagebox_mount_health=1
             run_sysboard=1
@@ -262,6 +271,9 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         bisync_run)  run_bisync_run=1 ;;
         storagebox_status) run_storagebox_status=1 ;;
         merkle_snap) run_merkle_snap=1 ;;
+        resync_loop) run_resync_loop=1 ;;
+        mount_check) run_mount_check=1 ;;
+        recover_script) run_recover_script=1 ;;
         install_binaries)  run_install_binaries=1 ;;
         storagebox_mount_health) run_storagebox_mount_health=1 ;;
         sysboard)              run_sysboard=1 ;;
@@ -386,6 +398,21 @@ fi
 if [[ $run_merkle_snap -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "Merkle Snapshot" "$SCRIPT_DIR/test_merkle_snap.sh" "$suite_counter"
+fi
+
+if [[ $run_resync_loop -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Resync Loop" "$SCRIPT_DIR/test_resync_persistence.sh" "$suite_counter"
+fi
+
+if [[ $run_mount_check -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Mount Check" "$SCRIPT_DIR/test_mount_check.sh" "$suite_counter"
+fi
+
+if [[ $run_recover_script -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Recover Script" "$SCRIPT_DIR/test_recover_script.sh" "$suite_counter"
 fi
 
 if [[ $run_install_binaries -eq 1 ]]; then

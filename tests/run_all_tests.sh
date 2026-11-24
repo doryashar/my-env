@@ -15,7 +15,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Valid suite names (single source of truth for the argument parser)
-SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|install_binaries|storagebox_mount_health|sysboard|docker|all"
+SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|install_binaries|storagebox_mount_health|sysboard|docker|all"
 
 # Test tracking
 TOTAL_SUITES=0
@@ -59,6 +59,7 @@ echo "  monitor_switch          Test monitor-switch resolver (pytest)"
 echo "  monitor_switch_restore  Test monitor-switch state + restore"
 echo "  sync_encrypted_units    Test sync_encrypted hash/debris/age units"
 echo "  bisync_run              Test StorageBox bisync runner (temp dirs, no network)"
+echo "  storagebox_status       Test StorageBox status check (temp log, stub sender)"
 echo "  install_binaries         Test on-demand binary installer (local fixtures, no network)"
 echo "  storagebox_mount_health  Test StorageBox rclone FUSE mounts respond"
 echo "  sysboard               Test sysboard dashboard script"
@@ -201,6 +202,7 @@ run_monitor_switch=0
 run_monitor_switch_restore=0
 run_sync_encrypted_units=0
 run_bisync_run=0
+run_storagebox_status=0
 run_install_binaries=0
 run_storagebox_mount_health=0
 run_sysboard=0
@@ -229,6 +231,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_monitor_switch_restore=1
             run_sync_encrypted_units=1
             run_bisync_run=1
+            run_storagebox_status=1
             run_install_binaries=1
             run_storagebox_mount_health=1
             run_sysboard=1
@@ -254,6 +257,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         monitor_switch_restore) run_monitor_switch_restore=1 ;;
         sync_encrypted_units)  run_sync_encrypted_units=1 ;;
         bisync_run)  run_bisync_run=1 ;;
+        storagebox_status) run_storagebox_status=1 ;;
         install_binaries)  run_install_binaries=1 ;;
         storagebox_mount_health) run_storagebox_mount_health=1 ;;
         sysboard)              run_sysboard=1 ;;
@@ -368,6 +372,11 @@ fi
 if [[ $run_bisync_run -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "Bisync Runner" "$SCRIPT_DIR/test_bisync_run.sh" "$suite_counter"
+fi
+
+if [[ $run_storagebox_status -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "StorageBox Status" "$SCRIPT_DIR/test_status_update.sh" "$suite_counter"
 fi
 
 if [[ $run_install_binaries -eq 1 ]]; then

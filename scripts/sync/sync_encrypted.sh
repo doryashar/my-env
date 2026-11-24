@@ -6,7 +6,11 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ENV_DIR="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
 source "$ENV_DIR/functions/common_funcs"
 
-[[ -d ~/.ssh ]] && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+# Add GitHub's host keys once: ~/.ssh is the decrypted tree, and every change
+# there counts as a local change at the next comparison.
+if [[ -d "$HOME/.ssh" ]] && ! ssh-keygen -F github.com -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1; then
+    ssh-keyscan github.com 2>/dev/null >> "$HOME/.ssh/known_hosts" || true
+fi
 
 # Load configuration (including BW_EMAIL).
 # repo.conf sets ENV_DIR for interactive shells; preserve the value
@@ -507,12 +511,17 @@ validate_merged_files() {
 #   - Sets BW_PASSWORD environment variable
 #   - Exits if password is empty
 get_bw_password() {
+    if ! can_ask; then
+        error "Bitwarden master password is required and there is no terminal to ask for it"
+        exit 1
+    fi
     if [[ -t 0 ]]; then
-        read -s -p "Enter your BitWarden password: " BW_PASSWORD
+        read -s -p "Enter your BitWarden password: " BW_PASSWORD || BW_PASSWORD=""
     else
         echo -n "Enter your BitWarden password: "
-        read -s BW_PASSWORD < /dev/tty
+        read -s BW_PASSWORD </dev/tty || BW_PASSWORD=""
     fi
+    echo
     if [[ -z "$BW_PASSWORD" ]]; then
         error "Bitwarden master password is required"
         exit 1
@@ -557,12 +566,12 @@ get_age_secret() {
         fi
     fi
 
-    if [[ -t 0 ]] || [[ -c /dev/tty ]]; then
+    if can_ask; then
         echo -n "Enter AGE_SECRET (encryption key): "
         if [[ -t 0 ]]; then
-            read -rs AGE_SECRET
+            read -rs AGE_SECRET || AGE_SECRET=""
         else
-            read -rs AGE_SECRET < /dev/tty
+            read -rs AGE_SECRET </dev/tty || AGE_SECRET=""
         fi
         echo
         if [[ -n "$AGE_SECRET" ]]; then

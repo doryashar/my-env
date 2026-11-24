@@ -107,7 +107,7 @@ info() {
     echo -e "${GREEN}[INFO] $*${NC}"
 }
 
-debug() {
+log_debug() {
     if [[ -n "${ENV_DEBUG:-}" ]]; then
         local message="$*"
         message=$(echo "$message" | sed -E 's/(AGE_SECRET|BW_PASSWORD|'\
@@ -210,7 +210,7 @@ get_vault_cli() {
 
     if [[ -n "$bw_bin" ]]; then
         if "$bw_bin" --version &>/dev/null; then
-            debug "Bitwarden CLI already installed and working"
+            log_debug "Bitwarden CLI already installed and working"
             return 0
         else
             warning "Existing Bitwarden CLI is broken " \
@@ -232,7 +232,7 @@ get_vault_cli() {
     if [[ -z "$bw_version" ]]; then
         bw_version="2026.2.0"
     fi
-    debug "Installing Bitwarden CLI version: $bw_version"
+    log_debug "Installing Bitwarden CLI version: $bw_version"
 
     local arch_suffix=""
     local machine
@@ -252,13 +252,13 @@ get_vault_cli() {
             arch_suffix=""
             ;;
     esac
-    debug "Architecture: $machine, suffix: ${arch_suffix:-none}"
+    log_debug "Architecture: $machine, suffix: ${arch_suffix:-none}"
 
     local download_url
     download_url="https://github.com/bitwarden/clients/releases"
     download_url+="/download/cli-v${bw_version}"
     download_url+="/bw-linux${arch_suffix}-${bw_version}.zip"
-    debug "Download URL: $download_url"
+    log_debug "Download URL: $download_url"
 
     if ! curl -fsSL -o bw.zip "$download_url" 2>/dev/null; then
         warning "Failed to download Bitwarden CLI v${bw_version} for ${machine}"
@@ -310,13 +310,13 @@ oauth2_authenticate() {
         local status
         status=$(bw status --raw 2>/dev/null || echo '{"status":"unauthenticated"}')
         if [[ "$status" == *"unlocked"* ]]; then
-            debug "BW_SESSION already set and vault unlocked"
+            log_debug "BW_SESSION already set and vault unlocked"
             export BW_AUTH_STATUS="success"
             export BW_SESSION
             return 0
         elif [[ "$status" != *"unauthenticated"* ]]; then
             if bw sync --session "$BW_SESSION" &>/dev/null; then
-                debug "BW_SESSION validated successfully"
+                log_debug "BW_SESSION validated successfully"
                 export BW_AUTH_STATUS="success"
                 export BW_SESSION
                 return 0
@@ -338,7 +338,7 @@ oauth2_authenticate() {
             bw_login_output=$(bw login --apikey 2>&1)
             if [[ $? -ne 0 ]]; then
                 warning "API key authentication failed"
-                debug "bw login --apikey output: $bw_login_output"
+                log_debug "bw login --apikey output: $bw_login_output"
                 export BW_AUTH_STATUS="failed"
                 return 1
             fi
@@ -380,7 +380,7 @@ oauth2_authenticate() {
     fi
 
     if [[ -n "${BW_SESSION:-}" ]]; then
-        debug "BW_SESSION already set, skipping unlock"
+        log_debug "BW_SESSION already set, skipping unlock"
     else
         status=$(bw status --raw 2>/dev/null || echo '{"status":"locked"}')
         
@@ -408,7 +408,7 @@ oauth2_authenticate() {
             export BW_SESSION
             info "Vault unlocked successfully"
         else
-            debug "Already authenticated and unlocked"
+            log_debug "Already authenticated and unlocked"
         fi
     fi
 
@@ -488,7 +488,7 @@ clone_public_repo() {
     info "Cloning public repository..."
 
     if [[ -d "$ENV_DIR/.git" ]]; then
-        debug "Repository already exists at $ENV_DIR"
+        log_debug "Repository already exists at $ENV_DIR"
         return 0
     fi
 
@@ -507,7 +507,7 @@ clone_public_repo() {
     github_token=$(get_github_token)
 
     if [[ -n "$github_token" ]] && [[ "$public_url" == *"github.com"* ]]; then
-        debug "Cloning with HTTPS token..."
+        log_debug "Cloning with HTTPS token..."
         local https_url
         https_url=$(echo "$public_url" | \
           sed 's|git@github.com:|https://github.com/|' | \
@@ -519,7 +519,7 @@ clone_public_repo() {
             git clone "$public_url" "$ENV_DIR" 2>/dev/null || error "Failed to clone repository"
         }
     else
-        debug "Cloning with SSH..."
+        log_debug "Cloning with SSH..."
         git clone "$public_url" "$ENV_DIR" 2>/dev/null || error "Failed to clone repository"
     fi
 
@@ -540,45 +540,45 @@ check_remote_repo_exists() {
         return 1
     fi
     
-    debug "Checking if repo exists: $owner/$repo_name"
+    log_debug "Checking if repo exists: $owner/$repo_name"
     
     local github_token
     github_token=$(get_github_token)
     if [[ -n "$github_token" ]]; then
-        debug "Checking repo via GitHub API..."
+        log_debug "Checking repo via GitHub API..."
         local http_code
         http_code=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: token $github_token" \
             "https://api.github.com/repos/$owner/$repo_name")
         if [[ "$http_code" == "200" ]]; then
-            debug "Repo exists (API)"
+            log_debug "Repo exists (API)"
             return 0
         elif [[ "$http_code" == "404" ]]; then
-            debug "Repo does not exist (API)"
+            log_debug "Repo does not exist (API)"
             return 1
         fi
-        debug "API check returned $http_code, trying other methods..."
+        log_debug "API check returned $http_code, trying other methods..."
     fi
     
     if command_exists gh && gh auth status &>/dev/null; then
-        debug "Checking repo via gh CLI..."
+        log_debug "Checking repo via gh CLI..."
         if gh repo view "$owner/$repo_name" &>/dev/null; then
-            debug "Repo exists (gh CLI)"
+            log_debug "Repo exists (gh CLI)"
             return 0
         else
-            debug "Repo does not exist (gh CLI)"
+            log_debug "Repo does not exist (gh CLI)"
             return 1
         fi
     fi
     
     mkdir -p ~/.ssh
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-    debug "Checking repo via git ls-remote..."
+    log_debug "Checking repo via git ls-remote..."
     if git ls-remote "$repo_url" HEAD &>/dev/null; then
-        debug "Repo exists (git ls-remote)"
+        log_debug "Repo exists (git ls-remote)"
         return 0
     else
-        debug "Repo does not exist or no access (git ls-remote)"
+        log_debug "Repo does not exist or no access (git ls-remote)"
         return 1
     fi
 }
@@ -707,7 +707,7 @@ sync_encrypted_files() {
 
     info "Checking if private repository exists..."
     if check_remote_repo_exists "$private_url"; then
-        debug "Private repository exists, syncing..."
+        log_debug "Private repository exists, syncing..."
         bash "$ENV_DIR/scripts/sync/sync_encrypted.sh" || \
           warning "Encrypted sync failed (non-fatal)"
     else
@@ -833,7 +833,7 @@ EOF
             info "Wrote $config_file"
         fi
     else
-        debug "Configuration file already exists"
+        log_debug "Configuration file already exists"
     fi
 }
 
@@ -841,7 +841,7 @@ install_docker() {
     info "Setting up Docker..."
 
     if command_exists docker; then
-        debug "Docker already installed"
+        log_debug "Docker already installed"
         return 0
     fi
 
@@ -880,7 +880,7 @@ install_apt_packages() {
     info "Setting up APT packages..."
 
     if ! command_exists apt-get; then
-        debug "Not a Debian-based system, skipping APT packages"
+        log_debug "Not a Debian-based system, skipping APT packages"
         return 0
     fi
 
@@ -922,7 +922,7 @@ install_apt_packages() {
         sudo apt-get update -qq
         sudo apt-get install -y "${missing_packages[@]}"
     else
-        debug "All APT packages already installed"
+        log_debug "All APT packages already installed"
     fi
 }
 
@@ -931,7 +931,7 @@ install_tpm() {
 
     local tpm_dir="$HOME/.tmux/plugins/tpm"
     if [[ -d "$tpm_dir" ]]; then
-        debug "TPM already installed at $tpm_dir"
+        log_debug "TPM already installed at $tpm_dir"
         return 0
     fi
 
@@ -949,7 +949,7 @@ install_pip_packages() {
     info "Setting up PIP packages..."
 
     if ! command_exists pip3; then
-        debug "pip3 not found, skipping PIP packages"
+        log_debug "pip3 not found, skipping PIP packages"
         return 0
     fi
 
@@ -967,7 +967,7 @@ install_pip_packages() {
             local err
             err=$(pip3 install --user "$pkg" 2>&1) || warning "Failed to install $pkg: $err"
         else
-            debug "$pkg already installed"
+            log_debug "$pkg already installed"
         fi
     done
 }
@@ -999,7 +999,7 @@ setup_binaries() {
     for appimage in "$ENV_DIR"/bin/*.AppImage; do
         if [[ -f "$appimage" ]]; then
             chmod +x "$appimage"
-            debug "Made executable: $appimage"
+            log_debug "Made executable: $appimage"
         fi
     done
 
@@ -1018,7 +1018,7 @@ setup_binaries() {
 
     if [[ ":$PATH:" != *":$ENV_DIR/bin:"* ]]; then
         export PATH="$ENV_DIR/bin:$PATH"
-        debug "Added $ENV_DIR/bin to PATH"
+        log_debug "Added $ENV_DIR/bin to PATH"
     fi
 }
 
@@ -1039,7 +1039,7 @@ clone_github_projects() {
               "$projects_dir/$repo_name" 2>/dev/null || \
               warning "Failed to clone $project"
         else
-            debug "$repo_name already exists"
+            log_debug "$repo_name already exists"
         fi
     done
 }
@@ -1084,7 +1084,7 @@ setup_zsh() {
             warning "Run this manually later: curl -fsSL https://raw.githubusercontent.com/romkatv/zsh4humans/v5/install | bash -s -- --yes"
         fi
     else
-        debug "z4h already installed"
+        log_debug "z4h already installed"
     fi
 
     if [[ -f "$ENV_DIR/dotfiles/.zshrc" ]]; then

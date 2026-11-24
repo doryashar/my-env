@@ -124,7 +124,7 @@ run_gen() {
         set -euo pipefail
         eval "$(load_fn generate_config)"
         info() { :; }
-        debug() { :; }
+        log_debug() { :; }
         warning() { echo "WARNING: $*"; }
         prompt() {
             # stub: next answer from the PROMPT_ANSWERS queue, or fail

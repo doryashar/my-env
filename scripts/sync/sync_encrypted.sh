@@ -69,7 +69,7 @@ ensure_age_installed() {
   if command_exists age; then
     age_bin=$(command -v age)
     if "$age_bin" --version &>/dev/null; then
-      debug "age encryption tool is installed and working: $age_bin"
+      log_debug "age encryption tool is installed and working: $age_bin"
       return 0
     else
       warning "age binary exists but cannot be executed (wrong architecture?): $age_bin"
@@ -106,7 +106,7 @@ ensure_age_installed() {
   fi
   
   if command_exists age && age --version &>/dev/null; then
-    debug "age encryption tool installed successfully"
+    log_debug "age encryption tool installed successfully"
     return 0
   else
     error "age installation completed but binary still not working"
@@ -203,7 +203,7 @@ encrypt_recursive() {
     dest_file="$dest_dir/$rel_path.age"
     mkdir -p "$(dirname "$dest_file")"
     encrypt_file "$file" "$dest_file"
-    debug "Encrypted: $rel_path"
+    log_debug "Encrypted: $rel_path"
   done
 }
 
@@ -536,14 +536,14 @@ get_bw_password() {
 #   - Sets AGE_SECRET environment variable
 get_age_secret() {
     if [[ -n "${AGE_SECRET:-}" ]]; then
-        debug "Using AGE_SECRET from environment"
+        log_debug "Using AGE_SECRET from environment"
         return 0
     fi
 
     local secret_file="$HOME/.config/age/secret"
     if [[ -f "$secret_file" ]]; then
         export AGE_SECRET=$(cat "$secret_file")
-        debug "Using AGE_SECRET from $secret_file"
+        log_debug "Using AGE_SECRET from $secret_file"
         return 0
     fi
 
@@ -552,7 +552,7 @@ get_age_secret() {
         secret=$(bw_get_secret AGE_SECRET 2>/dev/null || echo "")
         if [[ -n "$secret" ]]; then
             export AGE_SECRET="$secret"
-            debug "Using AGE_SECRET from Bitwarden"
+            log_debug "Using AGE_SECRET from Bitwarden"
             return 0
         fi
     fi
@@ -567,7 +567,7 @@ get_age_secret() {
         echo
         if [[ -n "$AGE_SECRET" ]]; then
             export AGE_SECRET
-            debug "Using AGE_SECRET from manual input"
+            log_debug "Using AGE_SECRET from manual input"
             return 0
         fi
     fi
@@ -588,20 +588,20 @@ get_age_secret() {
 #   - May call get_bw_password() if session is locked
 get_secret_keys() {
     if get_age_secret; then
-        debug "AGE_SECRET obtained via fallback chain"
+        log_debug "AGE_SECRET obtained via fallback chain"
     else
         if [[ "${BW_AUTH_STATUS:-}" == "skipped" ]]; then
-            debug "Bitwarden skipped in parent process"
+            log_debug "Bitwarden skipped in parent process"
             return 1
         fi
 
         if [[ "${BW_AUTH_STATUS:-}" == "failed" ]]; then
-            debug "Bitwarden auth failed in parent process"
+            log_debug "Bitwarden auth failed in parent process"
             return 1
         fi
 
         if [[ -n "${BW_SESSION:-}" ]] && bw get status &>/dev/null; then
-            debug "Using existing BW_SESSION from parent process"
+            log_debug "Using existing BW_SESSION from parent process"
         else
             if [[ -z "${BW_EMAIL:-}" ]]; then
                 warning "BW_EMAIL environment variable not set. Please add it to config/repo.conf"
@@ -650,7 +650,7 @@ get_secret_keys() {
                 fi
                 info "Vault unlocked successfully!"
             else
-                debug "Using existing BitWarden session."
+                log_debug "Using existing BitWarden session."
             fi
         fi
 
@@ -719,7 +719,7 @@ clone_private_repo() {
     owner_repo=$(echo "$repo_url" | sed -E 's|.*github.com[:/]([^/]+/[^/]+).*|\1|; s|\.git$||')
     
     if [[ -d "$target_dir/.git" ]]; then
-        debug "Repository already cloned at $target_dir"
+        log_debug "Repository already cloned at $target_dir"
         return 0
     fi
     
@@ -985,7 +985,7 @@ main() {
   fi
     
   # Ensure age is installed
-  debug "Ensuring AGE is installed and setting up the secret from BW"
+  log_debug "Ensuring AGE is installed and setting up the secret from BW"
   ensure_age_installed
   
   if ! get_secret_keys; then
@@ -997,7 +997,7 @@ main() {
       echo "  2. Run: bw login"
       echo "  3. Re-run this script after authenticating"
     else
-      debug "Bitwarden unavailable, skipping encrypted sync"
+      log_debug "Bitwarden unavailable, skipping encrypted sync"
     fi
     exit 0
   fi
@@ -1062,13 +1062,13 @@ main() {
 
   # Check for remote changes
   cd "$LOCAL_REPO_PATH" || exit 1
-  debug "Checking for remote changes..."
+  log_debug "Checking for remote changes..."
   git fetch 2>/dev/null || true
-  debug "Checking if there are any updates in local"
+  log_debug "Checking if there are any updates in local"
   
   # Handle empty repos (no commits yet)
   if ! git rev-parse HEAD &>/dev/null; then
-    debug "Empty repository (no commits)"
+    log_debug "Empty repository (no commits)"
     if [[ -d "$DECRYPTED_DIR" ]] && [[ -n "$(ls -A "$DECRYPTED_DIR" 2>/dev/null)" ]]; then
       info "Local files exist but repo is empty - will push local changes"
       local_changed=1
@@ -1079,7 +1079,7 @@ main() {
     fi
   else
     local_current=$(git rev-parse HEAD)
-    debug "Checking if there are any updates in remote"
+    log_debug "Checking if there are any updates in remote"
     remote_current=$(git rev-parse @{upstream} 2>/dev/null || echo "$local_current")
     
     remote_changed=0
@@ -1088,15 +1088,15 @@ main() {
       info "Remote has changes."
       remote_changed=1
     else
-      debug "Remote is up-to-date."
+      log_debug "Remote is up-to-date."
     fi
     
     # Check if local decrypted files changed
-    debug "Checking for local changes..."
+    log_debug "Checking for local changes..."
     local_changed=0
 
     if has_changed "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"; then
-      debug "Local files unchanged."
+      log_debug "Local files unchanged."
     else
       info "Local files have changed."
       local_changed=1
@@ -1111,7 +1111,7 @@ main() {
 
   # Case 1: No changes anywhere
   if [[ $remote_changed -eq 0 ]] && [ "$local_changed" -eq 0 ]; then
-    debug "No changes detected. Nothing to do."
+    log_debug "No changes detected. Nothing to do."
     exit 0
   fi
   
@@ -1130,7 +1130,7 @@ main() {
     decrypt_recursive "$LOCAL_REPO_PATH" "$DECRYPTED_DIR"
     chmod -R go-rwx "$DECRYPTED_DIR"
     hashit "$DECRYPTED_DIR" "$LOCAL_HASH_FILE"
-    debug "Local files updated successfully."
+    log_debug "Local files updated successfully."
     exit 0
   fi
   
@@ -1155,7 +1155,7 @@ main() {
       || warning "Nothing to commit for encrypted update."
     git push || { error "Failed to push changes."; exit 1; }
     mv "$TEMP_DIR/temp_hashes" "$LOCAL_HASH_FILE"
-    debug "Local changes encrypted and pushed successfully."
+    log_debug "Local changes encrypted and pushed successfully."
     exit 0
   fi
   
@@ -1247,7 +1247,7 @@ main() {
       || warning "Nothing to commit after merge."
     git push || { error "Failed to push merged changes."; exit 1; }
 
-    debug "Files merged, encrypted, and pushed successfully."
+    log_debug "Files merged, encrypted, and pushed successfully."
     exit 0
   fi
 }
@@ -1262,10 +1262,10 @@ main() {
 # Side Effects:
 #   - Removes TEMP_DIR
 cleanup() {
-  debug "Cleaning up temporary files..."
+  log_debug "Cleaning up temporary files..."
   _cleanup_age_identity
   rm -rf "$TEMP_DIR"
-  debug "Done cleanup."
+  log_debug "Done cleanup."
 }
 
 # Set cleanup on exit (single trap — chains age-identity cleanup + tempdir cleanup)

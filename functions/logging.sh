@@ -15,7 +15,7 @@ info() {
     echo -e "${GREEN}[INFO] $message${NC}"
 }
 
-debug() {
+log_debug() {
     local message="$*"
     if [[ -n "${ENV_DEBUG:-}" ]]; then
         message=$(echo "$message" | sed -E 's/(AGE_SECRET|BW_PASSWORD|BW_CLIENTID|BW_CLIENTSECRET|GITHUB_SSH_PRIVATE_KEY|GLM_API_KEY|GITHUB_TOKEN|GH_TOKEN|API_KEY|TOKEN|BW_SESSION|UPTIME_KUMA_API|ZEROTIER_API_KEY)=[^ ]+/\1=***HIDDEN***/g')

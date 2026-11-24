@@ -262,14 +262,14 @@ load_config() {
 # Side Effects:
 #   - Calls sync_file() for each matched file
 process_regex_mappings() {
-    debug "Processing regex-based mappings..."
+    log_debug "Processing regex-based mappings..."
     
     for i in "${!SOURCE_REGEX[@]}"; do
         local source_pattern="${SOURCE_REGEX[$i]}"
         local target_pattern="${TARGET_REGEX[$i]}"
         local options="${FILE_OPTIONS["regex:$source_pattern"]}"
         
-        debug "Processing pattern: $source_pattern => $target_pattern"
+        log_debug "Processing pattern: $source_pattern => $target_pattern"
         
         # Convert source_pattern to a glob pattern for finding files
         local glob_pattern="$ENV_DIR/${source_pattern//\(/*/}"
@@ -323,7 +323,7 @@ process_regex_mappings() {
             # Expand ~ in target path
             target="${target/#\~/$HOME}"
             
-            debug "(-) Matched: $rel_path => $target"
+            log_debug "(-) Matched: $rel_path => $target"
             
             # Sync the file
             sync_file "$rel_path" "$target" "$options"
@@ -467,21 +467,21 @@ sync_file() {
     if [[ -e "$target" ]]; then
         # Check if it's a link pointing to our source
         if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
-            debug "(-)(-) Link already exists and is correct: $target"
+            log_debug "(-)(-) Link already exists and is correct: $target"
             return 0
         else
             if [[ -L "$target" ]]; then
-                debug "Target is a symlink: $target"
+                log_debug "Target is a symlink: $target"
             fi
             if [[ "$(readlink "$target")" == "$source" ]]; then
-                debug "Symlink already points to source:" \
+                log_debug "Symlink already points to source:" \
                   "$(readlink "$target") == $source"
             fi
         fi
         
         # File exists but is not a correct link - check if it's different
         if diff -q "$source" "$target" &>/dev/null; then
-            debug "(-)(-) Files are identical: $target"
+            log_debug "(-)(-) Files are identical: $target"
             
             # If target is not a link to source, replace with link
             if [[ ! -L "$target" || "$(readlink "$target")" != "$source" ]]; then
@@ -503,7 +503,7 @@ sync_file() {
         fi
     else
         # Target doesn't exist - create link
-        debug "(-)(-) Creating link: $target"
+        log_debug "(-)(-) Creating link: $target"
         create_link "$source" "$target" "$link_type"
     fi
     
@@ -522,7 +522,7 @@ sync_file() {
 # Side Effects:
 #   - Calls backward_sync_file() for each mapping
 process_backward_sync() {
-    debug "Processing backward sync mappings..."
+    log_debug "Processing backward sync mappings..."
     
     for mapping in "${BACKWARD_SYNC[@]}"; do
         # Parse the mapping
@@ -530,7 +530,7 @@ process_backward_sync() {
         local target="${mapping#* <= }"
         local options="${FILE_OPTIONS["$mapping"]}"
         
-        debug "Processing backward sync: $source <= $target"
+        log_debug "Processing backward sync: $source <= $target"
         
         # Expand ~ in paths
         source="${source/#\~/$HOME}"
@@ -582,7 +582,7 @@ process_backward_sync() {
                     continue
                 fi
                 
-                debug "(-) Backward sync: $source_file <= $target_file${NC}"
+                log_debug "(-) Backward sync: $source_file <= $target_file${NC}"
                 
                 # Sync from target to source
                 backward_sync_file "$source_file" "$target_file" "$options"
@@ -601,7 +601,7 @@ process_backward_sync() {
                 continue
             fi
             
-            debug "(-) Backward sync: $source <= $target"
+            log_debug "(-) Backward sync: $source <= $target"
             
             # Sync from target to source
             backward_sync_file "$source" "$target" "$options"
@@ -656,13 +656,13 @@ backward_sync_file() {
     if [[ -e "$source" ]]; then
         # Check if source is a symbolic link to the target:
         if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
-            debug "(-)(-) Symbolic link already exists: $source"
+            log_debug "(-)(-) Symbolic link already exists: $source"
             return 0
         fi
 
         # Check if they're different
         if diff -q "$source" "$target" &>/dev/null; then
-            debug "(-)(-) Files are identical: $target"
+            log_debug "(-)(-) Files are identical: $target"
             rm -rf "$target"
             ln -sf "$source" "$target"
             return 0
@@ -744,9 +744,9 @@ create_link() {
 #   - Calls process_regex_mappings() for pattern mappings
 #   - Calls process_backward_sync() for backward sync
 sync_dotfiles() {
-    debug "Syncing the following files: ${!SOURCE_TO_TARGET[@]}"
+    log_debug "Syncing the following files: ${!SOURCE_TO_TARGET[@]}"
     for source in "${!SOURCE_TO_TARGET[@]}"; do
-        debug "Forward Syncing $source to ${SOURCE_TO_TARGET[$source]}"
+        log_debug "Forward Syncing $source to ${SOURCE_TO_TARGET[$source]}"
         local target="${SOURCE_TO_TARGET[$source]}"
         local options="${FILE_OPTIONS[$source]}"
         
@@ -759,7 +759,7 @@ sync_dotfiles() {
     # Finally, process backward sync mappings
     process_backward_sync
 
-    debug "Sync complete!"
+    log_debug "Sync complete!"
     return 0
 }
 # Remove all broken symlinks in a directory

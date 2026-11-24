@@ -199,7 +199,7 @@ test_debug_redacts_telegram_token() {
     local out
     out=$(ENV_DEBUG=1 bash -c '
         source "$1/functions/logging.sh"
-        debug "TELEGRAM_BOT_TOKEN=123456:ABC-DEF call failed"
+        log_debug "TELEGRAM_BOT_TOKEN=123456:ABC-DEF call failed"
     ' _ "$ENV_DIR" 2>/dev/null)
     if [[ "$out" == *123456:ABC-DEF* ]]; then
         echo -e "${RED}✗${NC} debug must redact TELEGRAM_BOT_TOKEN values"

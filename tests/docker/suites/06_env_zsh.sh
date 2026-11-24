@@ -106,7 +106,7 @@ test_Z12_common_funcs_debug_sanitizes() {
     reset_full_state
     source "$TEST_ENV_DIR/functions/common_funcs"
     
-    ENV_DEBUG=1 debug "AGE_SECRET=secret123" 2>&1 | grep -q "HIDDEN" || true
+    ENV_DEBUG=1 log_debug "AGE_SECRET=secret123" 2>&1 | grep -q "HIDDEN" || true
     assert_success 0 "debug() should sanitize secrets"
 }
 

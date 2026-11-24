@@ -45,7 +45,7 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-debug() {
+log_debug() {
   if [[ "$DEBUG" == "1" ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] $*" >> "$LOG_FILE"
   fi
@@ -112,12 +112,12 @@ while true; do
     fi
 
     log "New alert: $title (id=$alert_id, areas=$area_count)"
-    debug "$clean"
+    log_debug "$clean"
 
     if [[ -n "${MARK:-}" ]]; then
       matched=$(echo "$clean" | jq -r '(.data // [])[]' | grep -E "$MARK" || true)
       if [[ -z "$matched" ]]; then
-        debug "No match for MARK='$MARK', skipping notification"
+        log_debug "No match for MARK='$MARK', skipping notification"
         sleep "$POLL_INTERVAL"
         continue
       fi

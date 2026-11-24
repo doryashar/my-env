@@ -166,12 +166,12 @@ ensure_gh_auth() {
 
 ensure_github_auth() {
     if validate_github_token; then
-        debug "Valid GitHub token available"
+        log_debug "Valid GitHub token available"
         return 0
     fi
     
     if command -v gh &>/dev/null && gh auth status &>/dev/null; then
-        debug "GitHub CLI authenticated"
+        log_debug "GitHub CLI authenticated"
         return 0
     fi
     
@@ -219,7 +219,7 @@ ensure_ssh_dir() {
         warning "~/.ssh exists as a file, backing up..."
         mv ~/.ssh ~/.ssh.file.backup.$(date +%Y%m%d_%H%M%S)
     elif [[ -d ~/.ssh ]]; then
-        debug "~/.ssh directory already exists"
+        log_debug "~/.ssh directory already exists"
         return 0
     fi
     mkdir -p ~/.ssh
@@ -239,35 +239,35 @@ check_github_repo_exists() {
         return 1
     fi
     
-    debug "Checking if repo exists: $owner/$repo_name"
+    log_debug "Checking if repo exists: $owner/$repo_name"
     
     local github_token
     github_token=$(get_github_token)
     if [[ -n "$github_token" ]]; then
         if validate_github_token "$github_token"; then
-            debug "Checking repo via GitHub API..."
+            log_debug "Checking repo via GitHub API..."
             local http_code
             http_code=$(curl -s -o /dev/null -w "%{http_code}" \
                 -H "Authorization: token $github_token" \
                 "https://api.github.com/repos/$owner/$repo_name")
             if [[ "$http_code" == "200" ]]; then
-                debug "Repo exists (API)"
+                log_debug "Repo exists (API)"
                 return 0
             elif [[ "$http_code" == "404" ]]; then
-                debug "Repo does not exist (API)"
+                log_debug "Repo does not exist (API)"
                 return 1
             fi
-            debug "API check returned $http_code, trying other methods..."
+            log_debug "API check returned $http_code, trying other methods..."
         fi
     fi
     
     if command -v gh &>/dev/null && gh auth status &>/dev/null; then
-        debug "Checking repo via gh CLI..."
+        log_debug "Checking repo via gh CLI..."
         if gh repo view "$owner/$repo_name" &>/dev/null; then
-            debug "Repo exists (gh CLI)"
+            log_debug "Repo exists (gh CLI)"
             return 0
         else
-            debug "Repo does not exist (gh CLI)"
+            log_debug "Repo does not exist (gh CLI)"
             return 1
         fi
     fi
@@ -282,17 +282,17 @@ check_github_repo_exists() {
         cat ~/.ssh/known_hosts >> "$known_hosts" 2>/dev/null || true
     fi
     ssh-keyscan github.com >> "$known_hosts" 2>/dev/null || true
-    debug "Checking repo via git ls-remote..."
+    log_debug "Checking repo via git ls-remote..."
     local ls_remote_rc=0
     GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=$known_hosts \
 -o StrictHostKeyChecking=accept-new" \
         git ls-remote "$repo_url" HEAD &>/dev/null || ls_remote_rc=$?
     rm -f "$known_hosts"
     if [[ $ls_remote_rc -eq 0 ]]; then
-        debug "Repo exists (git ls-remote)"
+        log_debug "Repo exists (git ls-remote)"
         return 0
     else
-        debug "Repo does not exist or no access (git ls-remote)"
+        log_debug "Repo does not exist or no access (git ls-remote)"
         return 1
     fi
 }

@@ -905,6 +905,7 @@ install_apt_packages() {
         "bat"
         "eza"
         "jq"
+        "pipx"
         "unzip"
         "zip"
         "fontconfig"
@@ -949,8 +950,8 @@ install_tpm() {
 install_pip_packages() {
     info "Setting up PIP packages..."
 
-    if ! command_exists pip3; then
-        log_debug "pip3 not found, skipping PIP packages"
+    if ! command_exists pipx; then
+        warning "pipx not found (install the 'pipx' package); skipping Python tools"
         return 0
     fi
 
@@ -962,13 +963,15 @@ install_pip_packages() {
         "neovim-remote"
     )
 
+    local installed
+    installed=$(pipx list --short 2>/dev/null | awk '{print $1}')
+
     for pkg in "${packages[@]}"; do
-        if ! pip3 show "$pkg" &> /dev/null; then
-            info "Installing $pkg..."
-            local err
-            err=$(pip3 install --user "$pkg" 2>&1) || warning "Failed to install $pkg: $err"
-        else
+        if printf '%s\n' "$installed" | grep -qx "$pkg"; then
             log_debug "$pkg already installed"
+        else
+            info "Installing $pkg with pipx..."
+            pipx install "$pkg" || warning "Failed to install $pkg with pipx"
         fi
     done
 }
@@ -979,7 +982,26 @@ setup_cron_jobs() {
     local cron_file="$ENV_DIR/config/crontab"
 
     if [[ -f "$cron_file" ]]; then
-        crontab "$cron_file" 2>/dev/null || warning "Failed to install crontab"
+        local current
+        current=$(crontab -l 2>/dev/null || true)
+
+        if [[ "$current" == "$(cat "$cron_file")" ]]; then
+            info "Installed crontab already matches $cron_file"
+            return 0
+        fi
+
+        echo "--- installed crontab"
+        echo "+++ $cron_file"
+        diff <(printf '%s\n' "$current") "$cron_file" || true
+
+        if prompt_yn "Replace the installed crontab with $cron_file? (y/N) "; then
+            mkdir -p "$ENV_DIR/tmp"
+            printf '%s\n' "$current" \
+                > "$ENV_DIR/tmp/crontab.backup.$(date +%Y%m%d%H%M%S)"
+            crontab "$cron_file" 2>/dev/null || warning "Failed to install crontab"
+        else
+            info "Installed crontab left unchanged"
+        fi
     else
         mkdir -p "$ENV_DIR/config"
         cat > "$cron_file" << 'EOF'
@@ -1086,14 +1108,6 @@ setup_zsh() {
         fi
     else
         log_debug "z4h already installed"
-    fi
-
-    if [[ -f "$ENV_DIR/dotfiles/.zshrc" ]]; then
-        ln -sf "$ENV_DIR/dotfiles/.zshrc" "$HOME/.zshrc"
-    fi
-
-    if [[ -f "$ENV_DIR/dotfiles/.zshenv" ]]; then
-        ln -sf "$ENV_DIR/dotfiles/.zshenv" "$HOME/.zshenv"
     fi
 
     if [[ "$SHELL" != *"zsh"* ]]; then

@@ -50,13 +50,13 @@ STATUS_BOTH_CHANGES=3
 update_last_check() {
     mkdir -p "$ENV_DIR/tmp"
     touch "$ENV_DIR/tmp/last_check"
-    debug "Updated last_check timestamp"
+    log_debug "Updated last_check timestamp"
 }
 
 update_last_sync() {
     mkdir -p "$ENV_DIR/tmp"
     touch "$ENV_DIR/tmp/last_sync"
-    debug "Updated last_sync timestamp"
+    log_debug "Updated last_sync timestamp"
 }
 
 #########################################################################
@@ -93,10 +93,19 @@ git_commit_changes() {
     cd "$ENV_DIR" || return 1
     
     if [[ -n "$(git status --porcelain)" ]]; then
+        if [[ "${ENV_AUTO_COMMIT:-0}" != "1" ]]; then
+            git status --short
+            if ! prompt_yn "Commit ALL of these local changes? (y/N) "; then
+                warning "Local changes left uncommitted"
+                return 0
+            fi
+        fi
         info "Committing local changes..."
         git submodule foreach 'git add . && git commit -m "Auto-sync submodule $(date "+%Y-%m-%d %H:%M:%S")"' 2>/dev/null || true
         git add .
-        git commit -m "Auto-sync dotfiles $(date '+%Y-%m-%d %H:%M:%S')"
+        if ! git commit -m "Auto-sync dotfiles $(date '+%Y-%m-%d %H:%M:%S')"; then
+            warning "git commit failed"
+        fi
     fi
 }
 
@@ -104,7 +113,7 @@ git_pull() {
     cd "$ENV_DIR" || return 1
     
     if [[ -z "${REMOTE_URL:-}" ]]; then
-        debug "No remote URL configured, skipping pull"
+        log_debug "No remote URL configured, skipping pull"
         return 0
     fi
     
@@ -118,7 +127,7 @@ git_pull() {
     if git status | grep -q "behind"; then
         case "$DEFAULT_CONFLICT_STRATEGY" in
             "remote")
-                debug "Auto-pulling (strategy: remote)"
+                log_debug "Auto-pulling (strategy: remote)"
                 if ! git pull --ff-only origin master 2>/dev/null; then
                     info "Fast-forward failed, trying merge..."
                     if ! git pull origin master; then
@@ -128,7 +137,7 @@ git_pull() {
                 fi
                 ;;
             "local")
-                debug "Skipping pull (strategy: local)"
+                log_debug "Skipping pull (strategy: local)"
                 ;;
             "ask")
                 if prompt_yn "Remote updates available. Pull? (y/n) "; then
@@ -142,17 +151,17 @@ git_pull() {
                 fi
                 ;;
             "rename")
-                debug "Backing up and pulling (strategy: rename)"
+                log_debug "Backing up and pulling (strategy: rename)"
                 local backup_branch="backup-$(date +%Y%m%d%H%M%S)"
                 git branch "$backup_branch"
                 info "Created backup branch: $backup_branch"
                 git pull --ff-only origin master 2>/dev/null || git reset --hard origin/master
                 ;;
             "ignore")
-                debug "Ignoring remote updates (strategy: ignore)"
+                log_debug "Ignoring remote updates (strategy: ignore)"
                 ;;
             *)
-                debug "Unknown strategy: $DEFAULT_CONFLICT_STRATEGY, asking..."
+                log_debug "Unknown strategy: $DEFAULT_CONFLICT_STRATEGY, asking..."
                 prompt_yn "Remote updates available. Pull? (y/n) " && git pull origin master
                 ;;
         esac
@@ -163,7 +172,7 @@ git_push() {
     cd "$ENV_DIR" || return 1
     
     if [[ -z "${REMOTE_URL:-}" ]]; then
-        debug "No remote URL configured, skipping push"
+        log_debug "No remote URL configured, skipping push"
         return 0
     fi
     
@@ -172,12 +181,12 @@ git_push() {
     if [[ -n "$(git cherry -v 2>/dev/null)" ]]; then
         case "$DEFAULT_CONFLICT_STRATEGY" in
             "remote"|"local")
-                debug "Auto-pushing (strategy: $DEFAULT_CONFLICT_STRATEGY)"
+                log_debug "Auto-pushing (strategy: $DEFAULT_CONFLICT_STRATEGY)"
                 git push origin master 2>/dev/null || warning "Failed to push changes"
                 ;;
             "ask")
                 if prompt_yn "Local changes detected. Push? (y/n) "; then
-                    debug "Pushing changes to git"
+                    log_debug "Pushing changes to git"
                     git push origin master 2>/dev/null || warning "Failed to push changes"
                 fi
                 ;;
@@ -334,10 +343,12 @@ main() {
                 shift
                 ;;
             -r|--repo)
-                shift 2
+                echo "Error: --repo and --config are no longer supported; edit config/repo.conf"
+                exit 1
                 ;;
             --config)
-                shift 2
+                echo "Error: --repo and --config are no longer supported; edit config/repo.conf"
+                exit 1
                 ;;
             *)
                 warning "Unknown option: $1"
@@ -360,37 +371,62 @@ main() {
         perform_encrypted=1
     fi
     
+    local failed_steps=()
+    
     if [[ $perform_pull -eq 1 ]]; then
-        git_commit_changes
-        git_pull
+        if ! (
+            git_commit_changes
+            git_pull
+        ); then
+            failed_steps+=("pull")
+        fi
     fi
     
     if [[ $perform_dotfiles -eq 1 ]]; then
-        if [[ -f "$ENV_DIR/scripts/sync/sync_dotfiles.sh" ]]; then
-            bash "$ENV_DIR/scripts/sync/sync_dotfiles.sh" "$DOTFILES_CONFIG_FILE"
-        else
-            warning "sync_dotfiles.sh not found"
+        if ! (
+            if [[ -f "$ENV_DIR/scripts/sync/sync_dotfiles.sh" ]]; then
+                bash "$ENV_DIR/scripts/sync/sync_dotfiles.sh" "$DOTFILES_CONFIG_FILE"
+            else
+                warning "sync_dotfiles.sh not found"
+            fi
+        ); then
+            failed_steps+=("dotfiles")
         fi
     fi
     
     if [[ $perform_encrypted -eq 1 ]]; then
-        if [[ -f "$ENV_DIR/scripts/sync/sync_encrypted.sh" ]]; then
-            bash "$ENV_DIR/scripts/sync/sync_encrypted.sh"
-        else
-            warning "sync_encrypted.sh not found"
+        if ! (
+            if [[ -f "$ENV_DIR/scripts/sync/sync_encrypted.sh" ]]; then
+                bash "$ENV_DIR/scripts/sync/sync_encrypted.sh"
+            else
+                warning "sync_encrypted.sh not found"
+            fi
+        ); then
+            failed_steps+=("encrypted")
         fi
     fi
     
     if [[ $perform_push -eq 1 ]]; then
-        git_commit_changes
-        git_push
+        if ! (
+            git_commit_changes
+            git_push
+        ); then
+            failed_steps+=("push")
+        fi
+    fi
+    
+    if [[ ${#failed_steps[@]} -gt 0 ]]; then
+        warning "Some steps failed: ${failed_steps[*]}"
+        exit 1
     fi
     
     if [[ $perform_sync -eq 1 ]] || [[ $perform_pull -eq 1 ]] || [[ $perform_push -eq 1 ]]; then
         update_last_sync
     fi
     
-    debug "Finished!"
+    log_debug "Finished!"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

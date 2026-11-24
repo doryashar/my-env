@@ -40,8 +40,8 @@ if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
     
     # Check if we're running from inside the repo by looking for key files
     # Script lives at scripts/install/ — needs ../../ to reach repo root
-    if [[ -f "$SCRIPT_DIR/../../config/repo.conf" ]] && \
-      [[ -f "$SCRIPT_DIR/../../functions/common_funcs" ]]; then
+    if [[ -f "$SCRIPT_DIR/../../functions/common_funcs" ]] && \
+      [[ -f "$SCRIPT_DIR/../../scripts/sync/sync_env.sh" ]]; then
         # We're in the repo, set ENV_DIR and continue
         ENV_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
     else
@@ -62,11 +62,22 @@ if [[ "${NEEDS_CLONE:-0}" == "1" ]]; then
     echo "Cloning environment repository to $ENV_TARGET..."
     
     if [[ -d "$ENV_TARGET/.git" ]]; then
-        echo -e "${GREEN}[INFO]${NC} Repository already exists at $ENV_TARGET"
+        if [[ -n "${SCRIPT_PATH:-}" ]] && \
+           [[ "$(readlink -f "$ENV_TARGET/scripts/install/setup.sh")" == \
+               "$(readlink -f "$SCRIPT_PATH")" ]]; then
+            layout_msg="Error: already running from $ENV_TARGET, but the"
+            layout_msg="$layout_msg repository layout is incomplete (missing"
+            layout_msg="$layout_msg functions/common_funcs or scripts/sync/sync_env.sh)"
+            echo "$layout_msg"
+            exit 1
+        fi
     else
         if command -v git &>/dev/null; then
             echo -e "${GREEN}[INFO]${NC} Cloning $REPO_URL ..."
-            git clone "$REPO_URL" "$ENV_TARGET"
+            if ! git clone "$REPO_URL" "$ENV_TARGET"; then
+                echo -e "${RED}[ERROR]${NC} git clone failed for $REPO_URL"
+                exit 1
+            fi
             echo -e "${GREEN}[INFO]${NC} Repository cloned successfully"
         else
             echo -e "${RED}[ERROR]${NC} git is required but not installed."
@@ -119,36 +130,48 @@ error() {
     exit 1
 }
 
+# Can a human be asked? stdin is a terminal, or /dev/tty can be opened
+# (curl | bash).
+can_ask() {
+    [[ -t 0 ]] || { : 2>/dev/null </dev/tty; }
+}
+
 # Prompt user for input (works even when piped via curl)
 # Usage: prompt "Question? " variable_name
 # Usage: prompt_yn "Continue? " && do_something
 prompt() {
     local question="$1"
     local var_name="${2:-REPLY}"
-    local answer
-    
+    local answer=""
+
     if [[ -t 0 ]]; then
         read -p "$question" "$var_name"
-    else
+    elif can_ask; then
         echo -n "$question"
-        read -r answer < /dev/tty
+        read -r answer </dev/tty || answer=""
         printf -v "$var_name" '%s' "$answer"
+    else
+        printf -v "$var_name" '%s' ""
+        return 1
     fi
 }
 
 prompt_yn() {
     local question="$1"
-    local reply
-    
+    local reply=""
+
     if [[ -t 0 ]]; then
         read -p "$question" -n 1 -r
         echo
-    else
+    elif can_ask; then
         echo -n "$question"
-        read -r reply < /dev/tty
+        read -r reply </dev/tty || reply=""
         REPLY="${reply:0:1}"
+    else
+        REPLY=""
+        return 1
     fi
-    
+
     [[ "$REPLY" =~ ^[Yy]$ ]]
 }
 
@@ -722,8 +745,43 @@ generate_config() {
     local config_file="$ENV_DIR/config/repo.conf"
     if [[ ! -f "$config_file" ]]; then
         info "Creating $config_file..."
+
+        local repo_url private_url bw_email q_repo q_private q_bw
+        q_repo="Repository URL for your fork [git@github.com:YOUR_USER/my-env]: "
+        q_private="Private encrypted repo that holds your secrets"
+        q_private="$q_private [git@github.com:YOUR_USER/encrypted.git]: "
+        q_bw="Bitwarden email (optional; the vault unlock step asks for it too): "
+
+        repo_url="${REMOTE_URL:-}"
+        if [[ -z "$repo_url" ]]; then
+            repo_url="$(git -C "$ENV_DIR" remote get-url origin 2>/dev/null || true)"
+        fi
+        if [[ -z "$repo_url" ]]; then
+            if ! prompt "$q_repo" repo_url; then
+                repo_url=""
+            fi
+        fi
+
+        private_url="${PRIVATE_URL:-}"
+        if [[ -z "$private_url" ]]; then
+            if ! prompt "$q_private" private_url; then
+                private_url=""
+            fi
+        fi
+
+        bw_email="${BW_EMAIL:-}"
+        if [[ -z "$bw_email" ]]; then
+            if ! prompt "$q_bw" bw_email; then
+                bw_email=""
+            fi
+        fi
+
         # Mirrors config/repo.conf.example (real repo.conf is gitignored)
-        cat > "$config_file" << 'EOF'
+        # Temp file first: a failed replacement must not leave a half
+        # written repo.conf behind.
+        local tmp_file
+        tmp_file="$(mktemp "$ENV_DIR/config/.repo.conf.XXXXXX")"
+        cat > "$tmp_file" << 'EOF'
 # Remote git repository URL (your fork)
 REMOTE_URL="git@github.com:YOUR_USER/my-env"
 ENV_DIR="${HOME}/env"
@@ -748,7 +806,32 @@ SYNC_INTERVAL_DAYS="${SYNC_INTERVAL_DAYS:-7}"
 # Merge conflict resolution strategy: ask, local, remote, rename, ignore
 DEFAULT_CONFLICT_STRATEGY="${DEFAULT_CONFLICT_STRATEGY:-ask}"
 EOF
-        warning "Please edit $config_file: REMOTE_URL, PRIVATE_URL, BW_EMAIL"
+        awk -v repo_url="$repo_url" -v private_url="$private_url" \
+            -v bw_email="$bw_email" '
+            /^REMOTE_URL=/ && repo_url != "" {
+                print "REMOTE_URL=\"" repo_url "\""; next
+            }
+            /^PRIVATE_URL=/ && private_url != "" {
+                print "PRIVATE_URL=\"" private_url "\""; next
+            }
+            /^export BW_EMAIL=/ && bw_email != "" {
+                print "export BW_EMAIL=\"" "${BW_EMAIL:-" bw_email "}\""
+                next
+            }
+            {print}
+        ' "$tmp_file" > "${tmp_file}.out"
+        mv "${tmp_file}.out" "$tmp_file"
+        mv "$tmp_file" "$config_file"
+
+        local missing=""
+        [[ -z "$repo_url" ]] && missing="REMOTE_URL"
+        [[ -z "$private_url" ]] && missing="${missing:+$missing, }PRIVATE_URL"
+        [[ -z "$bw_email" ]] && missing="${missing:+$missing, }BW_EMAIL"
+        if [[ -n "$missing" ]]; then
+            warning "Edit $config_file before relying on it — still placeholders: $missing"
+        else
+            info "Wrote $config_file"
+        fi
     else
         debug "Configuration file already exists"
     fi

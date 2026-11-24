@@ -15,7 +15,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Valid suite names (single source of truth for the argument parser)
-SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|resync_loop|mount_check|recover_script|install_binaries|storagebox_mount_health|sysboard|docker|all"
+SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|resync_loop|mount_check|recover_script|install_binaries|setup_bootstrap|storagebox_mount_health|sysboard|docker|all"
 
 # Test tracking
 TOTAL_SUITES=0
@@ -65,6 +65,7 @@ echo "  resync_loop             Test StorageBox resync loop (stub runner)"
 echo "  mount_check             Test mount-check UUID matching (stub findmnt/lsblk)"
 echo "  recover_script          Static checks of recover-from-box.sh"
 echo "  install_binaries         Test on-demand binary installer (local fixtures, no network)"
+echo "  setup_bootstrap         Test setup.sh repo detection and first-run config (temp dirs)"
 echo "  storagebox_mount_health  Test StorageBox rclone FUSE mounts respond"
 echo "  sysboard               Test sysboard dashboard script"
 echo "  docker                  Docker container comprehensive tests (120 tests)"
@@ -212,6 +213,7 @@ run_resync_loop=0
 run_mount_check=0
 run_recover_script=0
 run_install_binaries=0
+run_setup_bootstrap=0
 run_storagebox_mount_health=0
 run_sysboard=0
 run_docker=0
@@ -245,6 +247,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_mount_check=1
             run_recover_script=1
             run_install_binaries=1
+            run_setup_bootstrap=1
             run_storagebox_mount_health=1
             run_sysboard=1
             run_docker=1
@@ -275,6 +278,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         mount_check) run_mount_check=1 ;;
         recover_script) run_recover_script=1 ;;
         install_binaries)  run_install_binaries=1 ;;
+        setup_bootstrap) run_setup_bootstrap=1 ;;
         storagebox_mount_health) run_storagebox_mount_health=1 ;;
         sysboard)              run_sysboard=1 ;;
         docker)               run_docker=1 ;;
@@ -418,6 +422,11 @@ fi
 if [[ $run_install_binaries -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "Install Binaries" "$SCRIPT_DIR/test_install_binaries.sh" "$suite_counter"
+fi
+
+if [[ $run_setup_bootstrap -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Setup Bootstrap" "$SCRIPT_DIR/test_setup_bootstrap.sh" "$suite_counter"
 fi
 
 if [[ $run_storagebox_mount_health -eq 1 ]]; then

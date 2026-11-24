@@ -6,6 +6,7 @@ private_encrypted
 .ssh
 **/*.pem
 **/*.key
+config/repo.conf
 
 # Version control and tool state
 .git

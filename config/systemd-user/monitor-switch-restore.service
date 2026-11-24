@@ -1,0 +1,6 @@
+[Unit]
+Description=Re-apply last monitor-switch profile after display hotplug
+
+[Service]
+Type=oneshot
+ExecStart=%h/env/bin/monitor-switch restore

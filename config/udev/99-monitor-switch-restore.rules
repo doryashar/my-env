@@ -1,0 +1,4 @@
+# Re-apply the last monitor-switch profile on display connect/disconnect.
+# Starts a user-level oneshot service; harmless if the session is not up
+# yet (systemctl just fails to find the user manager).
+ACTION=="change|add", SUBSYSTEM=="drm", RUN+="/usr/bin/systemctl --user -M yashar@ start monitor-switch-restore.service"

@@ -1,0 +1,460 @@
+#!/bin/bash
+
+# Monitor switching script for Wayland/GNOME
+# Toggles between two monitor profiles
+
+PYTHON_HELPER="${MONITOR_SWITCH_HELPER:-$HOME/.local/bin/monitor-switch-gnome.py}"
+
+# Last-applied profile (profile1|profile2|custom:CONN...), persisted so
+# `restore` can re-assert it after display hotplug events.
+STATE_FILE="${MONITOR_SWITCH_STATE:-$HOME/.local/state/monitor-switch/last-profile}"
+# Seconds to wait for expected monitors to (re)appear before restoring
+# with whatever subset is available. 0 = apply immediately.
+RESTORE_WAIT="${MONITOR_SWITCH_RESTORE_WAIT:-5}"
+
+# Monitor profiles
+# Physical arrangement (left to right): HP, DEL, LEN
+# Monitors must be adjacent in GNOME (no gaps)
+
+# Profile 1: HP + DEL
+PROFILE1_VENDORS=("HWP" "DEL")
+PROFILE1_NAME="HP + DEL"
+
+# Profile 2: LEN
+PROFILE2_VENDORS=("LEN")
+PROFILE2_NAME="LEN"
+
+# Monitor order (left to right) - determines positioning
+declare -a MONITOR_VENDORS=("HWP" "DEL" "LEN")  # HP, DEL, LEN
+
+# Declared native resolutions (WxH). Used as a fallback identity when a
+# monitor's EDID vendor reads as "unknown" (e.g. after a DP -> HDMI swap).
+declare -A MONITOR_RESOLUTIONS=(
+    ["HWP"]="1920x1200"
+    ["DEL"]="1920x1200"
+    ["LEN"]="5120x1440"
+)
+
+# Cached connector name lookups (populated at runtime)
+declare -A CONNECTOR_MAP  # vendor -> connector name
+declare -A WIDTH_MAP      # vendor -> width
+
+# Resolve all known vendor IDs to connector names + widths
+resolve_all_monitors() {
+    local output
+    local args=()
+    for vid in "${MONITOR_VENDORS[@]}"; do
+        args+=("${vid}=${MONITOR_RESOLUTIONS[$vid]:-}")
+    done
+    output=$("$PYTHON_HELPER" resolve "${args[@]}")
+    while IFS=' ' read -r vid conn width; do
+        [ -z "$vid" ] && continue
+        CONNECTOR_MAP["$vid"]="$conn"
+        WIDTH_MAP["$vid"]="$width"
+    done <<< "$output"
+}
+
+resolve_connector() {
+    local vendor="$1"
+    echo "${CONNECTOR_MAP[$vendor]:-}"
+}
+
+resolve_width() {
+    local vendor="$1"
+    echo "${WIDTH_MAP[$vendor]:-1920}"
+}
+
+# Keybinding configuration
+KEYBINDING_NAME="Monitor Switch"
+KEYBINDING_BINDING="<Super><Shift>m"
+KEYBINDING_COMMAND="/home/yashar/env/bin/monitor-switch toggle"
+KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+
+# Verify and set up keybinding
+ensure_keybinding() {
+    # Check if custom keybinding exists and points to this script
+    local current_name=$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" name 2>/dev/null)
+    local current_command=$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" command 2>/dev/null)
+    local current_binding=$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" binding 2>/dev/null)
+
+    # Check if the keybinding is correctly configured
+    if [ "$current_name" = "'$KEYBINDING_NAME'" ] && \
+       [ "$current_command" = "'$KEYBINDING_COMMAND'" ] && \
+       [ "$current_binding" = "'$KEYBINDING_BINDING'" ]; then
+        return 0
+    fi
+
+    # Keybinding not set correctly - set it up
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" name "$KEYBINDING_NAME"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" command "$KEYBINDING_COMMAND"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$KEYBINDING_PATH" binding "$KEYBINDING_BINDING"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$KEYBINDING_PATH']"
+
+    echo "Keybinding registered: Super+Shift+M"
+}
+
+# Detect which monitors are currently active (Wayland-compatible)
+get_active_monitors() {
+    # xrandr --query | grep " connected" | grep -v "disconnected" | awk '{print $1}'
+    "$PYTHON_HELPER" get-active
+}
+
+# Detect which monitors are available (connected to system)
+get_available_monitors() {
+    "$PYTHON_HELPER" get-available
+}
+
+# Filter a list of monitors to only those that are available
+get_available_from_profile() {
+    local profile_vendors=("$@")
+    local available=($(get_available_monitors))
+
+    for vid in "${profile_vendors[@]}"; do
+        local conn=$(resolve_connector "$vid")
+        for avail in "${available[@]}"; do
+            if [ "$conn" = "$avail" ]; then
+                echo "$conn"
+                break
+            fi
+        done
+    done
+}
+
+# Determine current profile based on active monitors
+get_current_profile() {
+    local active_monitors=($(get_active_monitors))
+
+    local p1_connectors=()
+    for vid in "${PROFILE1_VENDORS[@]}"; do
+        p1_connectors+=("$(resolve_connector "$vid")")
+    done
+
+    local p2_connectors=()
+    for vid in "${PROFILE2_VENDORS[@]}"; do
+        p2_connectors+=("$(resolve_connector "$vid")")
+    done
+
+    local active_str="${active_monitors[*]}"
+    local profile1_str="${p1_connectors[*]}"
+    local profile2_str="${p2_connectors[*]}"
+
+    active_str=$(echo "$active_str" | tr ' ' '\n' | sort | tr '\n' ' ')
+    profile1_str=$(echo "$profile1_str" | tr ' ' '\n' | sort | tr '\n' ' ')
+    profile2_str=$(echo "$profile2_str" | tr ' ' '\n' | sort | tr '\n' ' ')
+
+    if [ "$active_str" = "$profile1_str" ]; then
+        echo "profile1"
+    elif [ "$active_str" = "$profile2_str" ]; then
+        echo "profile2"
+    else
+        echo "profile1"
+    fi
+}
+
+# Build position arguments for monitors based on their physical order
+build_position_args() {
+    local enabled_monitors=("$@")
+    local args=()
+    local x_pos=0
+
+    for vid in "${MONITOR_VENDORS[@]}"; do
+        local conn=$(resolve_connector "$vid")
+        local is_enabled=false
+        for enabled in "${enabled_monitors[@]}"; do
+            if [ "$conn" = "$enabled" ]; then
+                is_enabled=true
+                break
+            fi
+        done
+
+        if [ "$is_enabled" = true ]; then
+            args+=("--pos" "$conn" "$x_pos")
+            x_pos=$((x_pos + $(resolve_width "$vid")))
+        fi
+    done
+
+    echo "${args[@]}"
+}
+
+# Persist the last applied profile for hotplug restore
+save_state() {
+  mkdir -p "$(dirname "$STATE_FILE")"
+  printf '%s\n' "$1" > "$STATE_FILE"
+}
+
+read_state() {
+  [ -r "$STATE_FILE" ] || return 1
+  cat "$STATE_FILE"
+}
+
+# Wait up to RESTORE_WAIT seconds for all expected connectors to become
+# available. Returns 0 if all appeared, 1 on timeout.
+wait_for_connectors() {
+  local expected=("$@")
+  local deadline=$((SECONDS + RESTORE_WAIT))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    local available=($(get_available_monitors))
+    local all_present=true
+    local conn
+    for conn in "${expected[@]}"; do
+      if [[ " ${available[*]} " != *" $conn "* ]]; then
+        all_present=false
+        break
+      fi
+    done
+    [ "$all_present" = true ] && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
+# Re-apply the last saved profile (invoked on display hotplug).
+# Profiles restore with their available subset; custom sets are
+# all-or-nothing.
+restore_profile() {
+  local state
+  if ! state=$(read_state); then
+    echo "No saved profile to restore"
+    return 0
+  fi
+
+  local expected=()
+  if [ "$state" = "profile1" ] || [ "$state" = "profile2" ]; then
+    local vendors=()
+    if [ "$state" = "profile1" ]; then
+      vendors=("${PROFILE1_VENDORS[@]}")
+    else
+      vendors=("${PROFILE2_VENDORS[@]}")
+    fi
+    local vid conn
+    for vid in "${vendors[@]}"; do
+      conn=$(resolve_connector "$vid")
+      [ -n "$conn" ] && [ "$conn" != "-" ] && expected+=("$conn")
+    done
+  elif [[ "$state" == custom:* ]]; then
+    read -ra expected <<< "${state#custom:}"
+  else
+    echo "Unknown saved state: $state"
+    return 0
+  fi
+
+  wait_for_connectors "${expected[@]}"
+
+  local available=($(get_available_monitors))
+  local candidates=()
+  local conn
+  for conn in "${expected[@]}"; do
+    [[ " ${available[*]} " == *" $conn "* ]] && candidates+=("$conn")
+  done
+  if [ ${#candidates[@]} -eq 0 ]; then
+    echo "Restore: no expected monitors available, nothing to do"
+    return 0
+  fi
+  if [[ "$state" == custom:* ]] && [ ${#candidates[@]} -ne ${#expected[@]} ]; then
+    echo "Restore: not all custom monitors available, nothing to do"
+    return 0
+  fi
+
+  echo "Restoring: $state (${candidates[*]})"
+  if [ "$state" = "profile1" ] || [ "$state" = "profile2" ]; then
+    enable_profile "${state#profile}"
+  else
+    enable_monitors "${expected[@]}"
+  fi
+}
+
+# Toggle between profiles
+toggle_profiles() {
+    local current_profile=$(get_current_profile)
+
+    if [ "$current_profile" = "profile1" ]; then
+        local primary=$(resolve_connector "${PROFILE2_VENDORS[0]}")
+        local monitors=($(get_available_from_profile "${PROFILE2_VENDORS[@]}"))
+        if [ ${#monitors[@]} -eq 0 ]; then
+            echo "Cannot switch to Profile 2: $PROFILE2_NAME"
+            echo "No monitors available"
+            return 1
+        fi
+        [[ " ${monitors[*]} " != *" $primary "* ]] && primary="${monitors[0]}"
+        local pos_args=($(build_position_args "${monitors[@]}"))
+        echo "Switching to Profile 2: $PROFILE2_NAME (primary: $primary)"
+        echo "Available monitors: ${monitors[*]}"
+        if "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"; then
+            save_state "profile2"
+        fi
+    else
+        local primary=$(resolve_connector "${PROFILE1_VENDORS[0]}")
+        local monitors=($(get_available_from_profile "${PROFILE1_VENDORS[@]}"))
+        if [ ${#monitors[@]} -eq 0 ]; then
+            echo "Cannot switch to Profile 1: $PROFILE1_NAME"
+            echo "No monitors available"
+            return 1
+        fi
+        [[ " ${monitors[*]} " != *" $primary "* ]] && primary="${monitors[0]}"
+        local pos_args=($(build_position_args "${monitors[@]}"))
+        echo "Switching to Profile 1: $PROFILE1_NAME (primary: $primary)"
+        echo "Available monitors: ${monitors[*]}"
+        if "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"; then
+            save_state "profile1"
+        else
+            return 1
+        fi
+    fi
+}
+
+# Enable specific profile
+enable_profile() {
+    local profile=$1
+
+    if [ "$profile" = "1" ] || [ "$profile" = "profile1" ]; then
+        local primary=$(resolve_connector "${PROFILE1_VENDORS[0]}")
+        local monitors=($(get_available_from_profile "${PROFILE1_VENDORS[@]}"))
+        if [ ${#monitors[@]} -eq 0 ]; then
+            echo "Cannot enable Profile 1: $PROFILE1_NAME"
+            echo "No monitors available"
+            return 1
+        fi
+        [[ " ${monitors[*]} " != *" $primary "* ]] && primary="${monitors[0]}"
+        local pos_args=($(build_position_args "${monitors[@]}"))
+        echo "Enabling Profile 1: $PROFILE1_NAME (primary: $primary)"
+        echo "Available monitors: ${monitors[*]}"
+        if "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"; then
+            save_state "profile1"
+        else
+            return 1
+        fi
+    elif [ "$profile" = "2" ] || [ "$profile" = "profile2" ]; then
+        local primary=$(resolve_connector "${PROFILE2_VENDORS[0]}")
+        local monitors=($(get_available_from_profile "${PROFILE2_VENDORS[@]}"))
+        if [ ${#monitors[@]} -eq 0 ]; then
+            echo "Cannot enable Profile 2: $PROFILE2_NAME"
+            echo "No monitors available"
+            return 1
+        fi
+        [[ " ${monitors[*]} " != *" $primary "* ]] && primary="${monitors[0]}"
+        local pos_args=($(build_position_args "${monitors[@]}"))
+        echo "Enabling Profile 2: $PROFILE2_NAME (primary: $primary)"
+        echo "Available monitors: ${monitors[*]}"
+        if "$PYTHON_HELPER" profile --primary "$primary" "${pos_args[@]}" "${monitors[@]}"; then
+            save_state "profile2"
+        else
+            return 1
+        fi
+    else
+        echo "Unknown profile: $profile"
+        echo "Valid profiles: 1 (or profile1), 2 (or profile2)"
+        return 1
+    fi
+}
+
+# Enable specific monitors
+enable_monitors() {
+    local monitors=("$@")
+    echo "Enabling monitors: ${monitors[*]}"
+    if "$PYTHON_HELPER" profile "${monitors[@]}"; then
+        save_state "custom:${monitors[*]}"
+    else
+        return 1
+    fi
+}
+
+# List connected monitors
+list_monitors() {
+    "$PYTHON_HELPER" list
+    echo ""
+    echo "Current profile: $(get_current_profile)"
+    echo "Saved profile: $(read_state || echo '(none)')"
+    echo ""
+    echo "Resolved monitors:"
+    for vid in "${MONITOR_VENDORS[@]}"; do
+        local conn=$(resolve_connector "$vid")
+        local w=$(resolve_width "$vid")
+        echo "  $vid -> $conn (${w}px)"
+    done
+    echo ""
+    echo "Profiles:"
+    echo "  Profile 1: $PROFILE1_NAME ($(printf '%s ' "${PROFILE1_VENDORS[@]}")) - primary: ${PROFILE1_VENDORS[0]}"
+    echo "  Profile 2: $PROFILE2_NAME ($(printf '%s ' "${PROFILE2_VENDORS[@]}")) - primary: ${PROFILE2_VENDORS[0]}"
+}
+
+# Show usage
+show_usage() {
+    cat << EOF
+Monitor Switching Tool (Wayland/GNOME)
+
+Usage:
+  monitor-switch              Toggle between profiles
+  monitor-switch toggle       Toggle between profiles
+  monitor-switch profile <1|2>     Enable specific profile
+  monitor-switch enable <monitors...>   Enable specific monitor(s)
+  monitor-switch restore      Re-apply the last saved profile (used on hotplug)
+  monitor-switch list         List all monitors and profiles
+  monitor-switch help         Show this help message
+
+Profiles:
+  Profile 1: $PROFILE1_NAME ($(printf '%s ' "${PROFILE1_VENDORS[@]}")) - primary: ${PROFILE1_VENDORS[0]}
+  Profile 2: $PROFILE2_NAME ($(printf '%s ' "${PROFILE2_VENDORS[@]}")) - primary: ${PROFILE2_VENDORS[0]}
+
+Examples:
+  monitor-switch                     # Toggle between profiles
+  monitor-switch profile 1           # Enable Profile 1 (HP + DEL)
+  monitor-switch profile 2           # Enable Profile 2 (LEN)
+  monitor-switch enable DP-1         # Custom: enable specific monitors
+  monitor-switch list                # List all monitors
+
+Note:
+  This script uses GNOME's display management API on Wayland.
+  Profiles define which monitors are enabled side by side.
+  Monitors are identified by vendor ID and resolved to connector names at runtime.
+  Every successful apply is saved to $STATE_FILE; `restore` re-applies it
+  (profiles with their available subset, custom sets all-or-nothing) after
+  display hotplug events.
+EOF
+}
+
+# Main logic
+resolve_all_monitors
+
+# Ensure keybinding is set up (silent for most operations; skipped for
+# restore/list/help which may run outside an interactive session)
+if [[ "$1" != "restore" && "$1" != "list" && "$1" != "help" && "$1" != "--help" && "$1" != "-h" ]]; then
+    ensure_keybinding
+fi
+
+case "${1:-toggle}" in
+    toggle)
+        toggle_profiles
+        ;;
+    restore)
+        restore_profile
+        ;;
+    profile)
+        shift
+        if [ $# -eq 0 ]; then
+            echo "Error: Please specify a profile (1 or 2)"
+            echo "Usage: monitor-switch profile <1|2>"
+            exit 1
+        fi
+        enable_profile "$1"
+        ;;
+    enable)
+        shift
+        if [ $# -eq 0 ]; then
+            echo "Error: Please specify at least one monitor"
+            echo "Usage: monitor-switch enable <monitor1> [monitor2] ..."
+            exit 1
+        fi
+        enable_monitors "$@"
+        ;;
+    list)
+        list_monitors
+        ;;
+    help|--help|-h)
+        show_usage
+        ;;
+    *)
+        echo "Unknown command: $1"
+        show_usage
+        exit 1
+        ;;
+esac

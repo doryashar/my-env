@@ -2,3 +2,8 @@ export PATH=${ENV_DIR}/scripts:${ENV_DIR}/bin:${PATH}
 export EDITOR=nvim
 export ENCRYPTED_DIR="$ENV_DIR"/var/private_encrypted
 MOUNT_FILE=~/.config/systemd/user/my_fstab
+
+# Go SDK installed by scripts/install/install_binaries.sh; only used when the system has no go
+if ! command -v go >/dev/null 2>&1 && [ -x "$ENV_DIR/go-1.27.0/bin/go" ]; then
+    export PATH="$ENV_DIR/go-1.27.0/bin:$PATH"
+fi

@@ -1,0 +1,13 @@
+# Artifacts that are not kept in git. Installed and verified by scripts/install/install_binaries.sh.
+# kind: sdk      tarball holding ONE top-level directory, installed as <target>
+#       tarball  option = path of ONE member inside the archive, installed as the executable <target>
+#       appimage installed as the executable <target>; option extract=<dir> also runs
+#                `--appimage-extract` and moves the result to <dir>
+#       file     installed as the executable <target>
+# target	kind	url	sha256	option
+go-1.27.0	sdk	https://go.dev/dl/go1.27.0.linux-amd64.tar.gz	675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685	-
+bin/age	tarball	https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz	7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50	age/age
+bin/age-keygen	tarball	https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz	7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50	age/age-keygen
+bin/AppImages/nvim.appimage	appimage	https://github.com/neovim/neovim/releases/download/v0.9.5/nvim.appimage	0c82e5702af7a11fbb916a11b4a82e98928abf8266c74b2030ea740340437bf9	extract=bin/nvim-appimage
+bin/AppImages/WezTerm-20240203-110809-5046fc22-Ubuntu20.04.AppImage	appimage	https://github.com/wez/wezterm/releases/download/20240203-110809-5046fc22/WezTerm-20240203-110809-5046fc22-Ubuntu20.04.AppImage	34010a07076d2272c4d4f94b5e0dae608a679599e8d729446323f88f956c60f0	-
+bin/neofetch	file	https://raw.githubusercontent.com/dylanaraps/neofetch/7.1.0/neofetch	3dc33493e54029fb1528251552093a9f9a2894fcf94f9c3a6f809136a42348c7	-

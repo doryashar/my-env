@@ -810,6 +810,9 @@ install_apt_packages() {
         "zsh"
         "git"
         "curl"
+        "duf"
+        "bat"
+        "ncdu"
         "wget"
         "htop"
         "tree"
@@ -923,6 +926,12 @@ setup_binaries() {
             tar -xzf "$archive" -C "$bin_dir" 2>/dev/null || warning "Failed to extract $archive"
         fi
     done
+
+    if [[ -f "$ENV_DIR/scripts/install/install_binaries.sh" ]]; then
+        bash "$ENV_DIR/scripts/install/install_binaries.sh" || \
+          warning "Some binaries were not installed (non-fatal). Re-run:" \
+            "$ENV_DIR/scripts/install/install_binaries.sh"
+    fi
 
     if [[ ":$PATH:" != *":$ENV_DIR/bin:"* ]]; then
         export PATH="$ENV_DIR/bin:$PATH"

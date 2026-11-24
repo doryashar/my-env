@@ -300,13 +300,16 @@ test_letmein_listens_on_localhost_by_default() {
 }
 
 # ----------------------------------------------------------------------------
-# #61: remove_all_broken_links must survive multiple broken links (set -e)
+# #61: remove_all_broken_links must survive multiple broken links (set -e).
+# It removes only links that point into the repository; other dangling
+# links in the home directory are not its to touch.
 # ----------------------------------------------------------------------------
 test_remove_all_broken_links_survives_multiple() {
     local d="$WORK_DIR/links"
     mkdir -p "$d"
-    ln -s "$WORK_DIR/nonexistent-a" "$d/a"
-    ln -s "$WORK_DIR/nonexistent-b" "$d/b"
+    ln -s "$ENV_DIR/nonexistent-a" "$d/a"
+    ln -s "$ENV_DIR/nonexistent-b" "$d/b"
+    ln -s "$WORK_DIR/nonexistent-c" "$d/c"
 
     local out rc=0
     out=$(bash -c '
@@ -334,6 +337,14 @@ test_remove_all_broken_links_survives_multiple() {
     else
         echo -e "${GREEN}✓${NC} second broken link removed (no early exit)"
         TESTS_PASSED=$((TESTS_PASSED + 1))
+    fi
+    TESTS_RUN=$((TESTS_RUN + 1))
+    if [[ -L "$d/c" ]]; then
+        echo -e "${GREEN}✓${NC} dangling link outside the repository is left alone"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo -e "${RED}✗${NC} dangling link outside the repository was removed"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
     TESTS_RUN=$((TESTS_RUN + 1))
 }

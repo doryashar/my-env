@@ -331,6 +331,20 @@ process_regex_mappings() {
     done
 }
 
+# Make DEST an exact copy of SRC (file or directory), following symlinks on SRC.
+# The copy is staged next to DEST, so DEST is never left missing or half-copied.
+copy_over() {
+    local src="$1" dst="$2" tmp
+    tmp="$(dirname "$dst")/.$(basename "$dst").copying.$$"
+    rm -rf "$tmp"
+    cp -aL "$src" "$tmp" && rm -rf "$dst" && mv -T "$tmp" "$dst"
+}
+
+# Is there a terminal to ask on? stdin, or /dev/tty (curl | bash).
+can_ask() {
+    [[ -t 0 ]] || { : 2>/dev/null </dev/tty; }
+}
+
 # Handle file conflicts based on configured strategy
 #
 # Args:
@@ -349,6 +363,11 @@ handle_conflict() {
     local target="$2"
     local strategy="$3"
     
+    if [[ "$strategy" == "ask" ]] && ! can_ask; then
+        warning "Conflict and no terminal to ask — leaving both unchanged: $target"
+        return 0
+    fi
+    
     case "$strategy" in
         "ask")
             warning "Conflict detected:"
@@ -365,12 +384,12 @@ handle_conflict() {
             prompt "Enter choice [1-5]: " choice
             
             case "$choice" in
-                1) cp -rf "$target" "$source" ;;
+                1) copy_over "$target" "$source" ;;
                 2)
                     rm -rf "$target"
                     ln -s "$source" "$target" ;;
                 3) 
-                    diff -u "$target" "$source"
+                    diff -u "$target" "$source" || true
                     handle_conflict "$source" "$target" "ask"
                     ;;
                 4) 
@@ -385,7 +404,7 @@ handle_conflict() {
             esac
             ;;
         "local")
-            cp -rf "$target" "$source"
+            copy_over "$target" "$source"
             info "Kept local version: $target"
             ;;
         "remote")
@@ -674,7 +693,7 @@ backward_sync_file() {
             if [[ "$target_mtime" -gt "$source_mtime" ]]; then
                 warning "Target is newer than source: $target"
                 # For backward sync, we typically want to update the source
-                cp -rf "$target" "$source"
+                copy_over "$target" "$source"
                 info "Updated source from target: $source_rel"
             else
                 warning "Source is newer than target: $source"
@@ -777,11 +796,18 @@ remove_all_broken_links() {
     local count=0
     while IFS= read -r file; do
         if [[ -L "$file" ]] && [[ ! -e "$file" ]]; then
-            warning "Removing broken symlink: $file -> $(readlink "$file")"
-            rm "$file"
-            # NB: not ((count++)) — that returns 1 when count is 0 and
-            # kills the script under set -e (first broken link = abort).
-            count=$((count + 1))
+            local link_target
+            link_target="$(readlink "$file")"
+            if [[ "$link_target" == "$ENV_DIR" || \
+              "$link_target" == "$ENV_DIR"/* ]]; then
+                warning "Removing broken symlink: $file -> $link_target"
+                rm "$file"
+                # NB: not ((count++)) — that returns 1 when count is 0 and
+                # kills the script under set -e (first broken link = abort).
+                count=$((count + 1))
+            else
+                log_debug "Not managed by $ENV_DIR, left alone: $file"
+            fi
         fi
     done < <(find "$directory" -maxdepth 2 -type l 2>/dev/null)
     

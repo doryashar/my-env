@@ -1,6 +1,5 @@
 PUBLIC_CHAT_FILE=${PUBLIC_CHAT_FILE:-"$HOME/.public_chatfile"}
 PRIVATE_CHAT_FILE=${PRIVATE_CHAT_FILE:-"$HOME/.private_chatfile"}
-setopt NO_NOMATCH
 
 # trap_exit() {
 #     rm -f "$PUBLIC_CHAT_FILE"

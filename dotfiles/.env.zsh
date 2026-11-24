@@ -54,12 +54,14 @@ fi
 
 # Source functions
 env_debug "Sourcing functions from ${ENV_DIR}/functions/*"
-for file in "${ENV_DIR}"/functions/*; do
-    if [[ -f "$file" ]]; then
-        env_debug "Sourcing $file"
-        source "$file"
-    fi
-done
+if [[ -d "${ENV_DIR}/functions" ]]; then
+    for file in "${ENV_DIR}"/functions/*; do
+        if [[ -f "$file" ]]; then
+            env_debug "Sourcing $file"
+            source "$file"
+        fi
+    done
+fi
 
 # Load aliases
 if [[ -f "${ENV_DIR}/aliases" ]]; then

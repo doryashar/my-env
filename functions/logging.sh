@@ -36,6 +36,7 @@ title() {
 error() {
     local message="$*"
     echo -e "${RED}[ERROR] $message${NC}" >&2
+    if [[ -o interactive ]]; then return 1; fi
     exit 1
 }
 

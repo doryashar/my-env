@@ -534,7 +534,8 @@ check_remote_repo_exists() {
         local repo_name="${BASH_REMATCH[2]}"
     elif [[ "$repo_url" =~ github\.com/([^/]+)/(.+)(\.git)? ]]; then
         local owner="${BASH_REMATCH[1]}"
-        local repo_name="${BASH_REMATCH[2]%.git}"
+        local repo_name="${BASH_REMATCH[2]}"
+        repo_name="${repo_name%.git}"
     else
         warning "Could not parse repository URL: $repo_url"
         return 1

@@ -35,6 +35,11 @@ require_common_funcs() {
 # Interactive Prompts (work even when stdin is piped)
 #########################################################################
 
+# Can a human be asked? stdin is a terminal, or /dev/tty can be opened (curl | bash).
+can_ask() {
+    [[ -t 0 ]] || { : 2>/dev/null </dev/tty; }
+}
+
 prompt() {
     local question="$1"
     local var_name="${2:-REPLY}"
@@ -42,10 +47,13 @@ prompt() {
     
     if [[ -t 0 ]]; then
         read -p "$question" "$var_name"
-    else
+    elif can_ask; then
         echo -n "$question"
         read -r answer < /dev/tty
         printf -v "$var_name" '%s' "$answer"
+    else
+        printf -v "$var_name" ''
+        return 1
     fi
 }
 
@@ -56,10 +64,12 @@ prompt_yn() {
     if [[ -t 0 ]]; then
         read -p "$question" -n 1 -r
         echo
-    else
+    elif can_ask; then
         echo -n "$question"
         read -r reply < /dev/tty
         REPLY="${reply:0:1}"
+    else
+        return 1
     fi
     
     [[ "$REPLY" =~ ^[Yy]$ ]]
@@ -225,21 +235,36 @@ ensure_ssh_dir() {
     mkdir -p ~/.ssh
 }
 
+# parse_repo_url URL -> sets REPO_OWNER and REPO_NAME; returns 1 when the URL is not GitHub
+parse_repo_url() {
+    local url="$1"
+    REPO_OWNER=""
+    REPO_NAME=""
+    if [[ "$url" =~ git@github\.com:([^/]+)/(.+)\.git ]]; then
+        # zsh fills `match`, not BASH_REMATCH; mirror it so the
+        # assignments below work in both shells.
+        [[ -n "${ZSH_VERSION:-}" ]] && BASH_REMATCH=("${match[@]}")
+        REPO_OWNER="${BASH_REMATCH[1]}"
+        REPO_NAME="${BASH_REMATCH[2]}"
+    elif [[ "$url" =~ github\.com/([^/]+)/(.+)(\.git)? ]]; then
+        [[ -n "${ZSH_VERSION:-}" ]] && BASH_REMATCH=("${match[@]}")
+        REPO_OWNER="${BASH_REMATCH[1]}"
+        REPO_NAME="${BASH_REMATCH[2]}"
+        REPO_NAME="${REPO_NAME%.git}"
+    else
+        return 1
+    fi
+}
+
 check_github_repo_exists() {
     local repo_url="$1"
     
-    if [[ "$repo_url" =~ git@github\.com:([^/]+)/(.+)\.git ]]; then
-        local owner="${BASH_REMATCH[1]}"
-        local repo_name="${BASH_REMATCH[2]}"
-    elif [[ "$repo_url" =~ github\.com/([^/]+)/(.+)(\.git)? ]]; then
-        local owner="${BASH_REMATCH[1]}"
-        local repo_name="${BASH_REMATCH[2]%.git}"
-    else
+    if ! parse_repo_url "$repo_url"; then
         warning "Could not parse repository URL: $repo_url"
         return 1
     fi
     
-    log_debug "Checking if repo exists: $owner/$repo_name"
+    log_debug "Checking if repo exists: $REPO_OWNER/$REPO_NAME"
     
     local github_token
     github_token=$(get_github_token)
@@ -249,7 +274,7 @@ check_github_repo_exists() {
             local http_code
             http_code=$(curl -s -o /dev/null -w "%{http_code}" \
                 -H "Authorization: token $github_token" \
-                "https://api.github.com/repos/$owner/$repo_name")
+                "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME")
             if [[ "$http_code" == "200" ]]; then
                 log_debug "Repo exists (API)"
                 return 0
@@ -263,7 +288,7 @@ check_github_repo_exists() {
     
     if command -v gh &>/dev/null && gh auth status &>/dev/null; then
         log_debug "Checking repo via gh CLI..."
-        if gh repo view "$owner/$repo_name" &>/dev/null; then
+        if gh repo view "$REPO_OWNER/$REPO_NAME" &>/dev/null; then
             log_debug "Repo exists (gh CLI)"
             return 0
         else

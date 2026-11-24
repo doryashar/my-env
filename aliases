@@ -7,7 +7,7 @@ alias ll="ls --color -altr"
 alias tmux_='systemd-run --user --slice=tmux.slice --scope tmux -u new-session -A -s dory'
 
 ##################################
-alias zj="zellij -l strider --config ~/zellij/zellij.cfg attach --create dor"
+alias zj="zellij -l strider attach --create dor"
 alias bat="batcat"
 alias grep="grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.snapshot}"
 alias tree='tree -a -I .git'
@@ -17,7 +17,6 @@ alias ls="${aliases[ls]:-ls} -A"
 ## Xsight
 ##################################
 alias meld='/bin/meld'
-alias emacs='/bin/emacs'
 alias e='emacs --reverse-video'
 alias snxx='printf "%s" "$XSIGHT_PASSWORD" | snx'
 

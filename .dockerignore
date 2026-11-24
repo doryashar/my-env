@@ -1,0 +1,28 @@
+# Secrets and private state (never part of a build context)
+var
+tmp
+private
+private_encrypted
+.ssh
+**/*.pem
+**/*.key
+
+# Version control and tool state
+.git
+.worktrees
+.kilo
+.qodo
+.pytest_cache
+.ruff_cache
+**/__pycache__
+.opencode
+config/opencode/node_modules
+config/opencode/*.bak*
+config/opencode/*.rea.backup*
+config/opencode/plugins
+config/opencode/skills/*/research
+
+# Large vendored files and binaries the test suites do not reference
+go-1.27.0
+bin
+local/share

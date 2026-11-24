@@ -14,6 +14,9 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# Valid suite names (single source of truth for the argument parser)
+SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|storagebox_mount_health|sysboard|docker|all"
+
 # Test tracking
 TOTAL_SUITES=0
 PASSED_SUITES=0
@@ -94,6 +97,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --only)
             if [[ -n "$2" ]]; then
+                if [[ ! "$2" =~ ^($SUITE_PATTERN)$ ]]; then
+                    echo "Error: unknown test suite '$2'"
+                    show_help
+                    exit 1
+                fi
                 SPECIFIC_TESTS=("$2")
                 shift 2
             else
@@ -101,16 +109,17 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
-        setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|storagebox_mount_health|sysboard|docker|all)
-            if [[ ${#SPECIFIC_TESTS[@]} -eq 0 || " ${SPECIFIC_TESTS[*]} " =~ " $1 " ]]; then
-                SPECIFIC_TESTS+=("$1")
-            fi
-            shift
-            ;;
         *)
-            echo "Unknown option: $1"
-            show_help
-            exit 1
+            if [[ "$1" =~ ^($SUITE_PATTERN)$ ]]; then
+                if [[ " ${SPECIFIC_TESTS[*]} " != " $1 " ]]; then
+                    SPECIFIC_TESTS+=("$1")
+                fi
+                shift
+            else
+                echo "Unknown option: $1"
+                show_help
+                exit 1
+            fi
             ;;
     esac
 done
@@ -422,6 +431,11 @@ if [[ $run_docker -eq 1 ]]; then
         echo -e "${YELLOW}⊘ Docker not available, skipping Docker tests${NC}"
         echo ""
     fi
+fi
+
+if [[ $TOTAL_SUITES -eq 0 ]]; then
+    echo -e "${RED}No test suites were selected or all were skipped${NC}"
+    exit 1
 fi
 
 # Print summary

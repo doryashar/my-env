@@ -45,25 +45,84 @@ test_runner_help_lists_orphan_suites() {
 }
 
 # ----------------------------------------------------------------------------
-# Test: invoking each new suite name is accepted (not 'Unknown option')
+# Test: every suite name the runner can dispatch runs its script
 # ----------------------------------------------------------------------------
 test_runner_accepts_new_suite_names() {
-    local bad=""
-    for suite in sync_dotfiles tmux_config oref_alert_monitor zerotier p0_fixes security_fixes; do
-        # --only <suite> should be accepted (exit 0 from --help path is fine;
-        # we only check it's not rejected as unknown)
-        out=$("$RUNNER" --only "$suite" --help 2>&1 || true)
-        if echo "$out" | grep -q "Unknown option: --only"; then
-            bad="$bad $suite"
-        fi
-    done
-    if [[ -z "$bad" ]]; then
-        assert_equals "" "" \
-            "run_all_tests.sh must accept new --only SUITE names"
-    else
-        assert_equals "" "$bad" \
-            "run_all_tests.sh must accept new --only SUITE names (rejected:$bad)"
+    local T
+    T=$(mktemp -d)
+    trap 'rm -rf "$T"' RETURN
+
+    cp "$RUNNER" "$T/run_all_tests.sh"
+    cp "$SCRIPT_DIR/test_helper.sh" "$T/test_helper.sh"
+
+    # name<TAB>file pairs for every suite the runner can dispatch
+    local map
+    map=$(awk '
+        /if \[\[ \$run_[a-z0-9_]+ -eq 1 \]\]/ { match($0, /run_[a-z0-9_]+/); n = substr($0, RSTART+4, RLENGTH-4) }
+        /run_test_suite "/ && /\$SCRIPT_DIR\// {
+            line = $0; sub(/^.*\$SCRIPT_DIR\//, "", line); sub(/".*$/, "", line); print n "\t" line; n = ""
+        }
+    ' "$RUNNER")
+
+    if [[ -z "$map" ]]; then
+        assert_equals "non-empty" "" "runner dispatches no suites (name-to-file map is empty)"
     fi
+
+    local name file rc content lines bad
+    while IFS=$'\t' read -r name file; do
+        [[ -n "$name" && -n "$file" ]] || continue
+
+        if [[ -f "$SCRIPT_DIR/$file" ]]; then
+            assert_equals "" "" "suite '$name' script tests/$file exists"
+        else
+            assert_equals "" "tests/$file" "suite '$name' script tests/$file must exist"
+        fi
+
+        if [[ "$file" != "test_helper.sh" ]]; then
+            mkdir -p "$T/$(dirname "$file")"
+            printf '#!/bin/bash\necho "%s" >> "%s/ran.txt"\n' "$file" "$T" > "$T/$file"
+        fi
+
+        : > "$T/ran.txt"
+        bash "$T/run_all_tests.sh" --only "$name" --skip-docker > /dev/null 2>&1
+        rc=$?
+
+        if [[ "$name" == "docker" ]]; then
+            assert_exit_code 1 "$rc" "docker suite must fail with --skip-docker (nothing ran)"
+            content=$(cat "$T/ran.txt" 2>/dev/null)
+            assert_equals "" "$content" "docker suite must run nothing with --skip-docker"
+        else
+            assert_exit_code 0 "$rc" "suite '$name' must succeed via --only"
+            content=$(cat "$T/ran.txt")
+            lines=$(wc -l < "$T/ran.txt")
+            if [[ "$lines" -eq 1 && "$content" == "$file" ]]; then
+                assert_equals "" "" "suite '$name' runs exactly tests/$file"
+            else
+                assert_equals "$file" "$content" "suite '$name' must run exactly tests/$file"
+            fi
+        fi
+    done <<< "$map"
+
+    : > "$T/ran.txt"
+    bash "$T/run_all_tests.sh" setup smoke --skip-docker > /dev/null 2>&1
+    rc=$?
+    assert_exit_code 0 "$rc" "positional 'setup smoke' must succeed"
+    content=$(cat "$T/ran.txt")
+    if [[ "$content" == $'setup_test.sh\nsmoke_test.sh' || \
+            "$content" == $'smoke_test.sh\nsetup_test.sh' ]]; then
+        assert_equals "" "" "positional 'setup smoke' runs setup_test.sh and smoke_test.sh only"
+    else
+        assert_equals "" "$content" "positional 'setup smoke' must run setup_test.sh and smoke_test.sh only"
+    fi
+
+    for bad in nosuchsuite smok; do
+        : > "$T/ran.txt"
+        bash "$T/run_all_tests.sh" --only "$bad" > /dev/null 2>&1
+        rc=$?
+        assert_exit_code 1 "$rc" "--only $bad must be rejected"
+        content=$(cat "$T/ran.txt" 2>/dev/null)
+        assert_equals "" "$content" "--only $bad must run nothing"
+    done
 }
 
 # ----------------------------------------------------------------------------

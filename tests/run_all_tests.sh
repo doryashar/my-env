@@ -15,7 +15,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Valid suite names (single source of truth for the argument parser)
-SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|install_binaries|storagebox_mount_health|sysboard|docker|all"
+SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|install_binaries|storagebox_mount_health|sysboard|docker|all"
 
 # Test tracking
 TOTAL_SUITES=0
@@ -60,6 +60,7 @@ echo "  monitor_switch_restore  Test monitor-switch state + restore"
 echo "  sync_encrypted_units    Test sync_encrypted hash/debris/age units"
 echo "  bisync_run              Test StorageBox bisync runner (temp dirs, no network)"
 echo "  storagebox_status       Test StorageBox status check (temp log, stub sender)"
+echo "  merkle_snap             Test merkle shrink tripwire (temp tree, stub sender)"
 echo "  install_binaries         Test on-demand binary installer (local fixtures, no network)"
 echo "  storagebox_mount_health  Test StorageBox rclone FUSE mounts respond"
 echo "  sysboard               Test sysboard dashboard script"
@@ -203,6 +204,7 @@ run_monitor_switch_restore=0
 run_sync_encrypted_units=0
 run_bisync_run=0
 run_storagebox_status=0
+run_merkle_snap=0
 run_install_binaries=0
 run_storagebox_mount_health=0
 run_sysboard=0
@@ -232,6 +234,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_sync_encrypted_units=1
             run_bisync_run=1
             run_storagebox_status=1
+            run_merkle_snap=1
             run_install_binaries=1
             run_storagebox_mount_health=1
             run_sysboard=1
@@ -258,6 +261,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         sync_encrypted_units)  run_sync_encrypted_units=1 ;;
         bisync_run)  run_bisync_run=1 ;;
         storagebox_status) run_storagebox_status=1 ;;
+        merkle_snap) run_merkle_snap=1 ;;
         install_binaries)  run_install_binaries=1 ;;
         storagebox_mount_health) run_storagebox_mount_health=1 ;;
         sysboard)              run_sysboard=1 ;;
@@ -377,6 +381,11 @@ fi
 if [[ $run_storagebox_status -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "StorageBox Status" "$SCRIPT_DIR/test_status_update.sh" "$suite_counter"
+fi
+
+if [[ $run_merkle_snap -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Merkle Snapshot" "$SCRIPT_DIR/test_merkle_snap.sh" "$suite_counter"
 fi
 
 if [[ $run_install_binaries -eq 1 ]]; then

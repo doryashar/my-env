@@ -21,16 +21,21 @@ Flow after the clone:
 
 1. `bw` CLI installed from GitHub releases.
 2. Interactive `bw login` + unlock (the one password you type).
-3. `GITHUB_API_KEY` from the vault authorizes the private repo
+3. Three questions: the URL of your fork, the private encrypted
+   repository, the Bitwarden email. Environment variables `REMOTE_URL`,
+   `PRIVATE_URL` and `BW_EMAIL` skip them.
+4. `GITHUB_API_KEY` from the vault authorizes the private repo
    (`doryashar/encrypted`) — the SSH key chicken-and-egg is solved by
    this token.
-4. `AGE_SECRET` from the vault decrypts `var/private_encrypted/*` into
+5. `AGE_SECRET` from the vault decrypts `var/private_encrypted/*` into
    `var/private/` (0600, world-unreadable).
-5. First successful decrypt also caches the age identity to
+6. First successful decrypt also caches the age identity to
    `~/.config/age/secret` (0600) — after this, **syncs never need the
    vault again**.
-6. `sync_dotfiles` symlinks `var/private/ssh -> ~/.ssh`, `var/private ->
+7. `sync_dotfiles` symlinks `var/private/ssh -> ~/.ssh`, `var/private ->
    ~/private`, `var/private/config/* -> ~/.config/*`.
+8. The Go SDK and the tools that are not in git are downloaded
+   and verified against `config/binaries.tsv`.
 
 ## Verify
 
@@ -43,15 +48,11 @@ zsh -c 'source ~/private/env_work'    # work env restored
 
 ## Ongoing sync after restore
 
-Daily sync is unattended (cron):
-
-```bash
-~/env/scripts/sync/sync_env.sh -d -e -l -p
-```
-
-It uses `~/.config/age/secret` + `gh` stored credentials — no vault
-unlock required. The vault is only needed again for key rotation or a
-fresh machine.
+The secrets sync is a manual step: run `envsync`. It asks before
+pulling, pushing or merging, so it is not scheduled.
+`secrets-health.timer` sends a Telegram message when the last backup is
+older than 48 hours. The vault is only needed again for key rotation
+or a fresh machine.
 
 ## Key rotation
 
@@ -72,3 +73,5 @@ fresh machine.
 | `~/.config/age/secret` | cached age identity for unattended sync |
 | `config/repo.conf` | personal config (gitignored; template: `repo.conf.example`) |
 | `config/dotfiles.conf` | symlink mappings incl. the private tree |
+| bin/, go-1.27.0/ | not in git; setup.sh downloads and verifies them from config/binaries.tsv |
+| config/binaries.tsv | pinned URLs and sha256 of those downloads |

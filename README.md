@@ -21,6 +21,11 @@ cd ~/env
 ./scripts/install/setup.sh
 ```
 
+On its first run the script asks for three values: the URL of your fork, the
+private repository that holds the encrypted secrets, and the Bitwarden
+email. Each can also be given as an environment variable (`REMOTE_URL`,
+`PRIVATE_URL`, `BW_EMAIL`). Press Enter to keep the placeholder.
+
 ## Prerequisites
 
 - Git
@@ -34,20 +39,27 @@ cd ~/env
 The setup script will configure:
 
 - **Dotfiles**: Shell configurations (.zshrc, .vimrc, etc.)
-- **Packages**: Development tools (APT, PIP packages)
+- **Packages**: APT packages; Python command-line tools through `pipx`
+- **Binaries**: the Go SDK and the tools that are not kept in git are
+  downloaded and verified against `config/binaries.tsv`
+  (`scripts/install/install_binaries.sh`)
 - **Docker**: Container runtime and compose services
 - **ZSH**: Zsh for Humans (z4h) as default shell
 - **Fonts**: Custom font installation
 - **Encrypted Secrets**: Bitwarden + age encryption
-- **Cron Jobs**: Automated daily sync and backups
+- **Cron**: asks before replacing the installed crontab with
+  `config/crontab`, and backs the installed one up first. Without
+  `config/crontab` it writes a default file and tells you to install
+  it. Nothing is scheduled automatically.
 
 ```
 env/
 ├── AGENTS.md           # Agent instructions
 ├── README.md           # This documentation
 ├── aliases             # Custom shell aliases
-├── bin/                # Standalone binaries
+├── bin/                 # Not in git: downloaded tools and symlinks; filled by setup.sh
 ├── config/             # Application configurations
+│   ├── binaries.tsv    # Pinned downloads for setup.sh
 │   ├── dotfiles.conf   # Dotfiles sync configuration (symlink mappings)
 │   ├── repo.conf       # Personal repo config (gitignored)
 │   ├── repo.conf.example  # Template for repo.conf
@@ -63,12 +75,12 @@ env/
 │   ├── install/        # One-time setup (setup.sh, docker, fonts)
 │   ├── sync/           # Ongoing sync (sync_env, sync_dotfiles, sync_encrypted, ...)
 │   ├── storagebox/     # StorageBox bisync/mount tooling
-│   └── tools/          # Personal utilities
+│   └── tools/          # Authored tools (monitor-switch, sysboard, …)
 ├── tests/              # Test suite (run_all_tests.sh)
-├── var/                # Persistent state (gitignored)
+├── var/                # Gitignored state: decrypted secrets, encrypted clone, change hashes
 │   ├── private/        # Decrypted secrets (0600)
 │   └── private_encrypted/  # Clone of the age-encrypted GitHub repo
-└── tmp/                # Actual temp files (caches, locks)
+└── tmp/                # Gitignored caches, locks and alert markers
 ```
 
 ## Scripts
@@ -108,6 +120,10 @@ Wrapper script for synchronizing all environment components.
 # Check for updates only
 ~/env/scripts/sync/sync_env.sh -u
 ```
+
+Local changes are committed only after a confirmation (or with
+`ENV_AUTO_COMMIT=1`). Each step runs on its own: a failing step is
+reported and the other steps still run.
 
 ### `scripts/sync/sync_dotfiles.sh`
 
@@ -237,6 +253,9 @@ runs unattended with no vault unlock:
 - Editor debris (`*~`, `#*#`, `*.bak*`) is never encrypted or pushed
 - `config/repo.conf` holds personal values and is gitignored
 - Never commit unencrypted sensitive data
+- The encrypted sync is a manual step (`envsync`); `secrets-health.timer`
+  sends a Telegram message when the last backup is older than 48 hours
+- Tokens reach curl through its config on stdin, never on a command line
 
 ### Bitwarden Setup
 
@@ -291,6 +310,10 @@ git pull
 # Full suite (or pick suites with --only <name>; see --help)
 bash tests/run_all_tests.sh --skip-docker
 ```
+
+`bash tests/run_all_tests.sh --only <suite>` runs one suite; the Docker
+suite needs Docker and its build context excludes secrets and vendored
+files (`.dockerignore`).
 
 ### Disaster Recovery
 

@@ -4,9 +4,11 @@
 - **Build:** There is no formal build process. The main script is
   `scripts/install/setup.sh`.
 - **Lint:** There is no linter configured.
-- **Test:** Run `bash tests/run_all_tests.sh` from the repo root.
-  Individual tests can be run with `bash tests/<test_name>.sh`.
-  Tests use a shared framework in `tests/test_helper.sh`.
+- **Test:** Run `bash tests/run_all_tests.sh --skip-docker` from the
+  repo root (the Docker suite needs Docker). One suite:
+  `--only <name>`. New suites are registered by hand in six places in
+  `tests/run_all_tests.sh`; `tests/runner_wiring_test.sh` checks that
+  wiring.
 
 ## Directory Structure
 
@@ -15,7 +17,12 @@
 - `scripts/sync/` — Ongoing sync/maintenance (sync_env, sync_dotfiles,
   sync_encrypted, update_infrastructure)
 - `scripts/tools/` — Personal utility scripts (camera, TTS, etc.)
-- `bin/` — Binary executables
+- `bin/` — Not in git. Downloaded tools plus symlinks to the authored
+  ones; `scripts/install/install_binaries.sh` fills it from
+  `config/binaries.tsv`. Authored tools live in `scripts/tools/`.
+- `var/` — Gitignored state: decrypted secrets (`private/`), the
+  encrypted clone (`private_encrypted/`), change hashes. `tmp/` holds
+  only caches, locks and alert markers.
 - `functions/` — Shared shell function libraries
 - `config/` — Configuration files
 - `tests/` — Test suite
@@ -44,3 +51,12 @@
     `functions/common_funcs`.
   - `scripts/install/setup.sh` is self-contained (runs via curl
     pre-clone) and maintains its own copies of these functions.
+- **Live Files:** Timers, services and the files every new shell
+  sources are replaced atomically (write next to the target, then
+  rename); they are never edited in place. Tests use temporary
+  directories and stubs, never the real mounts, logs, vault or
+  network.
+- **Logging:** `info`, `log_debug`, `warning`, `error`, `title` live in
+  `functions/logging.sh`. The debug logger is `log_debug`, not `debug`:
+  `debug` is a builtin in bash 5.3 and in the shell omp runs commands
+  with, and a function of that name is ignored there.

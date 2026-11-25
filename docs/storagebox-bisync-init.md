@@ -147,3 +147,45 @@ init, regular runs create/keep the `.lst` listings and exit 0.
   UUID auto-update, full restore from Box, fresh bisync --resync init,
   merkle baseline, timers resume. Old chkdsk plan obsolete (fresh NTFS).
 - USB device-name churn (sda/sdb/sdc) is chronic — always match by UUID.
+
+## 2026-11-25: every run had been a `--resync` (runner, status and tripwire rework)
+
+- **Defect.** `bisync-run.sh` decided "listings missing" with
+  `ls "$B"/*<md5 of path1>..<md5 of path2>.path1.lst`; rclone names listings
+  `<escaped path1>..<escaped path2>.path1.lst`. Nothing ever matched, so all
+  1,349 pair runs between 2026-10-27 and 2026-11-24 were `--resync` runs. A
+  resync merges both sides instead of carrying changes: the 119 GB
+  `backblazessdwithwindows.img`, deleted by cleanup-v2 on 10-26 (its Box purge
+  had failed but was logged as purged), was copied back at 00:50.
+- **Runner.** A pair that completed a run is listed in
+  `<workdir>/storagebox-pairs.txt` and runs as a regular bisync. An unlisted
+  pair is initialised once with `--resync`. A listed pair whose listings are
+  missing fails loudly; re-baseline on purpose with
+  `~/storagebox-sync/bisync-run.sh --resync` (all pairs) or
+  `--resync --only-pair NAME`. `--only-pair NAME` runs a single pair.
+- NTFS system directories (`System Volume Information`, recycle bins,
+  `.Trash-*`, `lost+found`) are never synced.
+- rclone's safety rules now apply for real: a run that deletes more than 25 %
+  of a pair's files (or hits `--max-delete 25` / 10 GB) aborts and needs a
+  human, and bisync refuses a pair whose prior listing is empty. Failed pairs
+  are named in the `pass exit=` line.
+- Log: rotated at 200 MB (`.1` to `.3`); pass markers `pass start` and
+  `pass exit=N failed=a,b`. The merkle check runs only from its timer (the
+  background call at the end of a pass was killed by systemd).
+- **Status.** Healthy = the last completed pass exited 0 AND a pass started
+  within 12 hours. A bisync that is running no longer hides a failed pass; a
+  dead timer or a failing mount check (which log nothing) is caught by the
+  age rule. First alert loud, then quiet repeats on every run until recovery,
+  then one RECOVERED. The message names the reason and the failed pairs.
+- **Merkle tripwire.** `CHANGED` directories are counted now (files and
+  bytes); before, "net files 0, bytes 0" was printed whatever happened. An
+  emptied directory trips it.
+- `resync-until-done.sh` succeeds when a whole `--resync` pass exits 0 (it
+  waited for one pre-October listing name).
+- `recover-hdd-rebuild.sh` takes the disk as an argument, refuses the system
+  disk and mounted disks, asks for `ERASE <disk>`, and has `--dry-run`.
+- `storagebox_mount_monitor.sh` probes for the `fuse.rclone` mount itself
+  (`ls` alone reported a dead mount as healthy).
+- Tests, all registered in `tests/run_all_tests.sh`: `bisync_run`,
+  `storagebox_status`, `merkle_snap`, `resync_loop`, `mount_check`,
+  `recover_script`, `recover_hdd_rebuild`.

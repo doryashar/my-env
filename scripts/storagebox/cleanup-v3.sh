@@ -14,7 +14,7 @@ FAIL=0
 
 set -a; source /home/yashar/.config/ailaw-pr-review/env; set +a
 SEND=/home/yashar/.config/opencode/skills/telegram-notify/scripts/telegram-send.sh
-log() { echo "$(date -Is) $*" >> "$LOG"; }
+say() { "$SEND" "$1"; }
 purge() {  # purge <path> — deletefile first (big-file safe), then purge; not-found = success
     local p="$1" try rc
     for try in 1 2; do
@@ -43,15 +43,22 @@ log "validating bkup-split/Shared10 remnant"
 "$RCLONE" lsf --config "$RCF" -R --files-only "hetzner-sftp:/archive/bkup-split/Shared10" 2>/dev/null | sort > /tmp/opencode/bs.txt
 "$RCLONE" lsf --config "$RCF" -R --files-only "hetzner-sftp:/lexar - ssd material to orginize/overflow/p6_shared/Shared10" 2>/dev/null | sort > /tmp/opencode/live-box.txt
 find "$B/lexar - ssd material to orginize/overflow/p6_shared/Shared10" -type f -printf '%P\n' 2>/dev/null | sort > /tmp/opencode/live-local.txt
-uniq -u /tmp/opencode/bs.txt /tmp/opencode/live-box.txt /tmp/opencode/live-local.txt > /tmp/opencode/bs-unique.txt
+sort -u /tmp/opencode/live-box.txt /tmp/opencode/live-local.txt > /tmp/opencode/live-all.txt
+comm -23 /tmp/opencode/bs.txt /tmp/opencode/live-all.txt > /tmp/opencode/bs-unique.txt
 miss=$(wc -l < /tmp/opencode/bs-unique.txt)
 tot=$(wc -l < /tmp/opencode/bs.txt)
-log "remnant has $tot files; $miss not covered by live copies"
-if [ "$miss" -eq 0 ]; then
-    purge "archive/bkup-split"
+if [ "$tot" -eq 0 ]; then
+    log "remnant listing empty or failed - not purging"
+    say "⚠️ bkup-split/Shared10: could not list the remnant - nothing purged. Check $LOG"
+    FAIL=1
 else
-    head -20 /tmp/opencode/bs-unique.txt >> "$LOG"
-    say "⚠️ bkup-split/Shared10: $miss/$tot files NOT in live copies — kept. Sample in $LOG"
+    log "remnant has $tot files; $miss not covered by live copies"
+    if [ "$miss" -eq 0 ]; then
+        purge "archive/bkup-split"
+    else
+        head -20 /tmp/opencode/bs-unique.txt >> "$LOG"
+        say "⚠️ bkup-split/Shared10: $miss/$tot files NOT in live copies — kept. Sample in $LOG"
+    fi
 fi
 
 # 3. Box-side photo move

@@ -1,6 +1,5 @@
 #!/bin/bash
-export TELEGRAM_BOT_TOKEN="7943280211:$(grep -oP '(?<=^TELEGRAM_BOT_TOKEN=bot7943280211:).+' ~/.config/ailaw-pr-review/env)"
-export TELEGRAM_CHAT_ID="6709569660"
+if [[ -f /home/yashar/.config/ailaw-pr-review/env ]]; then set -a; source /home/yashar/.config/ailaw-pr-review/env; set +a; fi
 SEND=~/.config/opencode/skills/telegram-notify/scripts/telegram-send.sh
 LOG=/home/yashar/logs/push-workers.log
 total_items=$(ls -A /media/yashar/Backups | wc -l)

@@ -30,12 +30,20 @@ mv "$B/lexar - ssd material to orginize/Drive/Google Photos" "$B/photos/legacy-c
 log "box: purging tier1 venv trees"
 while IFS= read -r d; do
     [ -d "$B/$d" ] && continue
-    "$RCLONE" purge "hetzner-sftp:/$d" --config "$RCF" >> "$LOG" 2>&1
+    if "$RCLONE" lsf --config "$RCF" "hetzner-sftp:/$d" >> "$LOG" 2>&1; then
+        log "box: purge FAILED, still present: $d"
+    else
+        log "box: purged $d"
+    fi
 done < /tmp/opencode/junk-roots.txt
 log "box: purging big items"
 for d in "backblazessdwithwindows.img" "flex2windowspartition.img" "seaweedfs" "archive/bkup-split" "found.000"; do
     "$RCLONE" purge "hetzner-sftp:/$d" --config "$RCF" >> "$LOG" 2>&1
-    log "box: purged $d"
+    if "$RCLONE" lsf --config "$RCF" "hetzner-sftp:/$d" >> "$LOG" 2>&1; then
+        log "box: purge FAILED, still present: $d"
+    else
+        log "box: purged $d"
+    fi
 done
 log "box: moving Google Photos"
 "$RCLONE" moveto "hetzner-sftp:lexar - ssd material to orginize/Drive/Google Photos" \

@@ -35,7 +35,9 @@ DEFAULT_REPO_URL="https://github.com/doryashar/my-env.git"
 
 # Check if running from a file (not piped)
 if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
-    SCRIPT_PATH="${BASH_SOURCE[0]}"
+    # Resolve symlinks: scripts/setup.sh -> install/setup.sh is a supported
+    # entry point, and the layout check below is relative to the real file
+    SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
     SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
     
     # Check if we're running from inside the repo by looking for key files
@@ -95,7 +97,8 @@ fi
 set -euo pipefail
 
 # Script directory (we know we're in repo now) — script lives at scripts/install/
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolved through symlinks, like the detection above
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ENV_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 #########################################################################
@@ -1208,4 +1211,8 @@ main() {
     echo "  3. Run: $ENV_DIR/scripts/sync/sync_env.sh --sync to sync your files"
 }
 
-main "$@"
+# Run only when executed. Sourced, the file just loads its functions
+# (the container tests call them one at a time).
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

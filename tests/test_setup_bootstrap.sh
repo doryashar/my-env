@@ -10,10 +10,13 @@
 #   - generate_config collects values from env, git, prompts or
 #     placeholders; an existing repo.conf is never rewritten
 #   - the real prompt helpers survive a run with no terminal at all
+#   - the entry point works through the scripts/setup.sh symlink, and
+#     sourcing the script loads its functions without running the setup
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SETUP="$SCRIPT_DIR/../scripts/install/setup.sh"
+SETUP="${SETUP_SCRIPT:-$SCRIPT_DIR/../scripts/install/setup.sh}"
+SETUP_ROOT="$(cd "$(dirname "$SETUP")/../.." && pwd)"
 
 # shellcheck source=test_helper.sh
 source "$SCRIPT_DIR/test_helper.sh"
@@ -269,5 +272,49 @@ D_RC=$?
 assert_exit_code 0 "$D_RC" "C2: no-terminal prompt_yn run must exit 0"
 assert_equals $'no\nalive' "$D_OUT" \
     "C2: stdout is exactly no and alive"
+
+# Group D -------------------------------------------------------------------
+# scripts/setup.sh -> install/setup.sh is a supported entry point; the
+# layout check is relative to the real file, whatever path was typed.
+
+# D1: executed through the symlink, inside a repository: repo mode, no clone
+h="$T/hd1"
+make_env "$h/env"
+mkdir "$h/env/.git"
+head_block "$h/env/scripts/install/setup.sh"
+ln -s install/setup.sh "$h/env/scripts/setup.sh"
+printf '#!/bin/bash\necho "git $*" >> "%s/git.calls"\nexit 1\n' "$T" \
+    > "$T/bin/git"
+chmod +x "$T/bin/git"
+: > "$T/git.calls"
+out=$(timeout 10 env PATH="$T/bin:$PATH" HOME="$h" ENV_DIR="$h/env" \
+    bash "$h/env/scripts/setup.sh" 2>&1)
+rc=$?
+assert_exit_code 0 "$rc" "D1: run through the symlink must exit 0"
+assert_contains "$out" "IN_REPO_MODE" \
+    "D1: run through the symlink ran in repo mode"
+assert_not_contains "$out" "Cloning" \
+    "D1: nothing is cloned from inside the repository"
+assert_equals "" "$(cat "$T/git.calls")" "D1: git is not called"
+
+# D2: sourced through the symlink: the functions only, ENV_DIR is the
+# repository root, the setup itself does not run
+out=$(cd "$T" && setsid -w env PATH="$T/bin:$PATH" HOME="$T" \
+    ENV_DIR="$T/hd2" timeout 10 bash -c '
+        source "$1/scripts/setup.sh"
+        echo "rc=$?"
+        echo "env_dir=$ENV_DIR"
+        declare -F generate_config main | sed "s/.* //" | sort | tr "\n" " "
+        echo
+    ' _ "$SETUP_ROOT" </dev/null 2>&1)
+rc=$?
+assert_exit_code 0 "$rc" "D2: sourcing through the symlink must exit 0"
+assert_contains "$out" "rc=0" "D2: sourcing returns 0"
+assert_equals "env_dir=$SETUP_ROOT" "$(grep '^env_dir=' <<< "$out")" \
+    "D2: ENV_DIR is the repository root"
+assert_equals "generate_config main" \
+    "$(grep -v '^rc=\|^env_dir=' <<< "$out" | tr '\n' ' ' | sed 's/ *$//')" \
+    "D2: output is exactly the two function names: functions loaded, \
+nothing else ran"
 
 print_test_summary

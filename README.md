@@ -311,9 +311,13 @@ git pull
 bash tests/run_all_tests.sh --skip-docker
 ```
 
-`bash tests/run_all_tests.sh --only <suite>` runs one suite; the Docker
-suite needs Docker and its build context excludes secrets and vendored
-files (`.dockerignore`).
+`bash tests/run_all_tests.sh --only <suite>` runs one suite. The Docker
+suite (`--only docker`) runs the scripts in a clean Ubuntu container; it
+needs Docker and its build context excludes secrets and vendored files
+(`.dockerignore`). It does not pass yet: five of its seven suites test code
+that was removed or assert nothing (follow-up 1 in
+`docs/code_review_2026-08-28.md`), so leave it out with `--skip-docker`
+until that is done.
 
 ### Disaster Recovery
 

@@ -5,10 +5,11 @@
   `scripts/install/setup.sh`.
 - **Lint:** There is no linter configured.
 - **Test:** Run `bash tests/run_all_tests.sh --skip-docker` from the
-  repo root (the Docker suite needs Docker). One suite:
-  `--only <name>`. New suites are registered by hand in six places in
-  `tests/run_all_tests.sh`; `tests/runner_wiring_test.sh` checks that
-  wiring.
+  repo root. The Docker suite needs Docker and does not pass yet (known
+  follow-up, see `docs/code_review_2026-08-28.md`), so it is left out.
+  One suite: `--only <name>`. New suites are registered by hand in six
+  places in `tests/run_all_tests.sh`; `tests/runner_wiring_test.sh`
+  checks that wiring.
 
 ## Directory Structure
 

@@ -25,7 +25,8 @@ for PHONE in old new; do
     echo "[$PHONE] media: skipped (synced directly to StorageBox via mount)"
   elif [ -d "$SRC/media" ] && [ -n "$(find "$SRC/media" -type f -print -quit)" ]; then
     if ! rclone sync "$SRC/media" "$RBASE/$PHONE/media" --transfers 4 --checkers 8 \
-         --stats-one-line --log-level WARNING 2>&1; then
+         --stats-one-line --log-level WARNING \
+         --backup-dir "$RBASE/$PHONE/_deleted/media/$STAMP" 2>&1; then
       FAIL="${FAIL:+$FAIL; }[$PHONE] media sync failed"
     else
       echo "[$PHONE] media: mirrored ($(du -sh "$SRC/media" | cut -f1))"
@@ -37,7 +38,8 @@ for PHONE in old new; do
   # --- 2. backups: full mirror (E2E keys, settings — small) ---
   if [ -d "$SRC/backups" ] && [ -n "$(find "$SRC/backups" -type f -print -quit)" ]; then
     if ! rclone sync "$SRC/backups" "$RBASE/$PHONE/backups" --transfers 4 --checkers 8 \
-         --stats-one-line --log-level WARNING 2>&1; then
+         --stats-one-line --log-level WARNING \
+         --backup-dir "$RBASE/$PHONE/_deleted/backups/$STAMP" 2>&1; then
       FAIL="${FAIL:+$FAIL; }[$PHONE] backups sync failed"
     else
       echo "[$PHONE] backups: mirrored"
@@ -68,7 +70,7 @@ for PHONE in old new; do
   mapfile -t FILES < <(rclone lsf "$RDB" --files-only --include "msgstore-*.crypt1[45]" 2>/dev/null | sort -r)
   KEEP_DAILY=7; KEEP_WEEKLY=4; KEEP_MONTHLY=3
   kept_d=0; kept_w=0; kept_m=0; removed=0
-  declare -A SEEN_W SEEN_M
+  unset SEEN_W SEEN_M; declare -A SEEN_W SEEN_M
   for f in "${FILES[@]:-}"; do
     [ -z "$f" ] && continue
     d="${f#msgstore-}"; d="${d%.*}"

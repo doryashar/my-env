@@ -28,7 +28,7 @@ kuma_status() {
     fi
 
     local result
-    result=$(timeout -k 1 3 curl -s -u":$UPTIME_KUMA_API" "$KUMA_URL" 2>/dev/null) || {
+    result=$(printf 'user = ":%s"\n' "$UPTIME_KUMA_API" | timeout -k 1 3 curl -s --config - "$KUMA_URL" 2>/dev/null) || {
         echo "Unable to reach Kuma API${cache:+ (cached: $(date -r "$cache_file" +%H:%M:%S 2>/dev/null))}"
         [[ -f "$cache_file" ]] && cat "$cache_file"
         return 1
@@ -93,8 +93,7 @@ zerotier_clients() {
     fi
 
     local result
-    result=$(timeout -k 1 5 curl -s -H "Authorization: bearer $ZEROTIER_API_KEY" \
-        "https://my.zerotier.com/api/v1/network/$ZEROTIER_NETWORK_ID/member" 2>/dev/null) || {
+    result=$(printf 'header = "Authorization: bearer %s"\n' "$ZEROTIER_API_KEY" | timeout -k 1 5 curl -s --config - "https://my.zerotier.com/api/v1/network/$ZEROTIER_NETWORK_ID/member" 2>/dev/null) || {
         echo "Unable to reach ZeroTier API"
         [[ -f "$cache_file" ]] && cat "$cache_file"
         return 1

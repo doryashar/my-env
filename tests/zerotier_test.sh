@@ -140,6 +140,8 @@ run_all_tests() {
     test_jq_timestamp_millisecond_bug
     test_jq_epoch_timestamp
     test_jq_recent_millisecond_timestamp
+    test_zerotier_clients_function_exists
+    test_zerotier_clients_has_millisecond_fix
 
     echo ""
     echo "========================================"

@@ -297,13 +297,16 @@ test_sync_encrypted_validates_ssh_dir() {
     TESTS_RUN=$((TESTS_RUN + 1))
 }
 
-# Test: sync_encrypted.sh ssh-keyscan only runs if ~/.ssh exists
+# Test: sync_encrypted.sh adds GitHub's host keys only when ~/.ssh exists and
+# does not know them yet (the old unconditional append changed the decrypted
+# tree on every run, so every run took the push path)
 test_sync_encrypted_ssh_keyscan_conditional() {
-    if grep -q '\[\[ -d ~/.ssh \]\] && ssh-keyscan' "$HOME/env/scripts/sync_encrypted.sh"; then
-        echo -e "${GREEN}✓${NC} sync_encrypted.sh should only ssh-keyscan if ~/.ssh exists"
+    if grep -q 'if \[\[ -d "\$HOME/.ssh" \]\] && ! ssh-keygen -F github.com' "$HOME/env/scripts/sync/sync_encrypted.sh" \
+        && ! grep -q '^\[\[ -d ~/.ssh \]\] && ssh-keyscan' "$HOME/env/scripts/sync/sync_encrypted.sh"; then
+        echo -e "${GREEN}✓${NC} sync_encrypted.sh adds GitHub host keys only when ~/.ssh exists and lacks them"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}✗${NC} sync_encrypted.sh should only ssh-keyscan if ~/.ssh exists"
+        echo -e "${RED}✗${NC} sync_encrypted.sh must guard ssh-keyscan with the ~/.ssh and ssh-keygen checks"
         TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
     TESTS_RUN=$((TESTS_RUN + 1))

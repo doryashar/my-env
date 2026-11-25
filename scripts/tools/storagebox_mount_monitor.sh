@@ -18,6 +18,8 @@ PROBE_WAIT="${PROBE_WAIT:-10}"
 RECOVER="${RECOVER:-1}"
 CONT_MAIN="rclone-mount-hetzner-storagebox__"
 CONT_BACKUP="rclone-mount-hetzner-storagebox__backup"
+MOUNTS_FILE="${MOUNT_MONITOR_MOUNTS:-/proc/self/mounts}"
+CURL="${MOUNT_MONITOR_CURL:-curl}"
 
 log() { echo "[storagebox-monitor] $*"; }
 
@@ -28,6 +30,13 @@ log() { echo "[storagebox-monitor] $*"; }
 probe_mount() {
   local path="$1"
   local tmp_dir done_file
+
+  # An rclone FUSE mount must actually sit on the path: the bare directory lists
+  # fine when the container is gone.
+  if ! awk -v p="$path" '$2 == p && $3 == "fuse.rclone" { found = 1 } END { exit !found }' "$MOUNTS_FILE"; then
+      echo "fail"
+      return
+  fi
   tmp_dir=$(mktemp -d) || { echo "fail"; return; }
   done_file="$tmp_dir/done"
   ( ls "$path" >/dev/null 2>&1; echo "rc=$?" >"$done_file" ) &
@@ -69,10 +78,9 @@ notify() {
     local tmp
     tmp=$(mktemp)
     printf '%s' "$payload" >"$tmp"
-    curl -s --max-time 10 -X POST \
-      "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-      -H 'Content-Type: application/json' \
-      --data-binary @"$tmp" >/dev/null 2>&1 || true
+    printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TELEGRAM_BOT_TOKEN" \
+      | "$CURL" -s --max-time 10 --config - -X POST \
+        -H 'Content-Type: application/json' --data-binary @"$tmp" >/dev/null 2>&1 || true
     rm -f "$tmp"
   else
     log "ALERT (no telegram creds): $message"
@@ -151,4 +159,4 @@ main() {
   exit 0
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

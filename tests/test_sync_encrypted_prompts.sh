@@ -79,7 +79,7 @@ cat > "$T/child.sh" <<'EOF'
 set -euo pipefail
 export HOME="$1"
 MODE="$2"
-eval "$(sed -e '/^trap cleanup EXIT$/d' -e '/^# Run main function/,$d' "$SRC_SCRIPT")"
+eval "$(sed -e '/^trap cleanup EXIT$/d' -e '/^# Run only when executed/,$d' "$SRC_SCRIPT")"
 case "$MODE" in
   age)  if get_age_secret; then echo "GOT=$AGE_SECRET"; else echo "AGE_REFUSED"; fi; echo ALIVE ;;
   bw)   if get_bw_password; then echo "GOT=$BW_PASSWORD"; fi; echo ALIVE ;;

@@ -1280,6 +1280,8 @@ cleanup() {
 # Set cleanup on exit (single trap — chains age-identity cleanup + tempdir cleanup)
 trap cleanup EXIT
 
-# Run main function
-main
+# Run only when executed. Sourced, the file just loads its functions.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main
+fi
 

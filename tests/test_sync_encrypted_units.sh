@@ -46,7 +46,7 @@ assert_not_contains() {
 REAL_ENV="$(cd "$SCRIPT_DIR/.." && pwd)"
 eval "$(sed -e "s|^ENV_DIR=.*|ENV_DIR=\"$REAL_ENV\"|" \
             -e '/^trap cleanup EXIT$/d' \
-            -e '/^# Run main function/,$d' "$SRC")"
+            -e '/^# Run only when executed/,$d' "$SRC")"
 # The script runs under set -euo pipefail; relax for the test driver
 set +e; set +u; set +o pipefail
 

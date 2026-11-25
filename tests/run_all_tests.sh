@@ -15,7 +15,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Valid suite names (single source of truth for the argument parser)
-SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|resync_loop|mount_check|recover_script|install_binaries|setup_bootstrap|sync_env_flow|sync_dotfiles_conflicts|shell_libs|setup_steps|update_infrastructure|security_tools|secrets_off_argv|whatsapp_backup|small_tools|recover_hdd_rebuild|sync_encrypted_prompts|storagebox_mount_health|sysboard|docker|all"
+SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|resync_loop|mount_check|recover_script|install_binaries|setup_bootstrap|sync_env_flow|sync_dotfiles_conflicts|shell_libs|setup_steps|update_infrastructure|security_tools|secrets_off_argv|whatsapp_backup|small_tools|secrets_health|recover_hdd_rebuild|sync_encrypted_prompts|storagebox_mount_health|sysboard|docker|all"
 
 # Test tracking
 TOTAL_SUITES=0
@@ -75,6 +75,7 @@ echo "  security_tools            Test letmein bind, cam_web CORS, camera discov
 echo "  secrets_off_argv          Test tokens stay off curl arguments and mount-probe detection (stubs)"
 echo "  whatsapp_backup           Test whatsapp-backup.sh with a stub rclone (temp dirs)"
 echo "  small_tools                Test tool fixes with stubs (new_claude path, generate_image body, ignore rules)"
+echo "  secrets_health            Test the secrets-backup staleness alert (stub sender)"
 echo "  recover_hdd_rebuild        Test the disk-rebuild script's refusals with stubbed commands"
 echo "  sync_encrypted_prompts   Test sync_encrypted.sh key prompts without a terminal (temp HOME)"
 echo "  storagebox_mount_health  Test StorageBox rclone FUSE mounts respond"
@@ -234,6 +235,7 @@ run_security_tools=0
 run_secrets_off_argv=0
 run_whatsapp_backup=0
 run_small_tools=0
+run_secrets_health=0
 run_recover_hdd_rebuild=0
 run_sync_encrypted_prompts=0
 run_storagebox_mount_health=0
@@ -279,6 +281,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_secrets_off_argv=1
             run_whatsapp_backup=1
             run_small_tools=1
+            run_secrets_health=1
             run_recover_hdd_rebuild=1
             run_sync_encrypted_prompts=1
             run_storagebox_mount_health=1
@@ -321,6 +324,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         secrets_off_argv) run_secrets_off_argv=1 ;;
         whatsapp_backup) run_whatsapp_backup=1 ;;
         small_tools) run_small_tools=1 ;;
+        secrets_health) run_secrets_health=1 ;;
         recover_hdd_rebuild) run_recover_hdd_rebuild=1 ;;
         sync_encrypted_prompts) run_sync_encrypted_prompts=1 ;;
         storagebox_mount_health) run_storagebox_mount_health=1 ;;
@@ -514,6 +518,11 @@ fi
 if [[ $run_small_tools -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "Small Tools" "$SCRIPT_DIR/test_small_tools.sh" "$suite_counter"
+fi
+
+if [[ $run_secrets_health -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Secrets Health" "$SCRIPT_DIR/test_secrets_health.sh" "$suite_counter"
 fi
 
 if [[ $run_recover_hdd_rebuild -eq 1 ]]; then

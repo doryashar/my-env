@@ -4,6 +4,7 @@ TESTS_RUN=0
 TESTS_PASSED=0
 TESTS_FAILED=0
 TESTS_SKIPPED=0
+TESTS_KNOWN=0
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -213,6 +214,7 @@ end_suite() {
   echo -e "  ${GREEN}Passed:${NC} $TESTS_PASSED"
   echo -e "  ${RED}Failed:${NC} $TESTS_FAILED"
   echo -e "  ${YELLOW}Skipped:${NC} $TESTS_SKIPPED"
+  echo -e "  ${YELLOW}Known failures:${NC} $TESTS_KNOWN"
   echo -e "  Total: $TESTS_RUN"
   echo ""
   
@@ -225,6 +227,7 @@ end_suite() {
   TESTS_PASSED=0
   TESTS_FAILED=0
   TESTS_SKIPPED=0
+  TESTS_KNOWN=0
 }
 
 run_test() {
@@ -239,6 +242,38 @@ run_test() {
   else
     return 1
   fi
+}
+
+# A test that documents a known defect. It runs like any other test. Its failed
+# assertions are reported as known failures and do not fail the suite. The day
+# every assertion passes, this counts as a failure: the defect is gone and the
+# marker must be removed.
+run_known_failure() {
+  local name="$1"
+  local func="$2"
+  local reason="$3"
+
+  local failed_before=$TESTS_FAILED
+
+  # `|| true`: the suites run under `set -e`; a non-zero return from the
+  # test must not end the suite before the result is counted
+  run_test "$name" "$func" || true
+
+  local known=$((TESTS_FAILED - failed_before))
+
+  if [[ $known -eq 0 ]]; then
+    echo -e "  ${RED}✗${NC} Known failure now passes - remove the marker: $reason"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    TESTS_RUN=$((TESTS_RUN + 1))
+    # counted as failed; returning 1 here would end the suite under `set -e`
+    # before its summary is printed
+    return 0
+  fi
+
+  TESTS_FAILED=$failed_before
+  TESTS_KNOWN=$((TESTS_KNOWN + 1))
+  echo -e "  ${YELLOW}Known failure ($known assertion(s)):${NC} $reason"
+  return 0
 }
 
 print_summary() {

@@ -307,17 +307,21 @@ git pull
 ### Run Tests
 
 ```bash
-# Full suite (or pick suites with --only <name>; see --help)
+# Everything except the Docker suite (about a minute)
 bash tests/run_all_tests.sh --skip-docker
 ```
 
 `bash tests/run_all_tests.sh --only <suite>` runs one suite. The Docker
-suite (`--only docker`) runs the scripts in a clean Ubuntu container; it
-needs Docker and its build context excludes secrets and vendored files
-(`.dockerignore`). It does not pass yet: five of its seven suites test code
-that was removed or assert nothing (follow-up 1 in
-`docs/code_review_2026-08-28.md`), so leave it out with `--skip-docker`
-until that is done.
+suite (`--only docker`, or the full run without `--skip-docker`) runs the
+scripts in a clean Ubuntu container: it needs Docker and network access and
+takes about three minutes, because its integration tests run the real
+`setup.sh` inside the container. Its build context excludes secrets and
+vendored files (`.dockerignore`).
+
+One of its tests is a known failure: `D09` documents that regex
+capture-group mappings in `sync_dotfiles.sh` never match (follow-up 2 in
+`docs/code_review_2026-08-28.md`). The suite reports it in every run and
+fails on the day that test passes, which is the signal to remove the marker.
 
 ### Disaster Recovery
 

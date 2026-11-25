@@ -46,9 +46,11 @@ copy_env_files() {
   cp -r "$ORIGINAL_ENV_DIR"/scripts/* "$TEST_ENV_DIR/scripts/" 2>/dev/null || true
   cp -r "$ORIGINAL_ENV_DIR"/functions/* "$TEST_ENV_DIR/functions/" 2>/dev/null || true
   cp -r "$ORIGINAL_ENV_DIR"/dotfiles/* "$TEST_ENV_DIR/dotfiles/" 2>/dev/null || true
+  cp -r "$ORIGINAL_ENV_DIR"/dotfiles/.??* "$TEST_ENV_DIR/dotfiles/" 2>/dev/null || true
   cp -r "$ORIGINAL_ENV_DIR"/config/* "$TEST_ENV_DIR/config/" 2>/dev/null || true
   cp "$ORIGINAL_ENV_DIR"/aliases "$TEST_ENV_DIR/aliases" 2>/dev/null || true
   cp "$ORIGINAL_ENV_DIR"/env_vars "$TEST_ENV_DIR/env_vars" 2>/dev/null || true
+  cp "$ORIGINAL_ENV_DIR"/env_funcs "$TEST_ENV_DIR/env_funcs" 2>/dev/null || true
   
   chmod +x "$TEST_ENV_DIR"/scripts/*.sh 2>/dev/null || true
   
@@ -58,6 +60,33 @@ copy_env_files() {
   cp -r "$ORIGINAL_ENV_DIR"/tests/docker/run_tests.sh "$TEST_ENV_DIR/tests/docker/" 2>/dev/null || true
   chmod +x "$TEST_ENV_DIR"/tests/docker/*.sh 2>/dev/null || true
   chmod +x "$TEST_ENV_DIR"/tests/docker/suites/*.sh 2>/dev/null || true
+}
+restricted_path() {
+  # Empty directory to be used as PATH: no tool on it is resolvable.
+  # The caller owns the directory (rm -rf when done).
+  local dir
+  dir=$(mktemp -d)
+  echo "$dir"
+}
+
+# Load the real sync_encrypted.sh into the test process: its functions and
+# its variables. The script works out ENV_DIR from its own path, so the copy
+# it is loaded from must sit next to the original in the test tree (loaded
+# from /tmp or a process substitution, it would look for its library under
+# "/"). The script has an entry guard, so loading it runs no sync. Left
+# out: its EXIT trap, which would delete TEMP_DIR when the test process
+# ends. The umask it sets for its own files is restored, so later tests
+# create files as before.
+load_sync_encrypted() {
+  local umask_before body
+  umask_before=$(umask)
+  body=$(mktemp "$TEST_ENV_DIR/scripts/sync/.sync_encrypted.XXXXXX")
+  sed '/^trap cleanup EXIT$/d' \
+    "$TEST_ENV_DIR/scripts/sync/sync_encrypted.sh" > "$body"
+  # shellcheck disable=SC1090
+  source "$body"
+  rm -f "$body"
+  umask "$umask_before"
 }
 
 setup_test_git_config() {

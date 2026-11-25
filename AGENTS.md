@@ -5,11 +5,13 @@
   `scripts/install/setup.sh`.
 - **Lint:** There is no linter configured.
 - **Test:** Run `bash tests/run_all_tests.sh --skip-docker` from the
-  repo root. The Docker suite needs Docker and does not pass yet (known
-  follow-up, see `docs/code_review_2026-08-28.md`), so it is left out.
-  One suite: `--only <name>`. New suites are registered by hand in six
-  places in `tests/run_all_tests.sh`; `tests/runner_wiring_test.sh`
-  checks that wiring.
+  repo root (about a minute). The Docker suite (`--only docker`) needs
+  Docker and network access and takes about three minutes. One suite:
+  `--only <name>`. New suites are registered by hand in six places in
+  `tests/run_all_tests.sh`; `tests/runner_wiring_test.sh` checks that
+  wiring. Never run `setup.sh` or anything under `tests/docker/` outside
+  the container: `setup.sh` installs packages, and `sudo` asks for no
+  password on this machine.
 
 ## Directory Structure
 

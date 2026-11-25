@@ -80,7 +80,7 @@ echo "  recover_hdd_rebuild        Test the disk-rebuild script's refusals with 
 echo "  sync_encrypted_prompts   Test sync_encrypted.sh key prompts without a terminal (temp HOME)"
 echo "  storagebox_mount_health  Test StorageBox rclone FUSE mounts respond"
 echo "  sysboard               Test sysboard dashboard script"
-echo "  docker                  Docker container comprehensive tests (120 tests)"
+echo "  docker                  Docker container comprehensive tests (92 tests)"
 echo "  all                     Run all tests (default)"
     echo ""
     echo "Docker Test Environment Variables:"

@@ -38,6 +38,57 @@ teardown_mocks() {
   rm -rf "$MOCK_BW_DIR" "$MOCK_GH_DIR" "$MOCK_AGE_DIR"
 }
 
+# Fakes that record their invocations in $FAKE_COMMANDS_LOG.
+# Call unfake_all at the start of every test that uses fakes and in
+# the suite's last test, so nothing leaks into the next test.
+FAKE_BIN_DIR=""
+FAKE_COMMANDS_LOG=""
+FAKE_PATH_BACKUP=""
+
+fake_command() {
+  if [[ -z "$FAKE_BIN_DIR" ]]; then
+    FAKE_BIN_DIR=$(mktemp -d)
+    FAKE_PATH_BACKUP="$PATH"
+    export FAKE_BIN_DIR
+    export PATH="$FAKE_BIN_DIR:$PATH"
+  fi
+  local name
+  for name in "$@"; do
+    cat > "$FAKE_BIN_DIR/$name" << FAKE_EOF
+#!/bin/bash
+if [[ -n "\${FAKE_COMMANDS_LOG:-}" ]]; then
+  echo "$name \$*" >> "\$FAKE_COMMANDS_LOG"
+fi
+exit 0
+FAKE_EOF
+    chmod +x "$FAKE_BIN_DIR/$name"
+  done
+}
+
+fake_calls() {
+  local name="${1:-}"
+  if [[ -z "$FAKE_COMMANDS_LOG" || ! -f "$FAKE_COMMANDS_LOG" ]]; then
+    return 0
+  fi
+  if [[ -n "$name" ]]; then
+    grep "^$name " "$FAKE_COMMANDS_LOG" || true
+  else
+    cat "$FAKE_COMMANDS_LOG"
+  fi
+}
+
+unfake_all() {
+  if [[ -n "$FAKE_BIN_DIR" && -d "$FAKE_BIN_DIR" ]]; then
+    rm -rf "$FAKE_BIN_DIR"
+  fi
+  if [[ -n "$FAKE_PATH_BACKUP" ]]; then
+    PATH="$FAKE_PATH_BACKUP"
+    FAKE_PATH_BACKUP=""
+  fi
+  FAKE_BIN_DIR=""
+  unset FAKE_COMMANDS_LOG
+}
+
 _create_mock_bw() {
   cat > "$MOCK_BW_DIR/bw" << 'MOCK_BW'
 #!/bin/bash
@@ -116,6 +167,9 @@ MOCK_BW
 _create_mock_gh() {
   cat > "$MOCK_GH_DIR/gh" << 'MOCK_GH'
 #!/bin/bash
+if [[ -n "${MOCK_GH_CALLS_LOG:-}" ]]; then
+  echo "gh $*" >> "$MOCK_GH_CALLS_LOG"
+fi
 
 case "$1" in
   auth)
@@ -134,7 +188,7 @@ case "$1" in
   repo)
     case "$2" in
       create)
-        local repo_name="$3"
+        repo_name="$3"
         echo "Created repository $repo_name"
         echo "{\"name\":\"$repo_name\",\"clone_url\":\"https://github.com/mock/$repo_name.git\"}"
         ;;
@@ -148,7 +202,7 @@ case "$1" in
     ;;
   api)
     shift
-    local endpoint="$1"
+    endpoint="$1"
     echo "{\"message\":\"Mock API response for $endpoint\"}"
     ;;
   *)
@@ -181,6 +235,9 @@ while [[ $# -gt 0 ]]; do
     -d|--decrypt)
       decrypt_mode=true
       shift
+      ;;
+    -i|--identity)
+      shift 2
       ;;
     -e|--encrypt)
       encrypt_mode=true

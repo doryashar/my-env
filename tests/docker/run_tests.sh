@@ -9,6 +9,13 @@ source "$DOCKER_TEST_SCRIPT_DIR/lib/test_framework.sh"
 source "$DOCKER_TEST_SCRIPT_DIR/lib/mocks.sh"
 source "$DOCKER_TEST_SCRIPT_DIR/lib/state_manager.sh"
 
+# Git identity for the harness's own commits (HOME is redirected to a
+# temporary directory that has no gitconfig).
+export GIT_AUTHOR_NAME="Env Test"
+export GIT_AUTHOR_EMAIL="env-test@example.com"
+export GIT_COMMITTER_NAME="Env Test"
+export GIT_COMMITTER_EMAIL="env-test@example.com"
+
 SUITES=()
 SUITE_PASSED=0
 SUITE_FAILED=0
@@ -35,7 +42,7 @@ Environment Variables:
 Examples:
   $0                        Run all tests
   $0 01_setup               Run setup tests only
-  $0 -s 02_sync_env         Run sync_env tests
+  $0 -s 03_sync_dotfiles    Run sync_dotfiles tests
   USE_REAL_AGE=true $0 04   Run encrypted tests with real age
 
 EOF
@@ -44,11 +51,9 @@ EOF
 list_suites() {
   echo "Available test suites:"
   echo "  01_setup          - Setup script tests (20 tests)"
-  echo "  02_sync_env       - Sync env tests (15 tests)"
   echo "  03_sync_dotfiles  - Dotfiles sync tests (25 tests)"
   echo "  04_sync_encrypted - Encrypted sync tests (20 tests)"
-  echo "  05_prerun         - Prerun script tests (12 tests)"
-  echo "  06_env_zsh        - .env.zsh and functions tests (18 tests)"
+  echo "  06_env_zsh        - .env.zsh and functions tests (17 tests)"
   echo "  07_integration    - Integration tests (10 tests)"
 }
 
@@ -77,7 +82,7 @@ parse_args() {
         run_all=true
         shift
         ;;
-      01_setup|02_sync_env|03_sync_dotfiles|04_sync_encrypted|05_prerun|06_env_zsh|07_integration)
+      01_setup|03_sync_dotfiles|04_sync_encrypted|06_env_zsh|07_integration)
         SUITES+=("$1")
         shift
         ;;
@@ -92,10 +97,8 @@ parse_args() {
   if [[ ${#SUITES[@]} -eq 0 ]] || [[ "$run_all" == "true" ]]; then
     SUITES=(
       "01_setup"
-      "02_sync_env"
       "03_sync_dotfiles"
       "04_sync_encrypted"
-      "05_prerun"
       "06_env_zsh"
       "07_integration"
     )

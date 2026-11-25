@@ -10,6 +10,10 @@ config/repo.conf
 /bin/
 /go-1.27.0/
 
+# Editor and tool backups inside live config directories (config/opencode is ~/.config/opencode)
+config/opencode/*.bak*
+config/opencode/*.rea.backup*
+
 # Python
 __pycache__/
 *.py[cod]

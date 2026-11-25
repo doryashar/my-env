@@ -13,7 +13,7 @@ CLAUDE_CONFIG_DIR="${HOME}/.claude"
 
 # Source shared virtualenv functions
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ENV_DIR=$(dirname "$SCRIPT_DIR")
+ENV_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
 source "$ENV_DIR/functions/virtualenv.sh"
 
 usage() {

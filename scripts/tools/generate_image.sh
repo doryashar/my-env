@@ -101,6 +101,12 @@ json_data=$(jq -nc \
     --arg size  "$SIZE" \
     '{model:$model, prompt:$prompt, size:$size}')
 
+# The request body goes through a file: curl re-parses escapes and $VARIABLES inside
+# quoted config strings, which corrupts JSON that contains " \ or $NAME.
+json_file=$(mktemp)
+trap 'rm -f "$json_file"' EXIT
+printf '%s' "$json_data" > "$json_file"
+
 # Pass URL + Authorization header via curl --config - (stdin) so the API key
 # never appears in argv (where it would be visible via `ps`).
 response=$(curl --config - <<EOF
@@ -110,7 +116,7 @@ request = POST
 url = "$API_URL"
 header = "Content-Type: application/json"
 header = "Authorization: Bearer $API_KEY"
-data = "$json_data"
+data = "@$json_file"
 EOF
 )
 

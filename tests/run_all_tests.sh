@@ -15,7 +15,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Valid suite names (single source of truth for the argument parser)
-SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|resync_loop|mount_check|recover_script|install_binaries|setup_bootstrap|sync_env_flow|sync_dotfiles_conflicts|shell_libs|setup_steps|update_infrastructure|security_tools|secrets_off_argv|whatsapp_backup|sync_encrypted_prompts|storagebox_mount_health|sysboard|docker|all"
+SUITE_PATTERN="setup|env_loading|full_setup|idempotency|smoke|sync_dotfiles|tmux_config|zerotier|oref_alert_monitor|p0_fixes|p1_fixes|p2_followups|security_fixes|runner_wiring|dead_scripts_removed|monitor_switch|monitor_switch_restore|sync_encrypted_units|bisync_run|storagebox_status|merkle_snap|resync_loop|mount_check|recover_script|install_binaries|setup_bootstrap|sync_env_flow|sync_dotfiles_conflicts|shell_libs|setup_steps|update_infrastructure|security_tools|secrets_off_argv|whatsapp_backup|small_tools|sync_encrypted_prompts|storagebox_mount_health|sysboard|docker|all"
 
 # Test tracking
 TOTAL_SUITES=0
@@ -74,6 +74,7 @@ echo "  update_infrastructure   Test update_infrastructure.sh direction and appl
 echo "  security_tools            Test letmein bind, cam_web CORS, camera discovery and error handling"
 echo "  secrets_off_argv          Test tokens stay off curl arguments and mount-probe detection (stubs)"
 echo "  whatsapp_backup           Test whatsapp-backup.sh with a stub rclone (temp dirs)"
+echo "  small_tools                Test tool fixes with stubs (new_claude path, generate_image body, ignore rules)"
 echo "  sync_encrypted_prompts   Test sync_encrypted.sh key prompts without a terminal (temp HOME)"
 echo "  storagebox_mount_health  Test StorageBox rclone FUSE mounts respond"
 echo "  sysboard               Test sysboard dashboard script"
@@ -231,6 +232,7 @@ run_update_infrastructure=0
 run_security_tools=0
 run_secrets_off_argv=0
 run_whatsapp_backup=0
+run_small_tools=0
 run_sync_encrypted_prompts=0
 run_storagebox_mount_health=0
 run_sysboard=0
@@ -274,6 +276,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
             run_security_tools=1
             run_secrets_off_argv=1
             run_whatsapp_backup=1
+            run_small_tools=1
             run_sync_encrypted_prompts=1
             run_storagebox_mount_health=1
             run_sysboard=1
@@ -314,6 +317,7 @@ for test in "${SPECIFIC_TESTS[@]}"; do
         security_tools) run_security_tools=1 ;;
         secrets_off_argv) run_secrets_off_argv=1 ;;
         whatsapp_backup) run_whatsapp_backup=1 ;;
+        small_tools) run_small_tools=1 ;;
         sync_encrypted_prompts) run_sync_encrypted_prompts=1 ;;
         storagebox_mount_health) run_storagebox_mount_health=1 ;;
         sysboard)              run_sysboard=1 ;;
@@ -502,6 +506,10 @@ fi
 if [[ $run_whatsapp_backup -eq 1 ]]; then
     suite_counter=$((suite_counter + 1))
     run_test_suite "WhatsApp Backup" "$SCRIPT_DIR/test_whatsapp_backup.sh" "$suite_counter"
+fi
+if [[ $run_small_tools -eq 1 ]]; then
+    suite_counter=$((suite_counter + 1))
+    run_test_suite "Small Tools" "$SCRIPT_DIR/test_small_tools.sh" "$suite_counter"
 fi
 
 if [[ $run_sync_encrypted_prompts -eq 1 ]]; then
